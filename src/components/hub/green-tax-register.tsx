@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCallback, useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -335,7 +336,7 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
             </CardHeader>
             <CardContent>
               {data.corrections.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No corrections in {year}.</p>
+                <EmptyState size="inline" title={`No corrections in ${year}.`} />
               ) : (
                 <>
                 <ul className="divide-y divide-border md:hidden">
@@ -380,7 +381,7 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
       ) : null}
 
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>
               {pending?.kind === "remove" && `Remove Reg No ${pending.registrationNo}`}
@@ -416,7 +417,7 @@ export function GreenTaxRegister({ propertyId, canManage }: { propertyId: string
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setPending(null)}>Cancel</Button>
                 <Button type="submit" disabled={submitting} variant={pending?.kind === "file" ? "default" : "destructive"}>
-                  {submitting ? "Saving..." : pending?.kind === "file" ? "Mark as filed" : "Renumber"}
+                  {submitting ? "Saving…" : pending?.kind === "file" ? "Mark as filed" : "Renumber"}
                 </Button>
               </DialogFooter>
             </form>

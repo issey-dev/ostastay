@@ -10,11 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
 import { MobileActions, type MobileAction } from "@/components/ui/mobile"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { InlineLoading } from "@/components/ui/inline-loading"
 
 // The desk's view of one spa appointment, and its lifecycle: check in → start → complete,
 // or no-show / cancel (SPA_PLAN.md §6/§9; server rules in src/lib/spa-lifecycle.ts). The
@@ -138,7 +139,7 @@ export function SpaAppointmentSheet({
   }, [appointmentId, load])
 
   const act = async (path: string, body: unknown, done: string) => {
-    if (!appt) return
+    if (!appt || busy) return
     setBusy(true)
     try {
       const res = await fetch(`/api/spa/appointments/${appt.id}/${path}`, {
@@ -148,13 +149,15 @@ export function SpaAppointmentSheet({
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        toast.error(typeof data?.error === "string" ? data.error : "That didn't work")
+        toast.error(typeof data?.error === "string" ? data.error : "Couldn't update the appointment. Try again.")
         return
       }
-      toast.success(data?.chargeNote ? `${done}. ${data.chargeNote}` : done)
+      toast.success(done, { description: data?.chargeNote || undefined })
       setMode("view")
       await load(appt.id)
       onChanged()
+    } catch {
+      toast.error("Couldn't update the appointment. Try again.")
     } finally {
       setBusy(false)
     }
@@ -205,10 +208,7 @@ export function SpaAppointmentSheet({
         </SheetHeader>
 
         {loading || !appt ? (
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-6 w-1/2" />
-            <Skeleton className="h-24 w-full" />
-          </div>
+          <InlineLoading lines={4} className="p-4" label="Loading the appointment" />
         ) : (
           <div className="space-y-5 p-4 text-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -345,7 +345,7 @@ export function SpaAppointmentSheet({
                     </FormItem>
                   )} />
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm" variant="destructive" disabled={busy}>Cancel appointment</Button>
+                    <SubmitButton size="sm" variant="destructive" pending={busy} pendingLabel="Cancelling…">Cancel appointment</SubmitButton>
                     <Button type="button" size="sm" variant="ghost" onClick={() => setMode("view")}>Back</Button>
                   </div>
                 </form>
@@ -373,7 +373,7 @@ export function SpaAppointmentSheet({
                     </FormItem>
                   )} />
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm" disabled={busy}>Mark no-show</Button>
+                    <SubmitButton size="sm" pending={busy} pendingLabel="Marking…">Mark no-show</SubmitButton>
                     <Button type="button" size="sm" variant="ghost" onClick={() => setMode("view")}>Back</Button>
                   </div>
                 </form>

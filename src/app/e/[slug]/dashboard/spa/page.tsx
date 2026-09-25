@@ -1,7 +1,10 @@
 "use client"
 
 import { toDateKey, todayKey } from "@/lib/date-only"
-import { useState, useEffect, useCallback } from "react"
+import { Suspense, useState, useEffect, useCallback } from "react"
+import { useForm, useFieldArray } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useUrlState } from "@/lib/use-url-state"
 import { useProperty } from "@/components/providers/property-provider"
 import { useParams } from "next/navigation"
 import { Sparkles, Clock, Users, X, Receipt, UserRound, Search, Calendar, ClipboardList } from "@/components/icons"
@@ -9,19 +12,32 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SpaSchedule } from "@/components/front-office/spa-schedule"
 import { SpaAppointmentSheet } from "@/components/front-office/spa-appointment-sheet"
 import { SalesHistory, type SalesRow } from "@/components/front-office/sales-history"
-import { InHousePaymentChoice, type InHousePayment } from "@/components/front-office/in-house-payment-choice"
+import { InHousePaymentChoice } from "@/components/front-office/in-house-payment-choice"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NumberStepper } from "@/components/ui/number-stepper"
 import { Label } from "@/components/ui/label"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
-import { InfoHint } from "@/components/ui/info-hint"
 import { MobileActionBar } from "@/components/ui/mobile"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { PageHeader } from "@/components/ui/page-header"
+import {
+  emptySpaBooking,
+  emptySpaParticipantSlot,
+  emptyWalkInGuest,
+  spaBookingSchemaFor,
+  walkInGuestSchema,
+  type SpaBookingValues,
+  type SpaGenderChoice,
+  type SpaParticipantValue,
+  type WalkInGuestValues,
+} from "@/lib/sales-form-schemas"
 
 type GuestResult = {
   reservationId: string
@@ -47,24 +63,15 @@ type GuestResult = {
 // SAME primary guest's name, not the actual companion. Free text sidesteps that
 // display bug entirely; the real name still shows correctly, it just isn't linked to
 // a Profile for this booking.
-type ParticipantValue =
-  | { kind: "reservation"; reservationId: string; guestName: string; roomNumber: string; profileId: string; accompanyingGuests: { upid: string; guestName: string }[] }
-  | { kind: "walkin_primary"; folioId: string; guestName: string }
-  | { kind: "walkin_companion"; guestName: string }
-
-type GenderChoice = "ANY" | "FEMALE" | "MALE"
-
-// One booking slot's guest identity PLUS its own therapist ask — the two are bundled
-// together (not parallel arrays) so every place that touches a participant only has
-// one thing to read/update. specificTherapistId and genderChoice are mutually
-// exclusive by construction (see setSlotGender/setSlotTherapist below): picking one
-// always clears the other, since a named request makes a gender filter moot.
-type ParticipantSlot = {
-  value: ParticipantValue | null
-  genderChoice: GenderChoice
-  specificTherapistId: string // "" = none
-}
-const emptySlot = (): ParticipantSlot => ({ value: null, genderChoice: "ANY", specificTherapistId: "" })
+//
+// Each slot (SpaParticipantSlot in sales-form-schemas) bundles the guest identity PLUS
+// its own therapist ask — together, not parallel arrays, so every place that touches a
+// participant only has one thing to read/update. specificTherapistId and genderChoice
+// are mutually exclusive by construction (see setSlotGender/setSlotTherapist below):
+// picking one always clears the other, since a named request makes a gender filter moot.
+type ParticipantValue = SpaParticipantValue
+type GenderChoice = SpaGenderChoice
+const emptySlot = emptySpaParticipantSlot
 
 type QualifiedTherapist = { id: string; displayName: string; gender: string | null; preferred: boolean; isPreferredForGuest: boolean }
 
@@ -111,7 +118,7 @@ type AppointmentListItem = {
 // guest's last deliberately-requested therapist at this property is remembered
 // (SpaGuestTherapistPreference) and pre-selected next time, written back only when a
 // specific-name request was actually honored (see the appointments route).
-export default function SpaPage() {
+function SpaPage() {
   const { currentProperty } = useProperty()
 
   const { slug } = useParams<{ slug: string }>()
@@ -119,41 +126,51 @@ export default function SpaPage() {
   // Derived, not set in an effect: until someone picks a tab, the default follows the
   // screen — and useIsMobile() is false on the first render, so desktop never changes.
   const isMobile = useIsMobile()
-  const [pickedTab, setPageTab] = useState<"book" | "schedule" | "history" | null>(null)
-  const pageTab = pickedTab ?? (isMobile ? "schedule" : "book")
+  // The tab lives in the URL (?tab=); with none named, a phone opens on Schedule, desktop on Book.
+  const [pickedTab, setPageTab] = useUrlState<"book" | "schedule" | "history" | "">("tab", "", ["book", "schedule", "history"])
+  const pageTab = pickedTab || (isMobile ? "schedule" : "book")
   const [historyRefresh, setHistoryRefresh] = useState(0)
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
 
+  // APP STANDARD 001: the booking form (treatment, party size, participant slots, date,
+  // time, notes, payment) and the walk-in mini form. The slots are a field array whose
+  // length always follows partySize; each slot's guest is picked from search results and
+  // its therapist may be pre-filled from the guest's remembered one (setValue, below).
+  // The payment choice only applies in-house, so its rule follows the mode.
+  const form = useForm<SpaBookingValues>({
+    resolver: zodResolver(spaBookingSchemaFor(mode === "guest")),
+    mode: "onChange",
+    defaultValues: emptySpaBooking,
+  })
+  const { setValue, getValues } = form
+  const participantsArray = useFieldArray({ control: form.control, name: "participants" })
+  const [selectedTreatmentId, partySize, selectedDate, selectedStartTime, inHousePayment, participants] =
+    form.watch(["treatmentId", "partySize", "appointmentDate", "startTime", "payment", "participants"])
+  const walkInForm = useForm<WalkInGuestValues>({ resolver: zodResolver(walkInGuestSchema), mode: "onChange", defaultValues: emptyWalkInGuest })
+  const walkInName = walkInForm.watch("name")
+
   const [treatments, setTreatments] = useState<Treatment[]>([])
-  const [selectedTreatmentId, setSelectedTreatmentId] = useState("")
   const selectedTreatment = treatments.find((t) => t.id === selectedTreatmentId) ?? null
   const availableTreatments = treatments.filter((t) => (mode === "guest" ? t.allowInHouseGuest : t.allowWalkIn))
 
-  const [partySize, setPartySize] = useState(1)
-  const [participants, setParticipants] = useState<ParticipantSlot[]>([emptySlot()])
   const [participantTherapistOptions, setParticipantTherapistOptions] = useState<QualifiedTherapist[][]>([])
   const [activeSlot, setActiveSlot] = useState<number | null>(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [guests, setGuests] = useState<GuestResult[]>([])
   const [loadingSearch, setLoadingSearch] = useState(false)
 
-  const [walkInForm, setWalkInForm] = useState({ name: "", contact: "" })
   const [startingWalkIn, setStartingWalkIn] = useState(false)
   const [walkInFolioId, setWalkInFolioId] = useState<string | null>(null)
   const [isWalkInPanelOpen, setIsWalkInPanelOpen] = useState(false)
   const [_openWalkIns, setOpenWalkIns] = useState<AppointmentListItem[]>([])
 
-  const [selectedDate, setSelectedDate] = useState("")
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [slots, setSlots] = useState<SlotAvailability[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const [selectedStartTime, setSelectedStartTime] = useState("")
   const [price, setPrice] = useState<number | null>(null)
   const [currency, setCurrency] = useState("")
 
-  const [notes, setNotes] = useState("")
-  const [inHousePayment, setInHousePayment] = useState<InHousePayment>({ settleNow: false, paymentMethodId: "" })
   const [booking, setBooking] = useState(false)
   // The appointment open in the side panel (lifecycle actions), and a counter that makes
   // the schedule reload after one of them.
@@ -220,31 +237,33 @@ export default function SpaPage() {
   }, [currentProperty])
 
   const resetParticipants = (size: number) => {
-    setPartySize(size)
-    setParticipants(Array.from({ length: size }, emptySlot))
+    setValue("partySize", size)
+    participantsArray.replace(Array.from({ length: size }, emptySlot))
     setActiveSlot(0)
-    setSelectedStartTime("")
+    setValue("startTime", "")
     setSlots([])
   }
 
   const handleModeChange = (next: "guest" | "walkin") => {
     setMode(next)
-    setSelectedTreatmentId("")
+    setValue("treatmentId", "")
     setWalkInFolioId(null)
     resetParticipants(1)
   }
 
   const handleTreatmentChange = (value: string | null) => {
-    setSelectedTreatmentId(value ?? "")
+    setValue("treatmentId", value ?? "", { shouldValidate: true })
     resetParticipants(1)
   }
 
   const handlePartySizeChange = (value: string | null) => {
     const n = Math.max(1, parseInt(value ?? "1") || 1)
-    setPartySize(n)
+    setValue("partySize", n, { shouldValidate: true })
     // Grow/shrink WITHOUT wiping already-selected participants (esp. the primary in slot 0).
-    setParticipants((prev) => (n <= prev.length ? prev.slice(0, n) : [...prev, ...Array.from({ length: n - prev.length }, emptySlot)]))
-    setSelectedStartTime("")
+    const current = getValues("participants").length
+    if (n < current) participantsArray.remove(Array.from({ length: current - n }, (_, k) => n + k))
+    else if (n > current) participantsArray.append(Array.from({ length: n - current }, emptySlot), { shouldFocus: false })
+    setValue("startTime", "")
     setSlots([])
   }
 
@@ -272,15 +291,14 @@ export default function SpaPage() {
     ).then((lists: QualifiedTherapist[][]) => {
       if (cancelled) return
       setParticipantTherapistOptions(lists)
-      setParticipants((prev) =>
-        prev.map((slot, i) => {
-          const preferred = lists[i]?.find((t) => t.isPreferredForGuest)
-          if (preferred && slot.genderChoice === "ANY" && !slot.specificTherapistId) {
-            return { ...slot, specificTherapistId: preferred.id }
-          }
-          return slot
-        })
-      )
+      // Pre-fill each guest's usual therapist — only into a slot where nobody has made a
+      // choice yet (no gender filter, no named therapist), read at the moment the lists land.
+      getValues("participants").forEach((slot, i) => {
+        const preferred = lists[i]?.find((t) => t.isPreferredForGuest)
+        if (preferred && slot.genderChoice === "ANY" && !slot.specificTherapistId) {
+          setValue(`participants.${i}.specificTherapistId`, preferred.id)
+        }
+      })
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -334,7 +352,7 @@ export default function SpaPage() {
     }
     setLoadingSlots(true)
     setLoadError(false)
-    setSelectedStartTime("")
+    setValue("startTime", "")
     const qs = new URLSearchParams({
       propertyId: currentProperty.id,
       treatmentId: selectedTreatmentId,
@@ -354,7 +372,7 @@ export default function SpaPage() {
       })
       .catch(() => setLoadError(true))
       .finally(() => setLoadingSlots(false))
-  }, [currentProperty, selectedTreatmentId, selectedDate, partySize, requirementsKey])
+  }, [currentProperty, selectedTreatmentId, selectedDate, partySize, requirementsKey, setValue])
 
   useEffect(() => { fetchSlots() }, [fetchSlots])
 
@@ -371,16 +389,23 @@ export default function SpaPage() {
     }
   }
 
+  // Field-level setValue (not useFieldArray's update(), which remounts the row — that would
+  // drop focus from the walk-in companion name input on every keystroke).
   const setSlot = (index: number, value: ParticipantValue | null) => {
-    setParticipants((prev) => prev.map((slot, i) => (i === index ? { value, genderChoice: "ANY", specificTherapistId: "" } : slot)))
+    if (index >= getValues("participants").length) return
+    setValue(`participants.${index}.value`, value)
+    setValue(`participants.${index}.genderChoice`, "ANY")
+    setValue(`participants.${index}.specificTherapistId`, "")
   }
 
   const setSlotGender = (index: number, choice: GenderChoice) => {
-    setParticipants((prev) => prev.map((slot, i) => (i === index ? { ...slot, genderChoice: choice, specificTherapistId: "" } : slot)))
+    setValue(`participants.${index}.genderChoice`, choice)
+    setValue(`participants.${index}.specificTherapistId`, "")
   }
 
   const setSlotTherapist = (index: number, therapistId: string) => {
-    setParticipants((prev) => prev.map((slot, i) => (i === index ? { ...slot, specificTherapistId: therapistId, genderChoice: "ANY" } : slot)))
+    setValue(`participants.${index}.specificTherapistId`, therapistId)
+    setValue(`participants.${index}.genderChoice`, "ANY")
   }
 
   const selectGuestForSlot = (guest: GuestResult) => {
@@ -408,20 +433,19 @@ export default function SpaPage() {
     setActiveSlot(index)
   }
 
-  const handleStartWalkIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentProperty || !walkInForm.name) return
+  const handleStartWalkIn = async (values: WalkInGuestValues) => {
+    if (!currentProperty) return
     setStartingWalkIn(true)
     try {
       const res = await fetch(`/api/folios/walk-in`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId: currentProperty.id, walkInGuestName: walkInForm.name, walkInGuestContact: walkInForm.contact }),
+        body: JSON.stringify({ propertyId: currentProperty.id, walkInGuestName: values.name, walkInGuestContact: values.contact }),
       })
       if (res.ok) {
         const folio = await res.json()
         setWalkInFolioId(folio.id)
-        setSlot(0, { kind: "walkin_primary", folioId: folio.id, guestName: walkInForm.name })
+        setSlot(0, { kind: "walkin_primary", folioId: folio.id, guestName: values.name })
       } else {
         const err = await res.json()
         setFeedback({ message: err.error || "Failed to start walk-in bill", type: "error" })
@@ -438,13 +462,12 @@ export default function SpaPage() {
     (mode === "guest" || !!walkInFolioId) &&
     (mode !== "guest" || !inHousePayment.settleNow || !!inHousePayment.paymentMethodId)
 
-  const handleBook = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleBook = async (values: SpaBookingValues) => {
     if (!currentProperty || !canBook || !selectedTreatment) return
     setBooking(true)
     setFeedback(null)
     try {
-      const payloadParticipants = participants.map((slot) => {
+      const payloadParticipants = values.participants.map((slot) => {
         const v = slot.value!
         const identity =
           v.kind === "reservation" ? { reservationId: v.reservationId } : v.kind === "walkin_primary" ? { folioId: v.folioId } : { walkInGuestName: v.guestName }
@@ -460,22 +483,22 @@ export default function SpaPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           propertyId: currentProperty.id,
-          treatmentId: selectedTreatmentId,
-          appointmentDate: selectedDate,
-          startTime: selectedStartTime,
+          treatmentId: values.treatmentId,
+          appointmentDate: values.appointmentDate,
+          startTime: values.startTime,
           participants: payloadParticipants,
-          notes: notes || undefined,
-          settlement: mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
-            ? { paymentMethodId: inHousePayment.paymentMethodId }
+          notes: values.notes || undefined,
+          settlement: mode === "guest" && values.payment.settleNow && values.payment.paymentMethodId
+            ? { paymentMethodId: values.payment.paymentMethodId }
             : undefined,
         }),
       })
       if (res.ok) {
-        const settled = mode === "guest" && inHousePayment.settleNow && inHousePayment.paymentMethodId
-        setFeedback({ message: `Booked ${selectedTreatment.name} at ${selectedStartTime}${settled ? " — paid" : ""}.`, type: "success" })
-        resetParticipants(partySize)
-        setNotes("")
-        setInHousePayment({ settleNow: false, paymentMethodId: "" })
+        const settled = mode === "guest" && values.payment.settleNow && values.payment.paymentMethodId
+        setFeedback({ message: `Booked ${selectedTreatment.name} at ${values.startTime}${settled ? " — paid" : ""}.`, type: "success" })
+        resetParticipants(values.partySize)
+        setValue("notes", "")
+        setValue("payment", emptySpaBooking.payment)
         fetchTodaysAppointments()
         setHistoryRefresh((n) => n + 1)
         if (mode === "walkin") {
@@ -498,12 +521,10 @@ export default function SpaPage() {
 
   return (
     <div className="space-y-6 pb-24 md:pb-0">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Spa
-            <InfoHint label="Spa">Search for an in-house guest, or start a walk-in bill, then book a treatment.</InfoHint>
-          </h2>
-      </div>
+      <PageHeader
+        title="Spa"
+        hint="Search for an in-house guest, or start a walk-in bill, then book a treatment."
+      />
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>
         <TabsList>
@@ -520,7 +541,7 @@ export default function SpaPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 {mode === "guest" ? <Search className="w-5 h-5 text-primary" /> : <UserRound className="w-5 h-5 text-primary" />}
-                {mode === "guest" ? "Find Guest" : "Walk-in Guest"}
+                {mode === "guest" ? "Find guest" : "Walk-in guest"}
               </h3>
               <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
                 <button
@@ -553,7 +574,7 @@ export default function SpaPage() {
                 <>
                   <form onSubmit={handleSearch} className="flex gap-3">
                     <Input
-                      placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                      placeholder={isMobile ? "Room no. or last name" : "Search by room number or last name..."}
                       enterKeyHint="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -595,30 +616,33 @@ export default function SpaPage() {
               walkInFolioId ? (
                 <div className="flex items-center justify-between bg-muted rounded-lg p-4">
                   <div>
-                    <p className="font-bold text-foreground">{walkInForm.name}</p>
+                    <p className="font-bold text-foreground">{walkInName}</p>
                     <p className="text-sm text-muted-foreground">Walk-in bill open</p>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => setIsWalkInPanelOpen(true)}>
-                    <Receipt className="w-4 h-4 mr-2" /> View / Close Bill
+                    <Receipt className="w-4 h-4 mr-2" /> View / close bill
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={handleStartWalkIn} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Input
-                    placeholder="Guest name"
-                    required
-                    value={walkInForm.name}
-                    onChange={(e) => setWalkInForm((p) => ({ ...p, name: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Phone / email (optional)"
-                    value={walkInForm.contact}
-                    onChange={(e) => setWalkInForm((p) => ({ ...p, contact: e.target.value }))}
-                  />
-                  <Button type="submit" className="md:col-span-2" disabled={startingWalkIn || !walkInForm.name}>
-                    {startingWalkIn ? "Starting..." : "Start Walk-in Bill"}
-                  </Button>
-                </form>
+                <Form {...walkInForm}>
+                  <form onSubmit={walkInForm.handleSubmit(handleStartWalkIn)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <FormField control={walkInForm.control} name="name" render={({ field }) => (
+                      <FormItem>
+                        <FormControl><Input placeholder="Guest name" aria-label="Guest name" {...field} /></FormControl>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )} />
+                    <FormField control={walkInForm.control} name="contact" render={({ field }) => (
+                      <FormItem>
+                        <FormControl><Input placeholder="Phone / email (optional)" aria-label="Phone or email" {...field} /></FormControl>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )} />
+                    <SubmitButton className="md:col-span-2" pending={startingWalkIn} pendingLabel="Starting…" disabled={!walkInName}>
+                      Start walk-in bill
+                    </SubmitButton>
+                  </form>
+                </Form>
               )
             )}
           </div>
@@ -627,43 +651,55 @@ export default function SpaPage() {
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
               <Sparkles className="w-5 h-5 text-primary" /> Treatment
             </h3>
+            <Form {...form}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Treatment</Label>
-                <Select value={selectedTreatmentId} onValueChange={handleTreatmentChange} disabled={mode === "walkin" && !walkInFolioId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>{selectedTreatment ? selectedTreatment.name : "Choose treatment..."}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableTreatments.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name} ({t.defaultDurationMinutes} min)</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedTreatment && selectedTreatment.maxParticipants > 1 && (
-                <div className="space-y-2">
-                  <Label>Party Size</Label>
-                  {/* Phone stepper first, so on desktop the Select stays the last child (space-y). */}
-                  <NumberStepper
-                    className="md:hidden"
-                    label="Guests"
-                    min={1}
-                    max={selectedTreatment.maxParticipants}
-                    value={partySize}
-                    onChange={(n) => handlePartySizeChange(String(n))}
-                  />
-                  <Select value={String(partySize)} onValueChange={handlePartySizeChange}>
-                    <SelectTrigger className="w-full max-md:hidden"><SelectValue /></SelectTrigger>
+              <FormField control={form.control} name="treatmentId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Treatment</FormLabel>
+                  <Select value={field.value} onValueChange={handleTreatmentChange} disabled={mode === "walkin" && !walkInFolioId}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue>{selectedTreatment ? selectedTreatment.name : "Choose treatment..."}</SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
                     <SelectContent>
-                      {Array.from({ length: selectedTreatment.maxParticipants }, (_, i) => i + 1).map((n) => (
-                        <SelectItem key={n} value={String(n)}>{n} {n === 1 ? "guest" : "guests"}</SelectItem>
+                      {availableTreatments.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name} ({t.defaultDurationMinutes} min)</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )} />
+              {selectedTreatment && selectedTreatment.maxParticipants > 1 && (
+                <FormField control={form.control} name="partySize" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Party size</FormLabel>
+                    {/* Phone stepper first, so on desktop the Select stays the last child (space-y). */}
+                    <NumberStepper
+                      className="md:hidden"
+                      label="Guests"
+                      min={1}
+                      max={selectedTreatment.maxParticipants}
+                      value={field.value}
+                      onChange={(n) => handlePartySizeChange(String(n))}
+                    />
+                    <Select value={String(field.value)} onValueChange={handlePartySizeChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full max-md:hidden"><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Array.from({ length: selectedTreatment.maxParticipants }, (_, i) => i + 1).map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n} {n === 1 ? "guest" : "guests"}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
               )}
             </div>
+            </Form>
           </div>
 
           {selectedTreatmentId && (
@@ -673,6 +709,7 @@ export default function SpaPage() {
               </h3>
               <div className="space-y-3 mb-4">
                 {participants.map((slot, i) => {
+                  const rowKey = participantsArray.fields[i]?.id ?? i
                   const usedCompanionNames = new Set(
                     participants.filter((s, si) => si !== i && s.value?.kind === "walkin_companion").map((s) => (s.value as { guestName: string }).guestName)
                   )
@@ -681,11 +718,11 @@ export default function SpaPage() {
                     : []
 
                   return (
-                    <div key={i} className="space-y-2">
+                    <div key={rowKey} className="space-y-2">
                       {i === 0 && mode === "walkin" ? (
                         <div className="flex items-center justify-between rounded-lg border p-3">
                           {walkInFolioId ? (
-                            <p className="text-sm text-foreground">{walkInForm.name} <span className="text-muted-foreground">(walk-in)</span></p>
+                            <p className="text-sm text-foreground">{walkInName} <span className="text-muted-foreground">(walk-in)</span></p>
                           ) : (
                             <p className="text-sm text-muted-foreground">Start a walk-in bill above first</p>
                           )}
@@ -719,7 +756,7 @@ export default function SpaPage() {
                         <>
                           {companionOptions.length > 0 && (
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-muted-foreground">Also in Room {primaryReservation!.roomNumber}:</span>
+                              <span className="text-xs text-muted-foreground">Also in room {primaryReservation!.roomNumber}:</span>
                               {companionOptions.map((c) => (
                                 <Button key={c.upid} type="button" size="sm" variant="outline" onClick={() => selectCompanionForSlot(i, c)}>
                                   + {c.guestName}
@@ -786,7 +823,7 @@ export default function SpaPage() {
                 <>
                   <form onSubmit={handleSearch} className="flex gap-3">
                     <Input
-                      placeholder={isMobile ? "Room no. or last name" : "Search by Room Number or Last Name..."}
+                      placeholder={isMobile ? "Room no. or last name" : "Search by room number or last name..."}
                       enterKeyHint="search"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -823,17 +860,21 @@ export default function SpaPage() {
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
                 <Clock className="w-5 h-5 text-primary" /> Date &amp; Time
               </h3>
+              <Form {...form}>
               <div className="space-y-4">
-                <div className="space-y-2 max-w-[240px]">
-                  <Label>Date</Label>
-                  <DatePicker
-                    value={selectedDate}
-                    onChange={setSelectedDate}
-                    placeholder="Choose date..."
-                    minDate={todayKey()}
-                    availableDates={availableDates}
-                  />
-                </div>
+                <FormField control={form.control} name="appointmentDate" render={({ field }) => (
+                  <FormItem className="max-w-[240px]">
+                    <FormLabel>Date</FormLabel>
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Choose date..."
+                      minDate={todayKey()}
+                      availableDates={availableDates}
+                    />
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
 
                 {selectedDate && (
                   loadingSlots ? (
@@ -843,25 +884,31 @@ export default function SpaPage() {
                   ) : slots.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No time slots available on this date.</p>
                   ) : (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                      {slots.map((s) => (
-                        <button
-                          key={s.startTime}
-                          type="button"
-                          disabled={!s.available}
-                          onClick={() => setSelectedStartTime(s.startTime)}
-                          className={`px-2 py-1.5 rounded-md text-sm border transition-colors ${
-                            !s.available
-                              ? "opacity-40 cursor-not-allowed border-border text-muted-foreground"
-                              : selectedStartTime === s.startTime
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border hover:bg-muted text-foreground"
-                          }`}
-                        >
-                          {s.startTime}
-                        </button>
-                      ))}
-                    </div>
+                    <FormField control={form.control} name="startTime" render={({ field }) => (
+                      <FormItem>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                          {slots.map((s) => (
+                            <button
+                              key={s.startTime}
+                              type="button"
+                              aria-pressed={field.value === s.startTime}
+                              disabled={!s.available}
+                              onClick={() => field.onChange(s.startTime)}
+                              className={`px-2 py-1.5 rounded-md text-sm border transition-colors ${
+                                !s.available
+                                  ? "opacity-40 cursor-not-allowed border-border text-muted-foreground"
+                                  : field.value === s.startTime
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "border-border hover:bg-muted text-foreground"
+                              }`}
+                            >
+                              {s.startTime}
+                            </button>
+                          ))}
+                        </div>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )} />
                   )
                 )}
 
@@ -889,19 +936,29 @@ export default function SpaPage() {
                   </div>
                 )}
               </div>
+              </Form>
             </div>
           )}
 
           {selectedTreatmentId && (
             <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!canBook ? "opacity-60" : "border-primary/30 shadow-md"}`}>
-              <form id="spa-book-form" onSubmit={handleBook} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Notes (optional)</Label>
-                  <Input placeholder="e.g. Prefers firm pressure" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                </div>
+              <Form {...form}>
+              <form id="spa-book-form" onSubmit={form.handleSubmit(handleBook)} className="space-y-4">
+                <FormField control={form.control} name="notes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes (optional)</FormLabel>
+                    <FormControl><Input placeholder="e.g. Prefers firm pressure" {...field} /></FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
 
                 {mode === "guest" && primaryReservation && (
-                  <InHousePaymentChoice value={inHousePayment} onChange={setInHousePayment} amount={price} currency={currency} />
+                  <FormField control={form.control} name="payment" render={({ field }) => (
+                    <FormItem>
+                      <InHousePaymentChoice value={field.value} onChange={field.onChange} amount={price} currency={currency} />
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
                 )}
 
                 {feedback && (
@@ -910,10 +967,11 @@ export default function SpaPage() {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full max-md:hidden" disabled={booking || !canBook}>
-                  {booking ? "Booking..." : "Book Appointment"}
-                </Button>
+                <SubmitButton className="w-full max-md:hidden" pending={booking} pendingLabel="Booking…" disabled={!canBook}>
+                  Book appointment
+                </SubmitButton>
               </form>
+              </Form>
             </div>
           )}
         </div>
@@ -973,7 +1031,7 @@ export default function SpaPage() {
         onClosed={() => {
           setIsWalkInPanelOpen(false)
           setWalkInFolioId(null)
-          setWalkInForm({ name: "", contact: "" })
+          walkInForm.reset(emptyWalkInGuest)
           setMode("guest")
           resetParticipants(1)
           fetchOpenWalkIns()
@@ -981,5 +1039,14 @@ export default function SpaPage() {
         }}
       />
     </div>
+  )
+}
+
+// useUrlState reads the query string — the page needs a Suspense boundary.
+export default function SpaRoute() {
+  return (
+    <Suspense>
+      <SpaPage />
+    </Suspense>
   )
 }

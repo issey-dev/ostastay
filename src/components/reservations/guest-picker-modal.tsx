@@ -5,7 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Star, Search, UserPlus, Loader2 } from "@/components/icons"
+import { Star, Search, UserPlus } from "@/components/icons"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { EmptyState } from "@/components/ui/empty-state"
 import { INPUT_EMAIL, INPUT_PHONE, INPUT_SEARCH } from "@/lib/input-presets"
 
 export type GuestProfile = {
@@ -32,7 +35,7 @@ type GuestPickerModalProps = {
 // fetch at mount) and — if the person isn't found — lets staff quick-create a minimal
 // profile inline without leaving the booking flow. Used for both Primary Guest and
 // Accompanying Guest selection in booking-form.tsx.
-export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excludeIds = [], title = "Select Guest" }: GuestPickerModalProps) {
+export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excludeIds = [], title = "Select guest" }: GuestPickerModalProps) {
   const [search, setSearch] = useState("")
   const [results, setResults] = useState<GuestProfile[]>([])
   const [loading, setLoading] = useState(false)
@@ -72,8 +75,26 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
     onClose()
   }
 
-  const handleQuickCreate = async () => {
-    if (!quickCreate.firstName.trim()) return
+  // Quick-create starts from what was typed in the search box, so the name isn't typed
+  // twice: "Anna Maria Silva" → first "Anna Maria", last "Silva"; a single word is taken as
+  // the last name (desks usually search by surname). An email or phone isn't a name — skip it.
+  const openQuickCreate = () => {
+    const typed = search.trim().replace(/\s+/g, " ")
+    if (typed && !/[@\d]/.test(typed)) {
+      const parts = typed.split(" ")
+      const lastName = parts.pop() ?? ""
+      setQuickCreate(p => ({ ...p, firstName: parts.join(" "), lastName }))
+    }
+    setShowQuickCreate(true)
+  }
+
+  // A real <form> so Enter creates (DESKTOP_PLAN D10). This modal is opened from inside the
+  // booking form, and React submit events bubble through portals — stop it here so Enter
+  // never also submits the booking.
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!quickCreate.firstName.trim() || creating) return
     setCreating(true)
     setError(null)
     try {
@@ -96,10 +117,10 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
         handleSelect(created)
       } else {
         const err = await res.json()
-        setError(err.error || "Failed to create profile")
+        setError(err.error || "Couldn't create the profile. Try again.")
       }
     } catch {
-      setError("An unexpected error occurred.")
+      setError("Couldn't create the profile. Try again.")
     } finally {
       setCreating(false)
     }
@@ -107,7 +128,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -127,9 +148,9 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
 
           <div className="border rounded-md max-h-64 overflow-y-auto divide-y">
             {loading ? (
-              <p className="text-sm text-muted-foreground italic p-3">Searching...</p>
+              <InlineLoading lines={3} className="p-3" label="Searching" />
             ) : visibleResults.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic p-3">No matching profiles found.</p>
+              <EmptyState size="inline" className="p-3" title="No matching profiles found" />
             ) : (
               visibleResults.map(p => {
                 const email = p.communications?.find(c => c.type === "EMAIL")?.value
@@ -152,20 +173,20 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
           </div>
 
           {!showQuickCreate ? (
-            <Button type="button" variant="outline" className="border-dashed max-sm:h-auto max-sm:py-2 max-sm:whitespace-normal" onClick={() => setShowQuickCreate(true)}>
+            <Button type="button" variant="outline" className="border-dashed max-sm:h-auto max-sm:py-2 max-sm:whitespace-normal" onClick={openQuickCreate}>
               <UserPlus className="h-4 w-4 mr-2" /> Can&apos;t find them? Quick-create a profile
             </Button>
           ) : (
-            <div className="border rounded-md p-3 flex flex-col gap-3 bg-muted/40">
-              <p className="text-xs font-medium text-muted-foreground">New Guest Profile</p>
+            <form onSubmit={handleQuickCreate} className="border rounded-md p-3 flex flex-col gap-3 bg-muted/40">
+              <p className="text-xs font-medium text-muted-foreground">New guest profile</p>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">First Name <span className="text-destructive">*</span></Label>
+                  <Label className="text-xs">First name <span className="text-destructive">*</span></Label>
                   <Input value={quickCreate.firstName} onChange={e => setQuickCreate(p => ({ ...p, firstName: e.target.value }))} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Last Name</Label>
+                  <Label className="text-xs">Last name</Label>
                   <Input value={quickCreate.lastName} onChange={e => setQuickCreate(p => ({ ...p, lastName: e.target.value }))} />
                 </div>
                 <div className="grid gap-1.5">
@@ -179,12 +200,11 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
-                <Button type="button" size="sm" disabled={!quickCreate.firstName.trim() || creating} onClick={handleQuickCreate}>
-                  {creating ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5 mr-1.5" />}
-                  {creating ? "Creating..." : "Create & Select"}
-                </Button>
+                <SubmitButton size="sm" pending={creating} pendingLabel="Creating…" disabled={!quickCreate.firstName.trim()}>
+                  <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Create & select
+                </SubmitButton>
               </div>
-            </div>
+            </form>
           )}
         </div>
 

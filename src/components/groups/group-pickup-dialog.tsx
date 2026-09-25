@@ -17,6 +17,7 @@ import { Plus } from "@/components/icons"
 import { addDays, subDays, parseISO, format } from "date-fns"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type GroupPickupDialogProps = {
   groupId: string
@@ -132,7 +133,9 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
         body: JSON.stringify({ ...fields, ...FIXED_FIELDS, billToMaster: bill, acknowledgeOverbook })
       })
       if (res.ok) {
+        form.reset(pickupDefaults)
         setOpen(false)
+        toast.success(`Room picked up for ${fields.firstName.trim()} ${fields.lastName.trim()}`.trim())
         onSaved()
         return
       }
@@ -147,28 +150,40 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
         if (ok) { setLoading(true); await send(true) }
         return
       }
-      toast.error(err.error || "Failed to create pickup reservation")
+      toast.error(err.error || "Couldn't create the pickup. Try again.")
     }
     try {
       await send(false)
     } catch (e) {
       console.error(e)
+      toast.error("Couldn't create the pickup. Try again.")
     } finally {
       setLoading(false)
     }
   }
 
+  // Esc, the overlay, X and Cancel all come through here — a filled-in pickup is not
+  // thrown away without asking (DESKTOP_PLAN D11). Discarding starts the next one fresh.
+  const requestClose = async () => {
+    if (loading) return
+    if (form.formState.isDirty) {
+      if (!(await confirm({ title: "Discard changes?", confirmLabel: "Discard", destructive: true }))) return
+      form.reset(pickupDefaults)
+    }
+    setOpen(false)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose())}>
       <DialogTrigger asChild>
         <Button className="flex items-center gap-2" disabled={!!disabledReason} title={disabledReason}>
           <Plus className="w-4 h-4" />
-          Pickup Room
+          Pickup room
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent size="lg">
         <DialogHeader>
-          <DialogTitle>Pickup Room from Block</DialogTitle>
+          <DialogTitle>Pickup room from block</DialogTitle>
           <DialogDescription>
             Create a reservation for a guest under this Group Block.
           </DialogDescription>
@@ -182,7 +197,7 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
                 name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>First Name</FormLabel>
+                    <FormLabel>First name</FormLabel>
                     <FormControl>
                       <Input autoComplete="given-name" {...field} />
                     </FormControl>
@@ -195,7 +210,7 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
                 name="lastName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Last Name</FormLabel>
+                    <FormLabel>Last name</FormLabel>
                     <FormControl>
                       <Input autoComplete="family-name" {...field} />
                     </FormControl>
@@ -255,7 +270,7 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
               name="roomTypeId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Room Type</FormLabel>
+                  <FormLabel>Room type</FormLabel>
                   <FormControl>
                     <SearchableSelect
                       value={field.value}
@@ -275,7 +290,7 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
                 name="ratePlanId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Rate Plan</FormLabel>
+                    <FormLabel>Rate plan</FormLabel>
                     <FormControl>
                       <SearchableSelect
                         value={field.value}
@@ -293,12 +308,12 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
                 name="mealPlanCode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Meal Plan</FormLabel>
+                    <FormLabel>Meal plan</FormLabel>
                     <FormControl>
                       <SearchableSelect
                         value={field.value}
                         onChange={(v) => field.onChange(v ?? "")}
-                        placeholder="None (Room Only)"
+                        placeholder="None (room only)"
                         options={mealPlans.map((mp) => ({ label: `${mp.code} — ${mp.name}`, value: mp.code }))}
                       />
                     </FormControl>
@@ -325,10 +340,8 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
             />
 
             <DialogFooter className="pt-4">
-              <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" className="" disabled={loading}>
-                {loading ? "Saving..." : "Create Pickup"}
-              </Button>
+              <Button variant="outline" type="button" onClick={requestClose} disabled={loading}>Cancel</Button>
+              <SubmitButton pending={loading} pendingLabel="Creating…">Create pickup</SubmitButton>
             </DialogFooter>
           </form>
         </Form>

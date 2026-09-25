@@ -73,7 +73,7 @@ export default function PermissionMatrixPage() {
 
   return (
     <PrintDocumentShell
-      previewLabel={`Permission Matrix — ${enterpriseName}`}
+      previewLabel={`Permission matrix — ${enterpriseName}`}
       fontClassName={fontClass}
       orientation="landscape"
     >
@@ -82,7 +82,7 @@ export default function PermissionMatrixPage() {
           <StationeryHeader
             brand={brand}
             eyebrow="Access control"
-            title="Permission Matrix"
+            title="Permission matrix"
             meta={[
               { label: "Enterprise", value: enterpriseName },
               { label: "Date", value: new Date().toLocaleDateString() },

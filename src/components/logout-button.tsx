@@ -17,7 +17,7 @@ export function LogoutButton() {
           foreground, with the hover state SidebarMenuButton already provides, is the
           right weight for it. */}
       <LogOut className="h-4 w-4" />
-      <span>Log Out</span>
+      <span>Log out</span>
     </SidebarMenuButton>
   )
 }

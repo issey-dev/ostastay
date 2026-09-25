@@ -161,7 +161,7 @@ export function PropertyForm({
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Property Name</FormLabel>
+                <FormLabel>Property name</FormLabel>
                 <FormControl>
                   <Input placeholder="Sunset Guest House" {...field} />
                 </FormControl>
@@ -174,7 +174,7 @@ export function PropertyForm({
             name="code"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Short Code</FormLabel>
+                <FormLabel>Short code</FormLabel>
                 <FormControl>
                   <Input placeholder="SGH" {...field} />
                 </FormControl>
@@ -188,7 +188,7 @@ export function PropertyForm({
           name="legalName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Legal Entity Name</FormLabel>
+              <FormLabel>Legal entity name</FormLabel>
               <FormControl>
                 <Input placeholder="Sunset Hospitality LLC" {...field} />
               </FormControl>
@@ -257,7 +257,7 @@ export function PropertyForm({
             name="checkInTime"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Check-in Time</FormLabel>
+                <FormLabel>Check-in time</FormLabel>
                 <FormControl>
                   <Input placeholder="14:00" {...field} />
                 </FormControl>
@@ -270,7 +270,7 @@ export function PropertyForm({
             name="checkOutTime"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Check-out Time</FormLabel>
+                <FormLabel>Check-out time</FormLabel>
                 <FormControl>
                   <Input placeholder="11:00" {...field} />
                 </FormControl>
@@ -333,7 +333,7 @@ export function PropertyForm({
           </p>
         )}
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? 'Saving...' : isEditing ? 'Update Property' : 'Create Property'}
+          {form.formState.isSubmitting ? 'Saving...' : isEditing ? 'Update property' : 'Create property'}
         </Button>
       </form>
     </Form>

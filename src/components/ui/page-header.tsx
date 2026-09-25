@@ -1,19 +1,31 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { InfoHint } from "@/components/ui/info-hint"
+import { DocumentTitle } from "@/components/ui/document-title"
+import { DashboardBreadcrumbs } from "@/components/shell/dashboard-breadcrumbs"
 
 /**
- * A page's title row: the heading (with its optional info hint) and the page's actions.
+ * THE page title row (DESKTOP_PLAN §3.2) — every dashboard page uses it, so every page has
+ * the same heading size, the same place for its actions and a browser-tab title:
+ *
+ *   <PageHeader title="Reservations" hint="…" actions={<Button>New booking</Button>} />
+ *   <PageHeader title={guestName} crumb={confirmationNo} description="…" />
+ *
+ * - The title is the page's only <h1> (the header's property name is not a heading).
+ * - `crumb` shows "‹Sidebar item› › crumb" above the title on pages below a nav entry.
+ * - Actions: at most one primary and a couple of secondary buttons; the rest belong in a More
+ *   menu (`ActionBar`) — owner rule "clean over convenient" (DECISIONS 2026-09-25).
+ * - Explanations go in `hint` (an InfoHint), not in a paragraph under the title.
  *
  * The actions WRAP onto their own line when they don't fit beside the title instead of
- * running off the right edge — on a phone, a row of "Task Sheets · Refresh" or "Refresh ·
- * Show Resolved" next to a long title used to be cut off with no way to reach it. When the
- * row fits (every desktop width), it lays out exactly as the hand-written rows it replaces:
- * title left, actions right.
+ * running off the right edge (phones).
  */
 export function PageHeader({
   title,
   hint,
+  description,
+  crumb,
+  tabTitle,
   actions,
   align = "center",
   className,
@@ -22,13 +34,20 @@ export function PageHeader({
   title: React.ReactNode
   /** The InfoHint text; its label is the title when that is a string. */
   hint?: React.ReactNode
+  /** One short line under the title. Prefer `hint` for anything explanatory. */
+  description?: React.ReactNode
+  /** Label of this page in the breadcrumb trail (detail/child pages). */
+  crumb?: string | null
+  /** Browser-tab title when `title` is not a plain string. */
+  tabTitle?: string | null
   actions?: React.ReactNode
   /** Vertical alignment of title and actions (the pages differ). */
   align?: "center" | "end"
   className?: string
-  /** Spacing between the actions — kept per page so each looks exactly as before. */
+  /** Spacing between the actions. */
   actionsClassName?: string
 }) {
+  const docTitle = tabTitle ?? (typeof title === "string" ? title : null)
   return (
     <div
       data-slot="page-header"
@@ -38,11 +57,14 @@ export function PageHeader({
         className
       )}
     >
+      <DocumentTitle title={docTitle} />
       <div className="min-w-0">
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
+        {crumb !== undefined && <DashboardBreadcrumbs current={crumb} />}
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
           {title}
           {hint && <InfoHint label={typeof title === "string" ? title : "About this page"}>{hint}</InfoHint>}
-        </h2>
+        </h1>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className={cn("flex flex-wrap items-center", actionsClassName)}>{actions}</div>}
     </div>

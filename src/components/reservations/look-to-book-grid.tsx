@@ -49,7 +49,7 @@ export function LookToBookGrid({ gridData, visibleRatePlans, selectedRoomTypeId,
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/40">
-            <th className="sticky left-0 z-10 text-left font-medium text-muted-foreground px-3 py-2 w-36 md:w-44 bg-muted">Rate Plan</th>
+            <th className="sticky left-0 z-10 text-left font-medium text-muted-foreground px-3 py-2 w-36 md:w-44 bg-muted">Rate plan</th>
             {gridData.roomTypes.map(rt => (
               <th key={rt.id} className="px-3 py-2 text-center font-medium">
                 <div>{rt.name}</div>

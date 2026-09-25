@@ -21,7 +21,7 @@ export default async function HubEnterpriseListsPage({ params }: { params: Promi
             updates it — so both are needed. */}
         <NationalitiesManager canEdit={hasPermission(ctx, "CONTROLS", "create") && hasPermission(ctx, "CONTROLS", "update")} />
       </ControlsCard>
-      <ControlsCard title="Guest Profile Lists" description="Genders, titles, ID types, dietary requirements and more — used on guest, company and travel-agent profiles at every property.">
+      <ControlsCard title="Guest profile lists" description="Genders, titles, ID types, dietary requirements and more — used on guest, company and travel-agent profiles at every property.">
         <DropdownsManager categories={PROFILE_LOV_CATEGORIES} />
       </ControlsCard>
     </div>

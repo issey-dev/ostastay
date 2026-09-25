@@ -13,6 +13,9 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { SubmitButton } from "@/components/ui/submit-button"
 import {
   GENERATE_METHODS,
   GENERATE_METHOD_LABELS,
@@ -46,6 +49,7 @@ export function ChargeCodeGeneratesEditor({
   chargeCode: ChargeCodeRow
   allCodes: ChargeCodeRow[]
 }) {
+  const confirm = useConfirm()
   const [rows, setRows] = useState<GenerateRowView[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -90,7 +94,7 @@ export function ChargeCodeGeneratesEditor({
         setForm({ generatedCodeId: "", method: "PERCENT", value: "", calculateOn: "NET", basisGenerateId: "", sortOrder: "10" })
         fetchRows()
       } else {
-        toast.error((await res.json().catch(() => null))?.error || "Failed to add generate")
+        toast.error(await apiError(res, "Couldn't add the generate. Try again."))
       }
     } finally {
       setSubmitting(false)
@@ -104,13 +108,22 @@ export function ChargeCodeGeneratesEditor({
       body: JSON.stringify({ isActive: !row.isActive }),
     })
     if (res.ok) fetchRows()
-    else toast.error((await res.json().catch(() => null))?.error || "Failed to update")
+    else toast.error(await apiError(res, "Couldn't update the generate. Try again."))
   }
 
   const remove = async (row: GenerateRowView) => {
+    const ok = await confirm({
+      title: "Remove this generate?",
+      description: `Posting ${chargeCode.code} will no longer post ${row.generatedCode.code} automatically. Charges already posted are not changed.`,
+      confirmLabel: "Remove",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/charge-codes/${chargeCode.id}/generates/${row.id}`, { method: "DELETE" })
-    if (res.ok) fetchRows()
-    else toast.error((await res.json().catch(() => null))?.error || "Failed to delete")
+    if (res.ok) {
+      toast.success("Generate removed")
+      fetchRows()
+    } else toast.error(await apiError(res, "Couldn't remove the generate. Try again."))
   }
 
   // Tax only ever generates on a sale. On a payment, refund, deposit, commission or
@@ -241,7 +254,7 @@ export function ChargeCodeGeneratesEditor({
 
       {!adding ? (
         <Button variant="outline" size="sm" onClick={() => { setForm((p) => ({ ...p, method: availableMethods[0] })); setAdding(true) }}>
-          <Plus className="w-4 h-4 mr-2" /> Add Generate
+          <Plus className="w-4 h-4 mr-2" /> Add generate
         </Button>
       ) : (
         <form onSubmit={submit} className="space-y-4 rounded-lg border bg-muted/30 p-4">
@@ -279,7 +292,7 @@ export function ChargeCodeGeneratesEditor({
               </div>
               {basisApplies && (
                 <div className="space-y-2">
-                  <Label>Calculate On *</Label>
+                  <Label>Calculate on *</Label>
                   <Select value={form.calculateOn} onValueChange={(v) => setForm((p) => ({ ...p, calculateOn: (v ?? "NET") as CalculateOn }))}>
                     <SelectTrigger><SelectValue>{CALCULATE_ON_LABELS[form.calculateOn]}</SelectValue></SelectTrigger>
                     <SelectContent>
@@ -297,7 +310,7 @@ export function ChargeCodeGeneratesEditor({
 
           {basisApplies && form.calculateOn === "ANOTHER_GENERATE" && (
             <div className="space-y-2">
-              <Label>Compound On *</Label>
+              <Label>Compound on *</Label>
               <SearchableSelect
                 required
                 value={form.basisGenerateId}
@@ -328,7 +341,7 @@ export function ChargeCodeGeneratesEditor({
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={submitting}>Add</Button>
+            <SubmitButton size="sm" pending={submitting} pendingLabel="Adding…">Add</SubmitButton>
           </div>
         </form>
       )}

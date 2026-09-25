@@ -18,7 +18,7 @@ export default async function HubPropertyChargeCodesPage({ params }: { params: P
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
       <HubSetupNotice title={item.title} />
-      <ControlsCard title="Charge Groups & Subgroups" description="The two levels above a charge code. A Group carries the reporting bucket every revenue, tax and EOD report rolls up into; a Subgroup splits it further for detail. The canonical set is system-managed — rename freely, and add your own alongside.">
+      <ControlsCard title="Charge groups & subgroups" description="The two levels above a charge code. A Group carries the reporting bucket every revenue, tax and EOD report rolls up into; a Subgroup splits it further for detail. The canonical set is system-managed — rename freely, and add your own alongside.">
         <ChargeGroupsManager propertyId={property.id} />
       </ControlsCard>
       <ControlsCard
@@ -28,16 +28,16 @@ export default async function HubPropertyChargeCodesPage({ params }: { params: P
       >
         <ChargeCodesManager propertyId={property.id} />
       </ControlsCard>
-      <ControlsCard title="Posting Defaults" description="Which of this property's charge codes plays each system role: the nightly room charge, the Green Tax levy, and the Travel Agent commission credit. Billing resolves these by role, never by a hardcoded code name.">
+      <ControlsCard title="Posting defaults" description="Which of this property's charge codes plays each system role: the nightly room charge, the Green Tax levy, and the Travel Agent commission credit. Billing resolves these by role, never by a hardcoded code name.">
         <PostingDefaultsManager propertyId={property.id} />
       </ControlsCard>
       {addons.has("SPA") && (
-        <ControlsCard title="Spa Outlet" description="The outlet of this property that its spa charges post through and whose Tax Rule they follow. Posting is blocked until one is linked.">
+        <ControlsCard title="Spa outlet" description="The outlet of this property that its spa charges post through and whose Tax Rule they follow. Posting is blocked until one is linked.">
           <ModuleOutletPicker propertyId={property.id} module="SPA" />
         </ControlsCard>
       )}
       {addons.has("EXCURSIONS") && (
-        <ControlsCard title="Excursion Outlet" description="The outlet of this property that its excursion sales post through and whose Tax Rule they follow. Posting is blocked until one is linked.">
+        <ControlsCard title="Excursion outlet" description="The outlet of this property that its excursion sales post through and whose Tax Rule they follow. Posting is blocked until one is linked.">
           <ModuleOutletPicker propertyId={property.id} module="EXCURSIONS" />
         </ControlsCard>
       )}

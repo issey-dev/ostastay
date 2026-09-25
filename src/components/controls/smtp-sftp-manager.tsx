@@ -138,8 +138,8 @@ export function SmtpSftpManager() {
     <form onSubmit={handleSave} className="space-y-8">
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
-            SMTP (Outgoing Email)
-            <InfoHint label="SMTP (Outgoing Email)">Your own sending account, used for guest mail — Confirmation Letters, eRegistration links and debtor statements. Configure it before using any &quot;Email to Guest&quot; button. Save your changes, then use Test connection below to check them.</InfoHint>
+            SMTP (outgoing email)
+            <InfoHint label="SMTP (outgoing email)">Your own sending account, used for guest mail — Confirmation Letters, eRegistration links and debtor statements. Configure it before using any &quot;Email to Guest&quot; button. Save your changes, then use Test connection below to check them.</InfoHint>
           </h3>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -159,7 +159,7 @@ export function SmtpSftpManager() {
             <Input type="password" value={form.smtpPassword} onChange={(e) => setForm({ ...form, smtpPassword: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <Label>From Address</Label>
+            <Label>From address</Label>
             <Input type="email" placeholder="no-reply@example.com" value={form.smtpFromAddress} onChange={(e) => setForm({ ...form, smtpFromAddress: e.target.value })} />
           </div>
           <div className="flex items-center gap-2 pt-6">
@@ -199,7 +199,7 @@ export function SmtpSftpManager() {
                 <p className="text-sm text-success">
                   {testResult.stage === "send"
                     ? `Test email sent to ${testResult.sentTo}. Check the inbox — and the spam folder.`
-                    : "Connected and authenticated successfully."}
+                    : "Connected and authenticated."}
                 </p>
               ) : (
                 <p className="text-sm text-destructive">
@@ -227,8 +227,8 @@ export function SmtpSftpManager() {
 
       <div className="space-y-4 border-t border-border pt-8">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground uppercase tracking-wider">
-            SFTP (File Transfer)
-            <InfoHint label="SFTP (File Transfer)">Not yet wired to any actual transfer — saved for when a file-export feature is built.</InfoHint>
+            SFTP (file transfer)
+            <InfoHint label="SFTP (file transfer)">Not yet wired to any actual transfer — saved for when a file-export feature is built.</InfoHint>
           </h3>
         <p className="text-xs text-muted-foreground">
           Not in use yet — nothing is sent over SFTP today. Details saved here are kept for a future file-export feature.
@@ -251,7 +251,7 @@ export function SmtpSftpManager() {
             <Input type="password" value={form.sftpPassword} onChange={(e) => setForm({ ...form, sftpPassword: e.target.value })} />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label>Remote Path</Label>
+            <Label>Remote path</Label>
             <Input placeholder="/exports" value={form.sftpRemotePath} onChange={(e) => setForm({ ...form, sftpRemotePath: e.target.value })} />
           </div>
         </div>
@@ -260,7 +260,7 @@ export function SmtpSftpManager() {
       <div className="flex items-center gap-3 justify-end pt-4 border-t">
         {savedMsg && <span className="text-sm text-success">Saved</span>}
         <Button type="submit" disabled={saving}>
-          <Save className="w-4 h-4 mr-2" /> {saving ? "Saving..." : "Save Configuration"}
+          <Save className="w-4 h-4 mr-2" /> {saving ? "Saving…" : "Save"}
         </Button>
       </div>
     </form>

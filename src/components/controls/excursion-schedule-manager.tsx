@@ -4,7 +4,10 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { EmptyState } from "@/components/ui/empty-state"
+import { apiError } from "@/lib/api-error"
 import { Switch } from "@/components/ui/switch"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -64,7 +67,9 @@ export function ExcursionScheduleManager({
     setError(null)
   }
 
-  const saveSchedule = async () => {
+  const saveSchedule = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (submitting) return
     setError(null)
     if (form.daysOfWeek.length === 0) return setError("Select at least one day of the week")
     if (!form.departureTime) return setError("Departure time is required")
@@ -96,8 +101,7 @@ export function ExcursionScheduleManager({
         setEditingId(null)
         onChanged()
       } else {
-        const body = await res.json().catch(() => null)
-        setError(body?.error || `Failed to ${editingId ? "update" : "add"} schedule`)
+        setError(await apiError(res, `Couldn't ${editingId ? "save" : "add"} the schedule. Try again.`))
       }
     } finally {
       setSubmitting(false)
@@ -117,8 +121,7 @@ export function ExcursionScheduleManager({
     setListError(null)
     const res = await fetch(`/api/excursions/schedules/${s.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setListError(body?.error || "Failed to delete schedule")
+      setListError(await apiError(res, "Couldn't delete the schedule. Try again."))
       return
     }
     if (editingId === s.id) cancelEdit()
@@ -136,8 +139,7 @@ export function ExcursionScheduleManager({
         body: JSON.stringify({ isActive }),
       })
       if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        setListError(body?.error || `Failed to ${isActive ? "reactivate" : "deactivate"} schedule`)
+        setListError(await apiError(res, `Couldn't ${isActive ? "reactivate" : "deactivate"} the schedule. Try again.`))
         return
       }
       onChanged()
@@ -160,7 +162,7 @@ export function ExcursionScheduleManager({
       if (res.ok) {
         setGenerateResult(`Created ${data.created} new departure(s) (${data.skipped} already existed).`)
       } else {
-        setGenerateResult(data?.error || "Failed to generate departures")
+        setGenerateResult(data?.error || "Couldn't generate departures. Try again.")
       }
     } finally {
       setGenerating(false)
@@ -172,14 +174,14 @@ export function ExcursionScheduleManager({
       <DialogHeader>
         <DialogTitle>Schedule — {excursionType.name}</DialogTitle>
         <DialogDescription>
-          Recurring templates expand into bookable departures via &quot;Generate Departures&quot; below. You can also
+          Recurring templates expand into bookable departures via &quot;Generate departures&quot; below. You can also
           add or cancel an individual departure by hand later from the Excursions booking screen.
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3">
         {excursionType.schedules.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No recurring schedules yet — add one below.</p>
+          <EmptyState size="inline" title="No recurring schedules yet — add one below." />
         ) : (
           excursionType.schedules.map((s: ExcursionScheduleDto) => (
             <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-lg p-3">
@@ -191,7 +193,7 @@ export function ExcursionScheduleManager({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {!s.isActive && <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>}
+                {!s.isActive && <StatusBadge status="INACTIVE" label="Inactive" />}
                 <Switch
                   checked={s.isActive}
                   disabled={togglingId === s.id}
@@ -217,7 +219,7 @@ export function ExcursionScheduleManager({
         )}
       </div>
 
-      <div className="border rounded-lg p-4 space-y-3">
+      <form onSubmit={saveSchedule} className="border rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium">{editingId ? "Edit recurring schedule" : "Add a recurring schedule"}</Label>
           {editingId && (
@@ -250,16 +252,16 @@ export function ExcursionScheduleManager({
           <Input type="number" min="0" placeholder="Min. headcount to run (optional)" value={form.minCapacity} onChange={(e) => setForm((p) => ({ ...p, minCapacity: e.target.value }))} />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="button" onClick={saveSchedule} disabled={submitting} className="w-full">
+        <SubmitButton pending={submitting} pendingLabel={editingId ? "Saving…" : "Adding…"} className="w-full">
           {editingId ? (
-            submitting ? "Saving..." : "Save Changes"
+            "Save"
           ) : (
             <>
-              <Plus className="h-4 w-4 mr-1.5" /> {submitting ? "Adding..." : "Add Schedule"}
+              <Plus className="h-4 w-4 mr-1.5" /> Add schedule
             </>
           )}
-        </Button>
-      </div>
+        </SubmitButton>
+      </form>
 
       <div className="border rounded-lg p-4 space-y-3">
         <Label className="text-sm font-medium">Generate departures</Label>
@@ -271,9 +273,9 @@ export function ExcursionScheduleManager({
           <div className="flex-1">
             <DatePicker value={generateThrough} onChange={(v) => setGenerateThrough(v ?? "")} placeholder="Through date" />
           </div>
-          <Button type="button" onClick={generateDepartures} disabled={generating || !generateThrough}>
-            {generating ? "Generating..." : "Generate"}
-          </Button>
+          <SubmitButton type="button" onClick={generateDepartures} pending={generating} pendingLabel="Generating…" disabled={!generateThrough}>
+            Generate
+          </SubmitButton>
         </div>
         {generateResult && <p className="text-sm text-muted-foreground">{generateResult}</p>}
       </div>

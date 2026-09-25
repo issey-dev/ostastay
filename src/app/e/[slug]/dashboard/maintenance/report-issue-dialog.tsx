@@ -133,7 +133,7 @@ export function ReportIssueDialog({
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Report Maintenance Issue</DialogTitle>
+          <DialogTitle>Report maintenance issue</DialogTitle>
           <DialogDescription>This will create a maintenance ticket for the selected room.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -163,7 +163,7 @@ export function ReportIssueDialog({
               name="issueType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Issue Type</FormLabel>
+                  <FormLabel>Issue type</FormLabel>
                   <FormControl>
                     <OptionSelect
                       aria-label="Issue type"
@@ -255,7 +255,7 @@ export function ReportIssueDialog({
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
           <Button type="submit" form="report-issue-form" disabled={submitting}>
-            {submitting ? "Saving..." : "Submit Ticket"}
+            {submitting ? "Saving..." : "Submit ticket"}
           </Button>
         </DialogFooter>
       </DialogContent>

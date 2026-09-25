@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { Suspense, useEffect, useRef, useState } from "react"
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation"
 import { format } from "date-fns"
 import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal, Send } from "@/components/icons"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
+import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { deriveReservationState, reservationStateLabel, canCheckIn } from "@/lib/reservation-state"
@@ -34,6 +35,13 @@ import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 import { MobileActions, type MobileAction } from "@/components/ui/mobile"
 import { INPUT_SEARCH } from "@/lib/input-presets"
+import { toast } from "@/lib/toast"
+import { StatTile } from "@/components/ui/stat-tile"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useUrlState } from "@/lib/use-url-state"
+
+const FRONT_DESK_TABS = ["arrivals", "departures", "inhouse", "roommoves"] as const
+type FrontDeskTab = (typeof FRONT_DESK_TABS)[number]
 
 // ── Shared row helpers ───────────────────────────────────────────────────────
 const guestDisplayName = (g: any) =>
@@ -90,16 +98,29 @@ const hasFrontDeskFlags = (res: any) =>
 
 const money = (n: number) => `$${(n ?? 0).toFixed(2)}`
 
+// useUrlState / useSearchParams need a Suspense boundary above them.
 export default function FrontOfficeDashboard() {
+  return (
+    <Suspense fallback={null}>
+      <FrontOfficeDashboardContent />
+    </Suspense>
+  )
+}
+
+function FrontOfficeDashboardContent() {
   const { currentProperty } = useProperty()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { slug } = useParams<{ slug: string }>()
+  // The open tab lives in the URL (?tab=departures), so Back, refresh and links from the
+  // dashboard land on the same list. DESKTOP_PLAN D3.
+  const [tab, setTab] = useUrlState<FrontDeskTab>("tab", "arrivals", FRONT_DESK_TABS)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const confirm = useConfirm()
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [notification, setNotification] = useState<{ title: string; message: string; isError?: boolean } | null>(null)
   const [checkInRes, setCheckInRes] = useState<any>(null)
   const [noShowRes, setNoShowRes] = useState<any>(null)
   const [eRegRes, setERegRes] = useState<any>(null)
@@ -120,6 +141,7 @@ export default function FrontOfficeDashboard() {
     reservationId: string;
     currentRoomNumber: string;
     currentRoomType: string;
+    currentRoomTypeId: string;
     checkInDate: string;
     checkOutDate: string;
   } | null>(null)
@@ -140,26 +162,61 @@ export default function FrontOfficeDashboard() {
     fetchSummary()
   }, [currentProperty])
 
-  const fetchSummary = async () => {
+  // Several desks work the same lists — refresh silently when this tab comes back into
+  // view so a desk never acts on a stale arrival/departure list.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") fetchSummary(true)
+    }
+    window.addEventListener("focus", refresh)
+    document.addEventListener("visibilitychange", refresh)
+    return () => {
+      window.removeEventListener("focus", refresh)
+      document.removeEventListener("visibilitychange", refresh)
+    }
+  }, [currentProperty])
+
+  // `silent`: a background refresh — no loading state, and a failure keeps the last list.
+  const fetchSummary = async (silent = false) => {
     if (!propertyId) return
-    setLoading(true)
-    setLoadError(false)
+    if (!silent) {
+      setLoading(true)
+      setLoadError(false)
+    }
     try {
       const res = await fetch(`/api/front-office/summary?propertyId=${propertyId}`)
       if (!res.ok) throw new Error()
       setData(await res.json())
+      if (silent) setLoadError(false)
     } catch (e) {
       console.error(e)
-      setLoadError(true)
+      if (!silent) setLoadError(true)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
+
+  // Walk-in hand-off: the booking form lands here with ?checkin=<reservationId> — open the
+  // check-in wizard for it once today's lists are loaded, then drop the param.
+  const checkinParam = searchParams.get("checkin")
+  const checkinHandled = useRef<string | null>(null)
+  useEffect(() => {
+    if (!checkinParam || !data || checkinHandled.current === checkinParam) return
+    checkinHandled.current = checkinParam
+    const res = [...(data.arrivals ?? []), ...(data.inHouse ?? [])].find((r: any) => r.id === checkinParam)
+    setCheckInRes(res ?? { id: checkinParam })
+    const sp = new URLSearchParams(window.location.search)
+    sp.delete("checkin")
+    const qs = sp.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [checkinParam, data, pathname, router])
 
   // Check-out goes through its dedicated route — the generic status endpoint is a
   // guarded state machine that rejects CHECKED_OUT directly. Check-in opens the
   // CheckInWizard (Room → Identification → Registration Card → Confirm) instead of a bare POST.
-  const handleCheckOut = async (id: string, early = false) => {
+  const handleCheckOut = async (id: string, early = false): Promise<void> => {
+    const row = [...(data?.departures ?? []), ...(data?.inHouse ?? [])].find((r: any) => r.id === id)
+    const guest = guestDisplayName(row?.primaryGuest) || "Guest"
     setActionLoading(id)
     try {
       const res = await fetch(`/api/reservations/${id}/check-out`, {
@@ -167,25 +224,36 @@ export default function FrontOfficeDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ early }),
       })
-      const data = await res.json()
+      const body = await res.json().catch(() => ({}))
       if (res.ok) {
-        const warning = data.creditLimitWarning
-          ? ` Note: this account is now over its credit limit ($${data.creditLimitWarning.balance.toFixed(2)} of $${data.creditLimitWarning.creditLimit.toFixed(2)}).`
-          : ""
-        setNotification({ title: "Check-out Complete", message: `Guest has been successfully checked out and room marked as dirty.${warning}` })
-        await fetchSummary()
-      } else if (data.earlyCheckoutRequired && !early) {
+        const w = body.creditLimitWarning
+        toast.success(`${guest} checked out`, {
+          description: w ? `Account over its credit limit ($${w.balance.toFixed(2)} of $${w.creditLimit.toFixed(2)})` : undefined,
+        })
+        await fetchSummary(true)
+      } else if (body.earlyCheckoutRequired && !early) {
         // Not due out yet — offer an explicit early check-out.
         setActionLoading(null)
-        if (await confirm({ title: "Check out early?", description: data.error, confirmLabel: "Check out anyway" })) {
+        if (await confirm({ title: "Check out early?", description: body.error, confirmLabel: "Check out anyway" })) {
           await handleCheckOut(id, true)
         }
         return
+      } else if (typeof body.balance === "number") {
+        // A decision, not a notice: the way forward is the folio, so the dialog opens it.
+        setActionLoading(null)
+        if (await confirm({
+          title: "Balance outstanding",
+          description: `${money(body.balance)} is still due on this stay. Settle the folio before checking out.`,
+          confirmLabel: "Open folio",
+        })) {
+          openFolio(id)
+        }
+        return
       } else {
-        setNotification({ title: "Check-out Failed", message: data.error || "Unknown error", isError: true })
+        toast.error(body.error || "Couldn't check out. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred during check-out.", isError: true })
+      toast.error("Couldn't check out. Try again.")
     } finally {
       setActionLoading(null)
     }
@@ -200,15 +268,15 @@ export default function FrontOfficeDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "NO_SHOW" }),
       })
-      const data = await res.json()
+      const body = await res.json().catch(() => ({}))
       if (res.ok) {
-        setNotification({ title: "Marked No-Show", message: `${noShowRes.confirmationNo} has been marked as a no-show. Any deposit stays on the folio for refund or fee handling.` })
-        await fetchSummary()
+        toast.success(`${noShowRes.confirmationNo} marked no-show`, { description: "Any deposit stays on the folio." })
+        await fetchSummary(true)
       } else {
-        setNotification({ title: "No-Show Failed", message: data.error || "Unknown error", isError: true })
+        toast.error(body.error || "Couldn't mark the no-show. Try again.")
       }
     } catch {
-      setNotification({ title: "Error", message: "An error occurred marking the no-show.", isError: true })
+      toast.error("Couldn't mark the no-show. Try again.")
     } finally {
       setActionLoading(null)
       setNoShowRes(null)
@@ -244,6 +312,7 @@ export default function FrontOfficeDashboard() {
       reservationId: res.id,
       currentRoomNumber: res.assignments?.[0]?.room?.roomNumber || "Unassigned",
       currentRoomType: res.assignments?.[0]?.roomType?.name || "",
+      currentRoomTypeId: res.assignments?.[0]?.roomTypeId ?? res.assignments?.[0]?.roomType?.id ?? "",
       checkInDate: new Date(res.checkInDate).toISOString().split('T')[0],
       checkOutDate: new Date(res.checkOutDate).toISOString().split('T')[0]
     })
@@ -275,7 +344,10 @@ export default function FrontOfficeDashboard() {
   const guestCell = (res: any, warn = false) => (
     <>
       <div className="font-medium flex items-center gap-1.5">
-        <span className="truncate">{guestDisplayName(res.primaryGuest)}</span>
+        {/* A real link, so Ctrl/middle-click and "open in new tab" work (DESKTOP_PLAN D4). */}
+        <Link href={viewUrl(res.id)} onClick={(e) => e.stopPropagation()} className="truncate hover:underline">
+          {guestDisplayName(res.primaryGuest)}
+        </Link>
         {res.primaryGuest?.vipLevel && <span title="VIP"><Star className="h-4 w-4 text-warning shrink-0" /></span>}
         {warn && res.profileIncomplete && (
           <span title="Guest profile incomplete — missing nationality, date of birth, or ID">
@@ -390,31 +462,17 @@ export default function FrontOfficeDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Stacks on a phone: side-by-side squeezed the title into two lines and pushed
-          the button into the subtitle. The subtitle keeps only the business date — live
-          operational data the desk reads constantly — while the descriptive half moved
-          into the ⓘ like every other page. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Front Desk Operations
-            <InfoHint label="Front Desk Operations">
-              Today&apos;s arrivals, departures, in-house guests and room moves for this property.
-            </InfoHint>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Business date{" "}
-            <span className="font-medium text-foreground">
-              {data?.businessDate
-                ? new Date(data.businessDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
-                : "—"}
-            </span>
-          </p>
-        </div>
-        <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/reservations/new?walkin=1`)}>
-          <LogIn className="mr-2 h-4 w-4" /> Walk-in Booking
-        </Button>
-      </div>
+      {/* The business date is already in the header — not repeated here. */}
+      <PageHeader
+        title="Front Desk"
+        hint={<>Today&apos;s arrivals, departures, in-house guests and room moves for this property.</>}
+        actionsClassName="gap-2 max-sm:w-full"
+        actions={
+          <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/reservations/new?walkin=1`)}>
+            <LogIn className="mr-2 h-4 w-4" /> Walk-in booking
+          </Button>
+        }
+      />
 
       {/* Phone: one compact counts strip instead of four KPI cards (~300px) — the guest
           list is what the desk came for. Same numbers as the cards below. */}
@@ -446,84 +504,32 @@ export default function FrontOfficeDashboard() {
         </div>
       </div>
 
-      {/* KPI Row */}
-      {/* Two-up on a phone — four full-width cards pushed the actual work off-screen. */}
-      <div className="grid grid-cols-2 gap-3 max-md:hidden md:grid-cols-2 lg:grid-cols-4 lg:gap-4">
-        {/* Arrivals — checked in of expected */}
-        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
-            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">Arrivals</CardTitle>
-            <LogIn className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="px-4 lg:px-6">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold lg:text-3xl">{data?.arrivalsSummary?.checkedIn ?? 0}</span>
-              <span className="text-base font-medium text-muted-foreground lg:text-lg">/ {data?.arrivalsSummary?.expected ?? 0}</span>
-            </div>
-            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground lg:mt-1 lg:text-xs">
-              checked in · {Math.max(0, (data?.arrivalsSummary?.expected ?? 0) - (data?.arrivalsSummary?.checkedIn ?? 0))} to arrive
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Departures — checked out of expected */}
-        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
-            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">Departures</CardTitle>
-            <LogOut className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="px-4 lg:px-6">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold lg:text-3xl">{data?.departuresSummary?.checkedOut ?? 0}</span>
-              <span className="text-base font-medium text-muted-foreground lg:text-lg">/ {data?.departuresSummary?.expected ?? 0}</span>
-            </div>
-            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground lg:mt-1 lg:text-xs">
-              checked out · {Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* In-House — occupied rooms and the people in them */}
-        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
-            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">In-House</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="px-4 lg:px-6">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold lg:text-3xl">{data?.inHouseSummary?.rooms ?? 0}</span>
-              <span className="text-sm font-medium text-muted-foreground">rooms</span>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground lg:gap-3 lg:text-xs">
-              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.adults ?? 0}</span> Adt</span>
-              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.children ?? 0}</span> Chd</span>
-              <span><span className="font-semibold text-foreground">{data?.inHouseSummary?.infants ?? 0}</span> Inf</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Room Status — occupied/vacant split and housekeeping readiness */}
-        <Card className="shadow-elevation-1 gap-2 py-4 lg:gap-6 lg:py-6">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-1 px-4 pb-0 lg:px-6 lg:pb-2">
-            <CardTitle className="truncate text-xs font-medium text-muted-foreground lg:text-sm">Room Status</CardTitle>
-            <BedDouble className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          {/* Both rows wrap on a phone — at the two-up card width they otherwise ran
-              past the card's edge. */}
-          <CardContent className="px-4 lg:px-6">
-            <div className="flex flex-wrap items-baseline gap-x-2 lg:gap-3">
-              <span className="text-2xl font-bold lg:text-3xl">{data?.roomStatusSummary?.occupied ?? 0}</span>
-              <span className="text-sm font-medium text-muted-foreground">occ ·</span>
-              <span className="text-2xl font-bold lg:text-3xl">{data?.roomStatusSummary?.vacant ?? 0}</span>
-              <span className="text-sm font-medium text-muted-foreground">vac</span>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground lg:gap-3 lg:text-xs">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> {data?.roomStatusSummary?.clean ?? 0} Clean</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" /> {data?.roomStatusSummary?.inspected ?? 0} Insp</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> {data?.roomStatusSummary?.dirty ?? 0} Dirty</span>
-            </div>
-          </CardContent>
-        </Card>
+      {/* KPI Row — the shared StatTile (DESKTOP_PLAN D8). Phones use the counts strip above. */}
+      <div className="grid grid-cols-2 gap-3 max-md:hidden lg:grid-cols-4 lg:gap-4">
+        <StatTile
+          label="Arrivals"
+          value={`${data?.arrivalsSummary?.checkedIn ?? 0} / ${data?.arrivalsSummary?.expected ?? 0}`}
+          footnote={`checked in · ${Math.max(0, (data?.arrivalsSummary?.expected ?? 0) - (data?.arrivalsSummary?.checkedIn ?? 0))} to arrive`}
+          icon={LogIn}
+        />
+        <StatTile
+          label="Departures"
+          value={`${data?.departuresSummary?.checkedOut ?? 0} / ${data?.departuresSummary?.expected ?? 0}`}
+          footnote={`checked out · ${Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out`}
+          icon={LogOut}
+        />
+        <StatTile
+          label="In-House"
+          value={`${data?.inHouseSummary?.rooms ?? 0} rooms`}
+          footnote={`${data?.inHouseSummary?.adults ?? 0} Adt · ${data?.inHouseSummary?.children ?? 0} Chd · ${data?.inHouseSummary?.infants ?? 0} Inf`}
+          icon={Users}
+        />
+        <StatTile
+          label="Room status"
+          value={`${data?.roomStatusSummary?.occupied ?? 0} occ · ${data?.roomStatusSummary?.vacant ?? 0} vac`}
+          footnote={`${data?.roomStatusSummary?.clean ?? 0} Clean · ${data?.roomStatusSummary?.inspected ?? 0} Insp · ${data?.roomStatusSummary?.dirty ?? 0} Dirty`}
+          icon={BedDouble}
+        />
       </div>
 
       {/* Operations Tabs.
@@ -533,10 +539,10 @@ export default function FrontOfficeDashboard() {
           list and which filtered it. Separating them makes the strip a navigation
           control that owns the card beneath it, which is also how the rest of the app's
           tabbed screens are laid out. */}
-      <Tabs defaultValue="arrivals" className="w-full space-y-3">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as FrontDeskTab)} className="w-full space-y-3">
         {/* 2x2 on a phone, one row from md up. grid-cols-4 at every width gave each
             trigger ~90px on a 390px screen while the labels are ~110px and
-            whitespace-nowrap, so "In-House" and "Room Moves" overlapped and clipped.
+            whitespace-nowrap, so "In-House" and "Room moves" overlapped and clipped.
             Wrapping beats horizontal scrolling here — all four counts stay visible,
             which is the point of the strip.
             The h-auto pair overrides the primitive's data-horizontal:h-8, which is an
@@ -556,7 +562,7 @@ export default function FrontOfficeDashboard() {
             <span className="text-xs md:hidden">In-house<PhoneCount n={inHouse.length} /></span>
           </TabsTrigger>
           <TabsTrigger value="roommoves" className="max-md:px-0.5">
-            <span className="hidden md:inline">Room Moves ({data?.roomMovesToday?.length})</span>
+            <span className="hidden md:inline">Room moves ({data?.roomMovesToday?.length})</span>
             <span className="text-xs md:hidden">Moves<PhoneCount n={data?.roomMovesToday?.length ?? 0} /></span>
           </TabsTrigger>
         </TabsList>
@@ -583,7 +589,7 @@ export default function FrontOfficeDashboard() {
               {/* Phone view — see MobileResCard. The table below takes over at md. */}
               <div className="md:hidden">
                 {loadError ? (
-                  <ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} />
+                  <ErrorState title="Couldn't load arrivals" onRetry={() => fetchSummary()} />
                 ) : arrivals.length === 0 ? (
                   <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
                 ) : (
@@ -597,7 +603,7 @@ export default function FrontOfficeDashboard() {
                           primary={
                             canCheckIn(res.status, res.checkInDate, bd) ? (
                               <Button variant="outline" className="h-10 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
-                                <Key className="h-4 w-4 mr-1.5" /> Check In
+                                <Key className="h-4 w-4 mr-1.5" /> Check in
                               </Button>
                             ) : unassigned ? (
                               <Button variant="outline" className="h-10" onClick={() => openAssign(res)}>
@@ -635,7 +641,7 @@ export default function FrontOfficeDashboard() {
                   </TableHeader>
                   <TableBody>
                     {loadError ? (
-                      <TableRow><TableCell colSpan={6} className="py-0"><ErrorState title="Couldn't load arrivals" onRetry={fetchSummary} /></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="py-0"><ErrorState title="Couldn't load arrivals" onRetry={() => fetchSummary()} /></TableCell></TableRow>
                     ) : arrivals.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="py-0"><EmptyState icon={LogIn} title="No arrivals scheduled for today" /></TableCell></TableRow>
                     ) : arrivals.map((res: any) => {
@@ -655,14 +661,14 @@ export default function FrontOfficeDashboard() {
                                 </Button>
                               )}
                               <Button size="sm" variant="outline" className="h-8" onClick={() => openRegCard(res.id)} title="Print registration card">
-                                <FileText className="h-3.5 w-3.5 mr-1.5" /> Reg Card
+                                <FileText className="h-3.5 w-3.5 mr-1.5" /> Reg card
                               </Button>
                               <Button size="sm" variant="outline" className="h-8" onClick={() => setERegRes(res)} title="Send the guest a link to fill in their own registration details">
                                 <Send className="h-3.5 w-3.5 mr-1.5" /> eReg
                               </Button>
                               {canCheckIn(res.status, res.checkInDate, bd) && (
                                 <Button size="sm" variant="outline" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
-                                  <Key className="h-3.5 w-3.5 mr-1.5" /> Check In
+                                  <Key className="h-3.5 w-3.5 mr-1.5" /> Check in
                                 </Button>
                               )}
                               <DropdownMenu>
@@ -696,7 +702,7 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="departures" className="m-0 border-none outline-none">
               <div className="md:hidden">
                 {loadError ? (
-                  <ErrorState title="Couldn't load departures" onRetry={fetchSummary} />
+                  <ErrorState title="Couldn't load departures" onRetry={() => fetchSummary()} />
                 ) : departures.length === 0 ? (
                   <EmptyState icon={LogOut} title="No departures scheduled for today" />
                 ) : (
@@ -708,7 +714,7 @@ export default function FrontOfficeDashboard() {
                         balance={res.balance}
                         primary={
                           <Button variant="outline" className="h-10" disabled={actionLoading === res.id} onClick={() => handleCheckOut(res.id)}>
-                            <LogOut className="h-4 w-4 mr-1.5" /> {actionLoading === res.id ? "..." : "Check Out"}
+                            <LogOut className="h-4 w-4 mr-1.5" /> {actionLoading === res.id ? "Checking out…" : "Check out"}
                           </Button>
                         }
                         more={[
@@ -736,7 +742,7 @@ export default function FrontOfficeDashboard() {
                   </TableHeader>
                   <TableBody>
                     {loadError ? (
-                      <TableRow><TableCell colSpan={7} className="py-0"><ErrorState title="Couldn't load departures" onRetry={fetchSummary} /></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="py-0"><ErrorState title="Couldn't load departures" onRetry={() => fetchSummary()} /></TableCell></TableRow>
                     ) : departures.length === 0 ? (
                       <TableRow><TableCell colSpan={7} className="py-0"><EmptyState icon={LogOut} title="No departures scheduled for today" /></TableCell></TableRow>
                     ) : departures.map((res: any) => (
@@ -753,7 +759,7 @@ export default function FrontOfficeDashboard() {
                               <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
                             </Button>
                             <Button size="sm" variant="outline" className="h-8" disabled={actionLoading === res.id} onClick={() => handleCheckOut(res.id)}>
-                              <LogOut className="h-3.5 w-3.5 mr-1.5" /> {actionLoading === res.id ? "..." : "Check Out"}
+                              <LogOut className="h-3.5 w-3.5 mr-1.5" /> {actionLoading === res.id ? "Checking out…" : "Check out"}
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
@@ -781,7 +787,7 @@ export default function FrontOfficeDashboard() {
             <TabsContent value="inhouse" className="m-0 border-none outline-none">
               <div className="md:hidden">
                 {loadError ? (
-                  <ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} />
+                  <ErrorState title="Couldn't load in-house guests" onRetry={() => fetchSummary()} />
                 ) : inHouse.length === 0 ? (
                   <EmptyState icon={CheckCircle} title="No guests currently in-house" />
                 ) : (
@@ -821,7 +827,7 @@ export default function FrontOfficeDashboard() {
                   </TableHeader>
                   <TableBody>
                     {loadError ? (
-                      <TableRow><TableCell colSpan={7} className="py-0"><ErrorState title="Couldn't load in-house guests" onRetry={fetchSummary} /></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="py-0"><ErrorState title="Couldn't load in-house guests" onRetry={() => fetchSummary()} /></TableCell></TableRow>
                     ) : inHouse.length === 0 ? (
                       <TableRow><TableCell colSpan={7} className="py-0"><EmptyState icon={CheckCircle} title="No guests currently in-house" /></TableCell></TableRow>
                     ) : inHouse.map((res: any) => (
@@ -869,7 +875,7 @@ export default function FrontOfficeDashboard() {
                   so this card is written out rather than reusing MobileResCard. */}
               <div className="md:hidden">
                 {loadError ? (
-                  <ErrorState title="Couldn't load room moves" onRetry={fetchSummary} />
+                  <ErrorState title="Couldn't load room moves" onRetry={() => fetchSummary()} />
                 ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
                   <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
                 ) : (
@@ -893,13 +899,13 @@ export default function FrontOfficeDashboard() {
                             {unassigned ? (
                               <span className="text-xs font-medium text-destructive">Unassigned</span>
                             ) : (
-                              <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge>
+                              <StatusBadge label={mv.toRoomNumber} tone="warning" />
                             )}
                             <span className="text-muted-foreground text-xs">{mv.toRoomTypeName}</span>
                           </div>
                           <div onClick={(e) => e.stopPropagation()}>
                             <Button variant="outline" className="h-10 w-full text-warning hover:text-warning hover:bg-warning-muted" disabled={!res} onClick={() => res && openRoomMove(res)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move Room"}
+                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move room"}
                             </Button>
                           </div>
                         </div>
@@ -915,15 +921,15 @@ export default function FrontOfficeDashboard() {
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead className="pl-6">Guest</TableHead>
                       <TableHead>Conf. #</TableHead>
-                      <TableHead>From Room</TableHead>
-                      <TableHead>To Room</TableHead>
-                      <TableHead>New Room Type</TableHead>
+                      <TableHead>From room</TableHead>
+                      <TableHead>To room</TableHead>
+                      <TableHead>New room type</TableHead>
                       <TableHead className="text-right pr-6">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadError ? (
-                      <TableRow><TableCell colSpan={6} className="py-0"><ErrorState title="Couldn't load room moves" onRetry={fetchSummary} /></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="py-0"><ErrorState title="Couldn't load room moves" onRetry={() => fetchSummary()} /></TableCell></TableRow>
                     ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
                       <TableRow><TableCell colSpan={6} className="py-0"><EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" /></TableCell></TableRow>
                     ) : data.roomMovesToday.map((mv: any) => {
@@ -931,18 +937,26 @@ export default function FrontOfficeDashboard() {
                       const unassigned = !mv.toRoomNumber
                       return (
                         <TableRow key={mv.reservationId} className={res ? "cursor-pointer" : ""} onClick={() => res && router.push(viewUrl(mv.reservationId))}>
-                          <TableCell className="pl-6 align-middle font-medium">{guestDisplayName(mv.primaryGuest)}</TableCell>
+                          <TableCell className="pl-6 align-middle font-medium">
+                            {res ? (
+                              <Link href={viewUrl(mv.reservationId)} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                                {guestDisplayName(mv.primaryGuest)}
+                              </Link>
+                            ) : (
+                              guestDisplayName(mv.primaryGuest)
+                            )}
+                          </TableCell>
                           <TableCell className="align-middle text-muted-foreground font-mono text-xs">{mv.confirmationNo}</TableCell>
                           <TableCell className="align-middle"><Badge variant="outline">{mv.fromRoomNumber ?? "—"}</Badge></TableCell>
                           <TableCell className="align-middle">
                             {unassigned
                               ? <span className="text-xs font-medium text-destructive">Unassigned</span>
-                              : <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">{mv.toRoomNumber}</Badge>}
+                              : <StatusBadge label={mv.toRoomNumber} tone="warning" />}
                           </TableCell>
                           <TableCell className="align-middle text-muted-foreground">{mv.toRoomTypeName}</TableCell>
                           <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
                             <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" disabled={!res} onClick={() => res && openRoomMove(res)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move Room"}
+                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move room"}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -961,6 +975,7 @@ export default function FrontOfficeDashboard() {
         reservationId={folioPanelResId}
         propertyId={propertyId ?? ""}
         isOpen={isFolioPanelOpen}
+        onCheckedOut={() => fetchSummary(true)}
         onClose={() => {
           setIsFolioPanelOpen(false)
           setFolioPanelResId(null)
@@ -981,9 +996,9 @@ export default function FrontOfficeDashboard() {
 
       {/* No-Show confirmation */}
       <Dialog open={!!noShowRes} onOpenChange={(open) => !open && setNoShowRes(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Mark as No-Show</DialogTitle>
+            <DialogTitle>Mark as no-show</DialogTitle>
             <DialogDescription>
               Mark {noShowRes?.primaryGuest?.firstName} {noShowRes?.primaryGuest?.lastName}&apos;s reservation
               ({noShowRes?.confirmationNo}) as a no-show? The room goes back on sale; any deposit stays on the folio
@@ -992,16 +1007,16 @@ export default function FrontOfficeDashboard() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNoShowRes(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleNoShow} disabled={!!actionLoading}>
-              Mark No-Show
-            </Button>
+            <SubmitButton type="button" variant="destructive" onClick={handleNoShow} pending={!!actionLoading} pendingLabel="Marking…">
+              Mark no-show
+            </SubmitButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* eRegistration — the same panel as the reservation detail page, in a dialog */}
       <Dialog open={!!eRegRes} onOpenChange={(open) => !open && setERegRes(null)}>
-        <DialogContent className="max-w-2xl sm:max-w-2xl">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4" /> eRegistration — {guestDisplayName(eRegRes?.primaryGuest)} ({eRegRes?.confirmationNo})
@@ -1017,26 +1032,19 @@ export default function FrontOfficeDashboard() {
         propertyId={propertyId ?? ""}
         isOpen={!!checkInRes}
         onClose={() => setCheckInRes(null)}
+        onOpenFolio={openFolio}
         onDone={(result) => {
-          setNotification(result)
-          fetchSummary()
+          // A failed payment already raised its own error toast (with Open folio).
+          if (!result.paymentFailed) {
+            const resId = result.reservationId
+            toast.success(`${result.guestName || "Guest"} checked in`, {
+              description: result.roomWarning,
+              action: resId ? { label: "Open folio", onClick: () => openFolio(resId) } : undefined,
+            })
+          }
+          fetchSummary(true)
         }}
       />
-
-
-      <Dialog open={!!notification} onOpenChange={(open) => !open && setNotification(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className={notification?.isError ? "text-destructive" : undefined}>
-              {notification?.title}
-            </DialogTitle>
-            <DialogDescription>{notification?.message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setNotification(null)}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <RoomMoveModal
         isOpen={isRoomMoveModalOpen}
@@ -1049,6 +1057,7 @@ export default function FrontOfficeDashboard() {
         reservationId={roomMoveData?.reservationId || null}
         currentRoomNumber={roomMoveData?.currentRoomNumber}
         currentRoomType={roomMoveData?.currentRoomType}
+        currentRoomTypeId={roomMoveData?.currentRoomTypeId}
         checkInDate={roomMoveData?.checkInDate}
         checkOutDate={roomMoveData?.checkOutDate}
       />
@@ -1064,7 +1073,7 @@ export default function FrontOfficeDashboard() {
         checkInDate={assignData?.checkInDate}
         checkOutDate={assignData?.checkOutDate}
         onAssigned={(message) => {
-          setNotification({ title: "Room Assigned", message })
+          toast.success("Room assigned", { description: message })
           fetchSummary()
         }}
       />

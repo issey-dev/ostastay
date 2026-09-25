@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { FolioPrintDialog } from "@/components/front-office/folio-print-dialog"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { Printer, Receipt, ReceiptText } from "@/components/icons"
 
 export type SalesRow = {
@@ -67,7 +69,7 @@ export function SalesHistory({
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <InlineLoading lines={4} label="Loading sales" />
       ) : rows.length === 0 ? (
         <EmptyState icon={ReceiptText} title={date ? "No sales on this date" : "No sales yet"} className="py-10" />
       ) : (
@@ -86,7 +88,7 @@ export function SalesHistory({
               </div>
               <div className="flex items-center gap-3">
                 <Badge variant="outline" className="text-[10px] uppercase">{r.source === "walkin" ? "Walk-in" : "Guest"}</Badge>
-                <Badge variant="outline" className="text-[10px]">{r.status.replace(/_/g, " ")}</Badge>
+                <StatusBadge label={r.status.replace(/_/g, " ")} status={r.status} />
                 <span className="font-semibold text-foreground">{money(r.amount)}</span>
                 {r.folioId && (
                   <Button size="sm" variant="outline" onClick={() => setPrintFolioId(r.folioId)}>

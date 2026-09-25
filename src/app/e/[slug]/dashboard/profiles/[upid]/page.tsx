@@ -1,27 +1,33 @@
 "use client"
 
-import { useEffect, useState, use } from "react"
+import { Suspense, useEffect, useState, use } from "react"
+import { useUrlState } from "@/lib/use-url-state"
 import { useRouter, useParams } from "next/navigation"
 import { useSmartBack } from "@/lib/use-smart-back"
 import { ArrowLeft, Pencil, ExternalLink, Star, CalendarDays, History as HistoryIcon, UserX, ChevronLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { ActionBar } from "@/components/ui/action-bar"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
+import Link from "next/link"
 import { CountryFlag, CountryLabel } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { ContactLink } from "@/components/ui/contact-link"
 import { cn } from "@/lib/utils"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
-  GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel Agent", STAFF: "Staff",
+  GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel agent", STAFF: "Staff",
 }
+const COMM_TYPE_LABELS: Record<string, string> = { EMAIL: "Email", MOBILE: "Mobile", SOCIAL: "Social" }
+const ADDRESS_TYPE_LABELS: Record<string, string> = { HOME: "Home", BUSINESS: "Business", BILLING: "Billing" }
 const classColors: Record<string, string> = {
   VIP: "bg-foreground text-background border-transparent",
   REGULAR: "bg-muted text-foreground border-border",
@@ -32,6 +38,7 @@ type StayRecord = {
   id: string
   confirmationNo: string
   status: string
+  propertyId?: string
   propertyName: string
   checkInDate: string
   checkOutDate: string
@@ -40,14 +47,45 @@ type StayRecord = {
   revenueBreakdown: { code: string; description: string; amount: number }[]
 }
 
-// Label-above-value field, mirroring the FormLabel/FormControl rhythm of the Edit
-// form's inputs so the two screens read the same way at a glance.
-function Field({ label, value, className }: { label: string; value?: React.ReactNode; className?: string }) {
+type FieldEntry = [label: string, value: React.ReactNode]
+
+const filled = (v: React.ReactNode) => v !== null && v !== undefined && v !== "" && v !== false
+
+/**
+ * Label-above-value fields — only the FILLED ones (DESKTOP_PLAN D7: view mode never shows a
+ * grid of "—"). Renders nothing when every value is empty.
+ */
+function Fields({ entries, className }: { entries: FieldEntry[]; className?: string }) {
+  const shown = entries.filter(([, v]) => filled(v))
+  if (shown.length === 0) return null
   return (
-    <div className={className}>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <p className="text-sm font-medium text-foreground mt-1 min-h-5">{value || value === 0 ? value : "—"}</p>
+    <dl className={cn("grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-3 lg:grid-cols-4", className)}>
+      {shown.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="mt-0.5 text-sm font-medium text-foreground break-words">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** One item of the summary strip under the header. */
+function Item({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn("flex min-w-0 items-baseline gap-1.5", className)}>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="min-w-0 text-sm font-medium text-foreground">{children}</span>
     </div>
+  )
+}
+
+/** A quiet "Add …" link into the Edit form, scrolled to the matching section. */
+function AddLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="text-sm font-medium text-primary underline-offset-2 hover:underline">
+      {children}
+    </Link>
   )
 }
 
@@ -67,11 +105,63 @@ function PhoneToggle({ open, onToggle, label }: { open: boolean; onToggle: () =>
   )
 }
 
-// Secondary sections a phone starts folded (see .agents/docs/MOBILE_PLAN.md §3).
-const PHONE_FOLDED = ["communications", "address", "identification", "negotiated-rates", "attachments", "profile-status", "billing-finance", "marketing-compliance"]
+/**
+ * One titled group inside a tab's single card — a heading and its content, divided from the
+ * next by a rule, instead of a bordered card per group (DESKTOP_PLAN §2.2 "Profiles").
+ */
+function Section({
+  id,
+  title,
+  hint,
+  action,
+  toggle,
+  bodyClassName,
+  children,
+}: {
+  id: string
+  title: string
+  hint?: React.ReactNode
+  /** A small link on the heading's right (e.g. "Add"). */
+  action?: React.ReactNode
+  /** Phones: the fold control. */
+  toggle?: React.ReactNode
+  bodyClassName?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="py-5 first:pt-0 last:pb-0">
+      <h2 id={`${id}-title`} className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+        {title}
+        {hint && <InfoHint label={title}>{hint}</InfoHint>}
+        {action && <span className="ml-auto font-normal">{action}</span>}
+        {toggle}
+      </h2>
+      <div className={bodyClassName}>{children}</div>
+    </section>
+  )
+}
 
-export default function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
+// Secondary sections a phone starts folded (see .agents/docs/MOBILE_PLAN.md §3) — the phone
+// contact card above the tabs already carries the primary email and mobile.
+const PHONE_FOLDED = ["communications", "address"]
+
+// "stay-history" is the old value — kept so existing links still open the Stays tab.
+const PROFILE_TABS = ["overview", "stays", "finance", "documents", "stay-history"] as const
+type ProfileTab = (typeof PROFILE_TABS)[number]
+
+// useUrlState reads the query string — the page needs a Suspense boundary.
+export default function ProfileDetailRoute({ params }: { params: Promise<{ upid: string }> }) {
+  return (
+    <Suspense>
+      <ProfileDetailPage params={params} />
+    </Suspense>
+  )
+}
+
+function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
   const { upid } = use(params)
+  const [rawTab, setTab] = useUrlState<ProfileTab>("tab", "overview", PROFILE_TABS)
+  const tab: ProfileTab = rawTab === "stay-history" ? "stays" : rawTab
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const goBack = useSmartBack(`/e/${slug}/dashboard/profiles`)
@@ -112,39 +202,99 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-4 p-4 md:p-8">
+      <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
-  if (!profile) {
+  if (!profile || profile.error) {
     return <EmptyState icon={UserX} title="Profile not found" className="py-24" />
   }
 
+  // The stored title is a system code ("MRS"); the heading shows its configured label ("Mrs").
+  // Until the codes load, or for a code with no label, a bare upper-case code reads "Mrs".
+  const titleLabel = (code: string | null | undefined) => {
+    const t = label("TITLE", code)
+    if (!t || t !== code || t !== t.toUpperCase()) return t
+    return t.charAt(0) + t.slice(1).toLowerCase()
+  }
   const isB2B = profile.profileType === "COMPANY" || profile.profileType === "TRAVEL_AGENT"
   const isIndividual = !isB2B
   const displayName = isB2B
     ? profile.companyName || `${profile.firstName} ${profile.lastName ?? ""}`.trim()
-    : [profile.title, profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ")
+    : [titleLabel(profile.title), profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(" ")
+
+  const editHref = `/e/${slug}/dashboard/profiles/${upid}/edit`
+  const editAt = (section: string) => `${editHref}#${section}`
 
   const folded = (id: string) => PHONE_FOLDED.includes(id) && !unfolded[id]
   const toggle = (id: string) => setUnfolded((u) => ({ ...u, [id]: folded(id) }))
-  /** Classes for a foldable card's content on phones. */
+  const phoneToggle = (id: string, name: string) =>
+    PHONE_FOLDED.includes(id) ? <PhoneToggle open={!folded(id)} onToggle={() => toggle(id)} label={name} /> : undefined
+  /** Classes for a foldable section's body on phones. */
   const foldClass = (id: string) => (folded(id) ? "max-md:hidden" : undefined)
-  const foldCard = (id: string) => (folded(id) ? "max-md:pb-0" : undefined)
-  const phoneEmail = primaryEmail(profile.communications)
-  const phoneMobile = primaryMobile(profile.communications)
-  const nextStay = stayHistory?.future?.[0]
 
+  const email = primaryEmail(profile.communications)
+  const mobile = primaryMobile(profile.communications)
+  // The API lists in-house and upcoming stays first; this page only links this property's.
+  const nextStay = stayHistory?.future?.[0]
+  const nextStayLinkable = nextStay && (!nextStay.propertyId || nextStay.propertyId === currentProperty?.id)
+
+  const communications: any[] = profile.communications ?? []
+  const addresses: any[] = profile.addresses ?? []
+  const documents: any[] = profile.documents ?? []
+  const attachments: any[] = profile.attachments ?? []
+  const notes: any[] = profile.notes ?? []
   const dietary = (profile.preferences ?? []).filter((p: any) => p.category === "DIETARY")
   const preferences = (profile.preferences ?? []).filter((p: any) => p.category === "PREFERENCE")
+  const rateLinks = (negotiatedRates?.links ?? [])
+    .map((link) => ({ link, rp: negotiatedRates?.available.find((r) => r.id === link.ratePlanId) }))
+    .filter((x) => x.rp)
+
+  const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString() : null)
+  const nationality = profile.nationality
+    ? <CountryLabel value={profile.nationality} name={label("NATIONALITY", profile.nationality)} />
+    : null
+
+  // Marketing / compliance switches — only the ones that are ON are worth a line.
+  const flags = [
+    profile.marketingOptIn && "On the mail list",
+    profile.greenTaxExempt && "Green Tax exempt",
+    profile.isIncognito && "Incognito",
+  ].filter(Boolean) as string[]
+
+  const billingEntries: FieldEntry[] = [
+    ["AR number", profile.arNumber],
+    ["Credit limit", profile.creditLimit != null ? <span className="tabular-nums">${Number(profile.creditLimit).toFixed(2)}</span> : null],
+    ["Credit account", isB2B && profile.isCreditAccount
+      ? <Link href={`/e/${slug}/dashboard/debtors/${upid}`} className="hover:underline">Active · open account</Link>
+      : null],
+    ["IATA number", isB2B ? profile.iataNumber : null],
+    ["TIN", isB2B ? profile.tinNumber : null],
+    ["Booking method", isB2B ? profile.bookingMethod : null],
+  ]
+  const hasBilling = billingEntries.some(([, v]) => filled(v))
+
+  // The personal details a front desk usually wants and a profile often lacks.
+  const missingPersonal = isIndividual && (!profile.gender || !profile.dateOfBirth || !profile.nationality || !profile.preferredLanguage)
 
   const renderStayRow = (r: StayRecord, showBreakdown: boolean) => (
     <div key={r.id} className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-medium text-sm">{r.confirmationNo} — {r.propertyName}</p>
+          <p className="font-medium text-sm">
+            {/* A real link to the stay (DESKTOP_PLAN D4) — only for this property's bookings,
+                the dashboard is one property at a time. */}
+            {!r.propertyId || r.propertyId === currentProperty?.id ? (
+              <Link href={`/e/${slug}/dashboard/reservations/${r.id}`} className="hover:underline">
+                {r.confirmationNo}
+              </Link>
+            ) : (
+              r.confirmationNo
+            )}{" "}
+            — {r.propertyName}
+          </p>
           <p className="text-xs text-muted-foreground">
             {new Date(r.checkInDate).toLocaleDateString()} – {new Date(r.checkOutDate).toLocaleDateString()}
             {r.roomTypes.length > 0 && <> · {r.roomTypes.join(", ")}</>}
@@ -152,7 +302,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
         </div>
         <div className="text-right shrink-0">
           <Badge variant="outline">{r.status}</Badge>
-          <p className="text-sm font-semibold mt-1">${r.revenueTotal.toFixed(2)}</p>
+          <p className="text-sm font-semibold mt-1 tabular-nums">${r.revenueTotal.toFixed(2)}</p>
         </div>
       </div>
       {showBreakdown && r.revenueBreakdown.length > 0 && (
@@ -160,7 +310,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
           {r.revenueBreakdown.map((b) => (
             <div key={b.code} className="flex justify-between">
               <span>{b.code} — {b.description}</span>
-              <span>${b.amount.toFixed(2)}</span>
+              <span className="tabular-nums">${b.amount.toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -169,46 +319,96 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
   )
 
   return (
-    <div className="max-w-7xl w-full mx-auto p-4 flex flex-col gap-4 pb-12">
-      {/* Header — mirrors the Edit form's sticky header */}
-      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
+    <div className="flex flex-col gap-4 pb-12">
+      {/* Header — mirrors the Edit form's sticky header. Breadcrumbs ("Client Relations ›")
+          replace the back arrow from md up. */}
+      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
         <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back" className="shrink-0">
+          <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back" className="shrink-0 md:hidden">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-bold tracking-tight max-sm:text-xl max-sm:break-words">{displayName || "Unnamed profile"}</h2>
-              <Badge variant="outline">{PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType}</Badge>
-              <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[profile.classification] || "bg-muted text-foreground"}`}>
-                {label("CLASSIFICATION", profile.classification)}
-              </span>
-              {profile.vipLevel && (
-                <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30 inline-flex items-center gap-1">
-                  <Star className="h-3 w-3 fill-none" /> {label("VIP_LEVEL", profile.vipLevel)}
+          <PageHeader
+            className="min-w-0 flex-1 max-sm:flex-col max-sm:items-stretch"
+            crumb={null}
+            tabTitle={displayName || "Unnamed profile"}
+            title={
+              <span className="flex min-w-0 flex-wrap items-center gap-2 max-sm:break-words">
+                {displayName || "Unnamed profile"}
+                <Badge variant="outline">{PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType}</Badge>
+                <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[profile.classification] || "bg-muted text-foreground"}`}>
+                  {label("CLASSIFICATION", profile.classification)}
                 </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground max-md:hidden">
-              {primaryEmail(profile.communications) || "No email"} {primaryMobile(profile.communications) ? `· ${primaryMobile(profile.communications)}` : ""}
-            </p>
-          </div>
+                {profile.vipLevel && (
+                  <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30 inline-flex items-center gap-1">
+                    <Star className="h-3 w-3 fill-none" /> {label("VIP_LEVEL", profile.vipLevel)}
+                  </span>
+                )}
+              </span>
+            }
+            actions={
+              <ActionBar
+                className="max-sm:w-full"
+                primary={
+                  <Button className="w-full sm:w-auto" onClick={() => router.push(editHref)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit
+                  </Button>
+                }
+              />
+            }
+          />
         </div>
-        <Button className="w-full sm:w-auto" onClick={() => router.push(`/e/${slug}/dashboard/profiles/${upid}/edit`)}>
-          <Pencil className="mr-2 h-4 w-4" /> Edit
-        </Button>
+
+        {/* Summary strip — the facts people open a profile for, on one line. Contact and the
+            next stay are phone-card items on phones (below), so they are desktop-only here. */}
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1.5">
+          {email && <Item label="Email" className="max-md:hidden"><ContactLink type="email" value={email} /></Item>}
+          {mobile && <Item label="Phone" className="max-md:hidden"><ContactLink type="phone" value={mobile} /></Item>}
+          {!email && !mobile && (
+            <span className="text-sm text-muted-foreground max-md:hidden">
+              No phone or email · <AddLink href={editAt("communications")}>Add</AddLink>
+            </span>
+          )}
+          {nationality && <Item label="Nationality">{nationality}</Item>}
+          <Item label="Visits">
+            <span className="tabular-nums">
+              {stayHistory?.visitsToProperty != null && <>{stayHistory.visitsToProperty} here · </>}
+              {profile.totalStays ?? 0} across the group
+            </span>
+          </Item>
+          {nextStay && (
+            <Item label={nextStay.status === "CHECKED_IN" ? "In house" : "Next stay"} className="max-md:hidden">
+              {nextStayLinkable ? (
+                <Link href={`/e/${slug}/dashboard/reservations/${nextStay.id}`} className="hover:underline">
+                  {nextStay.confirmationNo}
+                </Link>
+              ) : (
+                nextStay.confirmationNo
+              )}
+              <span className="font-normal text-muted-foreground">
+                {" "}· {fmtDate(nextStay.checkInDate)} – {fmtDate(nextStay.checkOutDate)}
+              </span>
+            </Item>
+          )}
+          {isB2B && profile.isCreditAccount && (
+            <Item label="Credit account">
+              <Link href={`/e/${slug}/dashboard/debtors/${upid}`} className="hover:underline">
+                {profile.arNumber || "Open"}
+              </Link>
+            </Item>
+          )}
+        </div>
       </div>
 
       {/* Phones: the reasons someone opens a profile on the go — call, email, and the
           next stay — first, as big tap targets. */}
       <div className="md:hidden rounded-2xl bg-card p-2 shadow-elevation-1 ring-1 ring-foreground/5">
-        {phoneMobile || phoneEmail ? (
+        {mobile || email ? (
           <div className="divide-y divide-border">
-            {phoneMobile && (
-              <ContactLink type="phone" value={phoneMobile} showIcon className="flex min-h-11 w-full px-2 text-sm font-medium text-foreground" />
+            {mobile && (
+              <ContactLink type="phone" value={mobile} showIcon className="flex min-h-11 w-full px-2 text-sm font-medium text-foreground" />
             )}
-            {phoneEmail && (
-              <ContactLink type="email" value={phoneEmail} showIcon className="flex min-h-11 w-full px-2 text-sm font-medium text-foreground" />
+            {email && (
+              <ContactLink type="email" value={email} showIcon className="flex min-h-11 w-full px-2 text-sm font-medium text-foreground" />
             )}
           </div>
         ) : (
@@ -226,7 +426,7 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                 {nextStay.status === "CHECKED_IN" ? "In house" : "Next stay"} · {nextStay.confirmationNo}
               </span>
               <span className="block truncate text-sm font-medium">
-                {new Date(nextStay.checkInDate).toLocaleDateString()} – {new Date(nextStay.checkOutDate).toLocaleDateString()}
+                {fmtDate(nextStay.checkInDate)} – {fmtDate(nextStay.checkOutDate)}
                 {nextStay.roomTypes.length > 0 && <> · {nextStay.roomTypes.join(", ")}</>}
               </span>
             </span>
@@ -235,358 +435,307 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
         )}
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as ProfileTab)}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="stay-history">Stay History</TabsTrigger>
+          <TabsTrigger value="stays">Stays</TabsTrigger>
+          <TabsTrigger value="finance">Finance</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
+        {/* ---------------- OVERVIEW ---------------- */}
         <TabsContent value="overview" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
+          <Card>
+            <CardContent className="divide-y divide-border">
+              <Section
+                id="personal-info"
+                title={isB2B ? "Company details" : "Personal details"}
+                action={missingPersonal ? <AddLink href={editAt("personal-info")}>Add details</AddLink> : undefined}
+              >
+                {isB2B ? (
+                  <Fields entries={[
+                    ["Company / agency", profile.companyName],
+                    ["Contact", [profile.firstName, profile.lastName].filter(Boolean).join(" ")],
+                    ["Language", profile.preferredLanguage],
+                    ["Created at", profile.originProperty?.name],
+                  ]} />
+                ) : (
+                  <Fields entries={[
+                    ["Title", label("TITLE", profile.title)],
+                    ["First name", profile.firstName],
+                    ["Middle name", profile.middleName],
+                    ["Last name", profile.lastName],
+                    ["Gender", label("GENDER", profile.gender)],
+                    ["Birthdate", fmtDate(profile.dateOfBirth)],
+                    ["Nationality", nationality],
+                    ["Language", profile.preferredLanguage],
+                    ["Anniversary", fmtDate(profile.anniversaryDate)],
+                    ["Membership no.", profile.membershipNumber],
+                    ["Created at", profile.originProperty?.name],
+                  ]} />
+                )}
+              </Section>
 
-            {/* ---------------- LEFT COLUMN (MAIN) ---------------- */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
+              <Section
+                id="communications"
+                title="Contact"
+                hint="Email, mobile and social contact methods — the starred one is primary."
+                action={communications.length > 0 ? <AddLink href={editAt("communications")}>Add</AddLink> : undefined}
+                toggle={communications.length > 0 ? phoneToggle("communications", "Contact") : undefined}
+                bodyClassName={communications.length > 0 ? foldClass("communications") : undefined}
+              >
+                {communications.length === 0 ? (
+                  <EmptyState size="inline" title="No phone or email on file." action={<AddLink href={editAt("communications")}>Add contact</AddLink>} />
+                ) : (
+                  <ul className="grid gap-x-6 gap-y-2 md:grid-cols-2">
+                    {communications.map((c) => (
+                      <li key={c.id} className="flex min-w-0 items-center gap-2 text-sm">
+                        <span className="w-14 shrink-0 text-xs text-muted-foreground">{COMM_TYPE_LABELS[c.type] ?? c.type}</span>
+                        {c.type === "EMAIL" || c.type === "MOBILE" ? (
+                          <ContactLink type={c.type === "EMAIL" ? "email" : "phone"} value={c.value} className="min-w-0 font-medium" />
+                        ) : (
+                          <span className="min-w-0 truncate font-medium">{c.value}</span>
+                        )}
+                        {c.isPrimary && <Star className="h-3.5 w-3.5 shrink-0 fill-current text-warning" aria-label="Primary" />}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
 
-              {/* Section: Personal Information / Company Details */}
-              <Card id="personal-info">
-                <CardHeader>
-                  <CardTitle>{isB2B ? "Company Details" : "Personal Information"}</CardTitle>
-                  <CardDescription>
-                    {isB2B ? "Primary identification details for this entity." : "Primary identification details for this profile."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {isB2B ? (
-                    <Field label="Company / Agency Name" value={profile.companyName} />
+              <Section
+                id="address"
+                title="Address"
+                hint="Home, business or billing addresses — the starred one is primary."
+                action={addresses.length > 0 ? <AddLink href={editAt("address")}>Add</AddLink> : undefined}
+                toggle={addresses.length > 0 ? phoneToggle("address", "Address") : undefined}
+                bodyClassName={addresses.length > 0 ? foldClass("address") : undefined}
+              >
+                {addresses.length === 0 ? (
+                  <EmptyState size="inline" title="No address on file." action={<AddLink href={editAt("address")}>Add address</AddLink>} />
+                ) : (
+                  <ul className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                    {addresses.map((a) => (
+                      <li key={a.id} className="min-w-0 text-sm">
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {ADDRESS_TYPE_LABELS[a.type] ?? a.type}
+                          {a.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning" aria-label="Primary" />}
+                        </p>
+                        {a.fullAddress && <p className="font-medium">{a.fullAddress}</p>}
+                        {[a.city, a.stateProvince, a.postalCode, a.country].some(Boolean) && (
+                          <p className="flex items-center gap-1.5 text-muted-foreground">
+                            {a.country && <CountryFlag value={a.country} />}
+                            {[a.city, a.stateProvince, a.postalCode, country(a.country)].filter(Boolean).join(", ")}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+
+              {/* Preferences & dietary — the Edit form keeps them on individuals only. */}
+              {isIndividual && (
+                <Section
+                  id="crm"
+                  title="Preferences"
+                  action={dietary.length + preferences.length > 0 ? <AddLink href={editAt("crm")}>Change</AddLink> : undefined}
+                >
+                  {dietary.length + preferences.length === 0 ? (
+                    <EmptyState size="inline" title="No preferences or dietary needs." action={<AddLink href={editAt("crm")}>Add</AddLink>} />
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 max-md:grid-cols-2">
-                      <Field className="md:col-span-1" label="Title" value={label("TITLE", profile.title)} />
-                      <Field className="md:col-span-2" label="First Name" value={profile.firstName} />
-                      <Field className="md:col-span-1" label="Middle" value={profile.middleName} />
-                      <Field className="md:col-span-2" label="Last Name" value={profile.lastName} />
-                      <Field className="md:col-span-1" label="Gender" value={label("GENDER", profile.gender)} />
-                      <Field className="md:col-span-1" label="Language" value={profile.preferredLanguage} />
+                    <div className="space-y-2">
+                      {dietary.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="w-20 shrink-0 text-xs text-muted-foreground">Dietary</span>
+                          {dietary.map((d: any) => <Badge key={d.id} variant="outline">{label("DIETARY_REQ", d.value)}</Badge>)}
+                        </div>
+                      )}
+                      {preferences.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="w-20 shrink-0 text-xs text-muted-foreground">Preferences</span>
+                          {preferences.map((p: any) => <Badge key={p.id} variant="outline">{label("PREFERENCE", p.value)}</Badge>)}
+                        </div>
+                      )}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </Section>
+              )}
 
-              {/* Section: Communications */}
-              <Card id="communications" className={foldCard("communications")}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-            Communications
-            <InfoHint label="Communications">Email, mobile, and social contact methods — one may be marked primary.</InfoHint>
-            <PhoneToggle open={!folded("communications")} onToggle={() => toggle("communications")} label="Communications" />
-          </CardTitle>
-                </CardHeader>
-                <CardContent className={cn("space-y-2", foldClass("communications"))}>
-                  {(profile.communications ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">None on file.</p>
-                  ) : profile.communications.map((c: any) => (
-                    <div key={c.id} className="flex items-center gap-2 text-sm rounded-md border px-3 py-2">
-                      <Badge variant="outline" className="text-xs">{c.type}</Badge>
-                      <span className={cn("font-medium", (c.type === "EMAIL" || c.type === "MOBILE") && "max-md:hidden")}>{c.value}</span>
-                      {(c.type === "EMAIL" || c.type === "MOBILE") && (
-                        <ContactLink type={c.type === "EMAIL" ? "email" : "phone"} value={c.value} className="min-w-0 font-medium md:hidden" />
-                      )}
-                      {c.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}
+              <Section
+                id="notes"
+                title="Notes"
+                hint="Feedback, complaints and other notable things about this profile."
+                action={notes.length > 0 ? <AddLink href={editAt("notes")}>Add note</AddLink> : undefined}
+              >
+                {notes.length === 0 ? (
+                  <EmptyState size="inline" title="No notes yet." action={<AddLink href={editAt("notes")}>Add note</AddLink>} />
+                ) : (
+                  <ul className="space-y-3">
+                    {notes.map((n) => (
+                      <li key={n.id} className="border-l-2 border-border pl-3 text-sm">
+                        <p className="whitespace-pre-wrap">{n.noteText}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {n.authorName ?? "Unknown"} · {new Date(n.createdAt).toLocaleString()}{n.isPinned && " · Pinned"}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- STAYS ---------------- */}
+        <TabsContent value="stays" className="mt-4">
+          <Card>
+            <CardContent className="divide-y divide-border">
+              {historyLoading ? (
+                <InlineLoading lines={4} />
+              ) : (
+                <>
+                  <section className="py-5 first:pt-0">
+                    <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> Upcoming and in house</h2>
+                    {(!stayHistory?.future || stayHistory.future.length === 0) ? (
+                      <EmptyState size="inline" title="No upcoming or in-house stays." />
+                    ) : (
+                      <div className="flex flex-col gap-2">{stayHistory.future.map((r) => renderStayRow(r, false))}</div>
+                    )}
+                  </section>
+                  <section className="py-5 last:pb-0">
+                    <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><HistoryIcon className="h-4 w-4" /> Past stays</h2>
+                    {(!stayHistory?.history || stayHistory.history.length === 0) ? (
+                      <EmptyState size="inline" title="No past stays on record." />
+                    ) : (
+                      <div className="flex flex-col gap-2">{stayHistory.history.map((r) => renderStayRow(r, true))}</div>
+                    )}
+                  </section>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- FINANCE ---------------- */}
+        <TabsContent value="finance" className="mt-4">
+          <Card>
+            <CardContent className="divide-y divide-border">
+              <Section
+                id="billing-finance"
+                title="Billing"
+                action={hasBilling ? <AddLink href={editAt("billing-finance")}>Change</AddLink> : undefined}
+              >
+                {hasBilling ? (
+                  <Fields entries={billingEntries} />
+                ) : (
+                  <EmptyState size="inline" title="No billing details." action={<AddLink href={editAt("billing-finance")}>Add</AddLink>} />
+                )}
+              </Section>
+
+              {isB2B && (
+                <Section
+                  id="negotiated-rates"
+                  title="Negotiated rates"
+                  hint="The negotiated rate plans this account can book with — only on bookings made through this profile."
+                  action={rateLinks.length > 0 ? <AddLink href={editAt("negotiated-rates")}>Change</AddLink> : undefined}
+                >
+                  {!negotiatedRates ? (
+                    <InlineLoading lines={1} />
+                  ) : rateLinks.length === 0 ? (
+                    <EmptyState size="inline" title="No negotiated rate plans linked." action={<AddLink href={editAt("negotiated-rates")}>Link rate plans</AddLink>} />
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {rateLinks.map(({ link, rp }) => (
+                        <Badge key={rp!.id} variant="outline">
+                          {rp!.name} ({rp!.code}) · {rp!.propertyName}
+                          {link.commissionRate != null && ` · ${link.commissionRate}% commission`}
+                        </Badge>
+                      ))}
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                  )}
+                </Section>
+              )}
 
-              {/* Section: Address */}
-              <Card id="address" className={foldCard("address")}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-            Address
-            <InfoHint label="Address">Home, business, or billing addresses — one may be marked primary.</InfoHint>
-            <PhoneToggle open={!folded("address")} onToggle={() => toggle("address")} label="Address" />
-          </CardTitle>
-                </CardHeader>
-                <CardContent className={cn("space-y-2", foldClass("address"))}>
-                  {(profile.addresses ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">None on file.</p>
-                  ) : profile.addresses.map((a: any) => (
-                    <div key={a.id} className="rounded-md border px-3 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">{a.type}</Badge>
-                        {a.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}
-                      </div>
-                      <p className="font-medium mt-1">{a.fullAddress || "—"}</p>
-                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {a.country && <CountryFlag value={a.country} />}
-                        {[a.city, a.stateProvince, a.postalCode, country(a.country)].filter(Boolean).join(", ") || "—"}
-                      </p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+              <Section
+                id="marketing-compliance"
+                title="Marketing and compliance"
+                hint="Mail list, Green Tax exemption and incognito. Only the ones switched on are listed."
+                action={<AddLink href={editAt("marketing-compliance")}>Change</AddLink>}
+              >
+                {flags.length === 0 && !profile.photoUrl ? (
+                  <EmptyState size="inline" title="None switched on." />
+                ) : (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {flags.map((f) => <Badge key={f} variant="outline">{f}</Badge>)}
+                    {profile.photoUrl && (
+                      <a href={profile.photoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-info hover:underline">
+                        Photo / logo <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                )}
+              </Section>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              {/* Section: Identification (Guest/Staff only) — Birthdate/Nationality live
-                  here too, matching the Edit form's card boundary exactly. */}
+        {/* ---------------- DOCUMENTS ---------------- */}
+        <TabsContent value="documents" className="mt-4">
+          <Card>
+            <CardContent className="divide-y divide-border">
               {isIndividual && (
-                <Card id="identification" className={foldCard("identification")}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-            Identification
-            <InfoHint label="Identification">Passport or National ID documents — one may be marked primary.</InfoHint>
-            <PhoneToggle open={!folded("identification")} onToggle={() => toggle("identification")} label="Identification" />
-          </CardTitle>
-                  </CardHeader>
-                  <CardContent className={cn("space-y-6", foldClass("identification"))}>
-                    <div className="space-y-2">
-                      {(profile.documents ?? []).length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">No identification documents on file.</p>
-                      ) : profile.documents.map((d: any) => (
-                        <div key={d.id} className="flex items-center gap-2 text-sm rounded-md border px-3 py-2">
-                          <Badge variant="outline" className="text-xs">{label("ID_TYPE", d.documentType)}</Badge>
+                <Section
+                  id="identification"
+                  title="Identification"
+                  hint="Passport or national ID documents — the starred one is primary."
+                  action={documents.length > 0 ? <AddLink href={editAt("identification")}>Add ID</AddLink> : undefined}
+                >
+                  {documents.length === 0 ? (
+                    <EmptyState size="inline" title="No ID on file." action={<AddLink href={editAt("identification")}>Add ID</AddLink>} />
+                  ) : (
+                    <ul className="space-y-2">
+                      {documents.map((d) => (
+                        <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                          <span className="w-24 shrink-0 text-xs text-muted-foreground">{label("ID_TYPE", d.documentType)}</span>
                           <span className="font-medium">{d.documentNumber}</span>
                           {d.issuingCountry && (
                             <span className="inline-flex items-center gap-1 text-muted-foreground">
                               · <CountryFlag value={d.issuingCountry} /> {country(d.issuingCountry)}
                             </span>
                           )}
-                          {d.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning ml-auto" />}
-                        </div>
+                          {d.expiryDate && <span className="text-muted-foreground">· expires {fmtDate(d.expiryDate)}</span>}
+                          {d.isWorkPermit && <Badge variant="outline">Work permit</Badge>}
+                          {d.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning" aria-label="Primary" />}
+                        </li>
                       ))}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border max-md:grid-cols-2">
-                      <Field label="Birthdate" value={profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : undefined} />
-                      <Field
-                        label="Nationality"
-                        value={profile.nationality ? <CountryLabel value={profile.nationality} name={label("NATIONALITY", profile.nationality)} /> : undefined}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                    </ul>
+                  )}
+                </Section>
               )}
 
-              {/* Section: CRM (Guest/Staff only, matching the Edit form) */}
-              {isIndividual && (
-                <Card id="crm">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-            CRM
-            <InfoHint label="CRM">Stay history summary, guest preferences, and VIP status.</InfoHint>
-          </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-md:grid-cols-2">
-                      <Field label="Anniversary" value={profile.anniversaryDate ? new Date(profile.anniversaryDate).toLocaleDateString() : undefined} />
-                      <Field label="VIP Level" value={label("VIP_LEVEL", profile.vipLevel)} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 rounded-md border p-3 bg-muted/30">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Visits to This Property</Label>
-                        <p className="text-lg font-semibold">{stayHistory?.visitsToProperty ?? "—"}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Visits to Property Chain (Enterprise)</Label>
-                        <p className="text-lg font-semibold">{profile.totalStays ?? 0}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>Dietary Requirements</Label>
-                      {dietary.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">None set.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {dietary.map((d: any) => <Badge key={d.id} variant="outline">{label("DIETARY_REQ", d.value)}</Badge>)}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>Preferences</Label>
-                      {preferences.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">None set.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {preferences.map((p: any) => <Badge key={p.id} variant="outline">{label("PREFERENCE", p.value)}</Badge>)}
-                        </div>
-                      )}
-                    </div>
-
-                    <Field label="Membership Number" value={profile.membershipNumber} />
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Section: Negotiated Rates (Company/Travel Agent only) */}
-              {isB2B && (
-                <Card id="negotiated-rates" className={foldCard("negotiated-rates")}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-            Negotiated Rates
-            <InfoHint label="Negotiated Rates">Which negotiated Rate Plans this account can book with — restricted to bookings made through this profile.</InfoHint>
-            <PhoneToggle open={!folded("negotiated-rates")} onToggle={() => toggle("negotiated-rates")} label="Negotiated Rates" />
-          </CardTitle>
-                  </CardHeader>
-                  <CardContent className={foldClass("negotiated-rates")}>
-                    {!negotiatedRates || negotiatedRates.links.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic">No negotiated rate plans linked.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {negotiatedRates.links.map((link) => {
-                          const rp = negotiatedRates.available.find((r) => r.id === link.ratePlanId)
-                          if (!rp) return null
-                          return (
-                            <Badge key={rp.id} variant="outline">
-                              {rp.name} ({rp.code}) · {rp.propertyName}
-                              {link.commissionRate != null && ` · ${link.commissionRate}% commission`}
-                            </Badge>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Section: Attachments */}
-              <Card id="attachments" className={foldCard("attachments")}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-            Attachments
-            <InfoHint label="Attachments">Linked files (label + URL) — passport scans, signed contracts, etc.</InfoHint>
-            <PhoneToggle open={!folded("attachments")} onToggle={() => toggle("attachments")} label="Attachments" />
-          </CardTitle>
-                </CardHeader>
-                <CardContent className={cn("space-y-1.5", foldClass("attachments"))}>
-                  {(profile.attachments ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">No attachments linked yet.</p>
-                  ) : profile.attachments.map((a: any) => (
-                    <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-info hover:underline">
-                      {a.label} <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ))}
-                </CardContent>
-              </Card>
-
-              {/* Section: Notes */}
-              <Card id="notes">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-            Notes
-            <InfoHint label="Notes">Feedback, complaints, and other notable things about this profile.</InfoHint>
-          </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {(profile.notes ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">No notes yet.</p>
-                  ) : profile.notes.map((n: any) => (
-                    <div key={n.id} className="text-sm border-l-2 pl-2 border-border">
-                      <p className="whitespace-pre-wrap">{n.noteText}</p>
-                      <p className="text-xs text-muted-foreground">{n.authorName ?? "Unknown"} · {new Date(n.createdAt).toLocaleString()} {n.isPinned && "· Pinned"}</p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-            </div>
-
-            {/* ---------------- RIGHT COLUMN (SIDEBAR) ---------------- */}
-            <div className="flex flex-col gap-6">
-
-              {/* Section: Profile Settings */}
-              <Card id="profile-status" className={cn("bg-muted/50", foldCard("profile-status"))}>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg max-md:flex max-md:items-center">
-                    Profile Settings
-                    <PhoneToggle open={!folded("profile-status")} onToggle={() => toggle("profile-status")} label="Profile Settings" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className={cn("space-y-4", foldClass("profile-status"))}>
-                  <div className="space-y-4 max-md:grid max-md:grid-cols-2 max-md:gap-4 max-md:space-y-0">
-                  <Field label="Profile Type" value={PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType} />
-                  <Field label="Classification" value={label("CLASSIFICATION", profile.classification)} />
-                  </div>
-                  {profile.originProperty && (
-                    <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-                      Originated at <span className="font-medium text-foreground">{profile.originProperty.name}</span>
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Section: Finance & Billing (AR) */}
-              <Card id="billing-finance" className={foldCard("billing-finance")}>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg max-md:flex max-md:items-center">
-                    Finance & Billing
-                    <PhoneToggle open={!folded("billing-finance")} onToggle={() => toggle("billing-finance")} label="Finance and Billing" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className={cn("space-y-4", foldClass("billing-finance"))}>
-                  <Field label="AR Number (Accounts Rec.)" value={profile.arNumber} />
-                  <Field label="Credit Limit" value={profile.creditLimit != null ? `$${profile.creditLimit.toFixed(2)}` : undefined} />
-                  {isB2B && (
-                    <>
-                      <Field label="Credit Account (Debtors)" value={profile.isCreditAccount ? "Active" : "No"} />
-                      <div className="pt-2 border-t border-border">
-                        <Field label="IATA Number" value={profile.iataNumber} />
-                        <Field label="Booking Method" value={profile.bookingMethod} />
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Section: Marketing & Compliance */}
-              <Card id="marketing-compliance" className={foldCard("marketing-compliance")}>
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg max-md:flex max-md:items-center">
-                    Marketing & Compliance
-                    <PhoneToggle open={!folded("marketing-compliance")} onToggle={() => toggle("marketing-compliance")} label="Marketing and Compliance" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className={cn("space-y-4", foldClass("marketing-compliance"))}>
-                  {profile.photoUrl && (
-                    <Field label="Photo / Logo URL" value={
-                      <a href={profile.photoUrl} target="_blank" rel="noopener noreferrer" className="text-info hover:underline inline-flex items-center gap-1">
-                        View <ExternalLink className="h-3 w-3" />
-                      </a>
-                    } />
-                  )}
-                  <div className="flex flex-col gap-3 pt-2 border-t border-border max-md:grid max-md:grid-cols-2">
-                    <Field label="Mail List (Marketing)" value={profile.marketingOptIn ? "Yes" : "No"} />
-                    <Field label="Green Tax Exempt" value={profile.greenTaxExempt ? "Yes" : "No"} />
-                    <Field label="Incognito Mode" value={profile.isIncognito ? "Yes" : "No"} />
-                  </div>
-                </CardContent>
-              </Card>
-
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="stay-history" className="mt-4 space-y-6">
-          {historyLoading ? (
-            <Skeleton className="h-40 rounded-xl" />
-          ) : (
-            <>
-              <div>
-                <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-2"><CalendarDays className="h-4 w-4" /> Future Stays</h3>
-                {(!stayHistory?.future || stayHistory.future.length === 0) ? (
-                  <p className="text-sm text-muted-foreground italic">No upcoming or in-house stays.</p>
+              <Section
+                id="attachments"
+                title="Attachments"
+                hint="Linked files (label and URL) — passport scans, signed contracts and so on."
+                action={attachments.length > 0 ? <AddLink href={editAt("attachments")}>Add</AddLink> : undefined}
+              >
+                {attachments.length === 0 ? (
+                  <EmptyState size="inline" title="No attachments." action={<AddLink href={editAt("attachments")}>Add attachment</AddLink>} />
                 ) : (
-                  <div className="flex flex-col gap-2">{stayHistory.future.map((r) => renderStayRow(r, false))}</div>
+                  <ul className="space-y-1.5">
+                    {attachments.map((a) => (
+                      <li key={a.id}>
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-info hover:underline">
+                          {a.label} <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold flex items-center gap-1.5 mb-2"><HistoryIcon className="h-4 w-4" /> History</h3>
-                {(!stayHistory?.history || stayHistory.history.length === 0) ? (
-                  <p className="text-sm text-muted-foreground italic">No past stays on record.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">{stayHistory.history.map((r) => renderStayRow(r, true))}</div>
-                )}
-              </div>
-            </>
-          )}
+              </Section>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

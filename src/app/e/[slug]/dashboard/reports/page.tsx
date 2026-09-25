@@ -11,10 +11,10 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useProperty } from "@/components/providers/property-provider"
-import { InfoHint } from "@/components/ui/info-hint"
 import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { ReportDocument } from "@/components/reports/report-document"
 import type { ReportPreview } from "@/lib/reports/types"
+import { PageHeader } from "@/components/ui/page-header"
 
 type Param = {
   key: string
@@ -184,7 +184,7 @@ export default function ReportsPage() {
 
   if (!catalog) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="space-y-6">
         <Skeleton className="h-9 w-64" />
         <Skeleton className="h-96 rounded-xl" />
       </div>
@@ -194,15 +194,8 @@ export default function ReportsPage() {
   const paramOptions = (p: Param) => p.options ?? dynOptions[p.key] ?? []
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-          Reports
-          <InfoHint label="Reports">
-            Generate operational and financial reports as PDF, Excel, or CSV{currentProperty ? ` for ${currentProperty.name}` : ""}.
-          </InfoHint>
-        </h2>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Daily Reports" hint="Generate operational and financial reports as PDF, Excel, or CSV." />
 
       <section aria-label="Report selection" className="rounded-xl border border-border bg-card">
         {/* Step 1 — which report */}

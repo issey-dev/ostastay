@@ -20,6 +20,9 @@ import { Save, ArrowLeft } from "@/components/icons"
 import { differenceInYears } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useUnsavedGuard } from "@/lib/use-unsaved-guard"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { CommunicationsManager } from "@/components/profiles/communications-manager"
 import { AddressManager } from "@/components/profiles/address-manager"
 import { IdentificationManager } from "@/components/profiles/identification-manager"
@@ -28,6 +31,7 @@ import { NotesPanel } from "@/components/profiles/notes-panel"
 import { PreferencesEditor } from "@/components/profiles/preferences-editor"
 import { NegotiatedRatesManager } from "@/components/profiles/negotiated-rates-manager"
 import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
 import { MobileActionBar } from "@/components/ui/mobile"
 import { INPUT_EMAIL, INPUT_MONEY, INPUT_PHONE } from "@/lib/input-presets"
@@ -52,6 +56,7 @@ const profileFormSchema = z.object({
   marketingOptIn: z.boolean().default(false),
   isIncognito: z.boolean().default(false),
   iataNumber: z.string().optional(),
+  tinNumber: z.string().trim().max(50, { message: "TIN is too long" }).optional(),
   bookingMethod: z.string().optional(),
   commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
   arNumber: z.string().optional(),
@@ -72,7 +77,7 @@ const profileFormSchema = z.object({
     if (!data.companyName || data.companyName.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Company / Agency Name is required.",
+        message: "Company / agency name is required.",
         path: ["companyName"],
       })
     }
@@ -100,7 +105,7 @@ const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest",
   STAFF: "Staff",
   COMPANY: "Company",
-  TRAVEL_AGENT: "Travel Agent",
+  TRAVEL_AGENT: "Travel agent",
 }
 
 export default function ProfileForm({ initialData, upid, defaultType = "GUEST", contextMode }: { initialData?: any, upid?: string, defaultType?: string, contextMode?: "debtor" }) {
@@ -136,6 +141,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
       marketingOptIn: initialData?.marketingOptIn ?? false,
       isIncognito: initialData?.isIncognito ?? false,
       iataNumber: initialData?.iataNumber || "",
+      tinNumber: initialData?.tinNumber || "",
       bookingMethod: initialData?.bookingMethod || "",
       commissionRate: initialData?.commissionRate || null,
       arNumber: initialData?.arNumber || "",
@@ -150,6 +156,11 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
       initialCountry: "",
     }
   })
+
+  // Warn before a reload/tab close throws away unsaved edits (DESKTOP_PLAN D11). `saved`
+  // switches it off for the success navigation.
+  const [saved, setSaved] = useState(false)
+  useUnsavedGuard(form.formState.isDirty && !submitting && !saved)
 
   const profileType = form.watch("profileType")
   const isB2B = profileType === "COMPANY" || profileType === "TRAVEL_AGENT"
@@ -168,6 +179,15 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
       .then((data) => setVisitsToProperty(data?.visitsToProperty ?? null))
       .catch(() => setVisitsToProperty(null))
   }, [isEditMode, upid, currentProperty?.id])
+
+  // "Add ID", "Add note"… on the profile page link to /edit#<section>. The browser can't
+  // jump there on its own — the form mounts after the profile loads — so scroll once here.
+  useEffect(() => {
+    const id = window.location.hash.slice(1)
+    if (!id) return
+    const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 150)
+    return () => clearTimeout(t)
+  }, [])
 
   const onSubmit = async (data: ProfileFormValues) => {
     setSubmitting(true)
@@ -208,6 +228,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
       })
 
       if (res.ok) {
+        setSaved(true)
         if (isDebtorContext) {
           const saved = await res.json()
           router.push(`/e/${slug}/dashboard/debtors/${saved.upid}`)
@@ -221,42 +242,47 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
         }
         router.refresh()
       } else {
-        const error = await res.json()
-        toast.error(error.error || "Failed to save profile")
+        toast.error(await apiError(res, "Couldn't save the profile. Try again."))
       }
     } catch (e) {
       console.error(e)
+      toast.error("Couldn't save the profile. Try again.")
     } finally {
       setSubmitting(false)
     }
   }
 
+  const formTitle = isDebtorContext ? "New credit account" : isEditMode ? "Edit profile" : "New profile"
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 max-w-7xl w-full mx-auto pb-12 p-4">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
-          <div className="flex items-start gap-4">
-            <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back" className="shrink-0">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="min-w-0">
-              <h2 className="text-2xl font-bold tracking-tight max-sm:text-xl">
-                {isDebtorContext ? "New Credit Account" : isEditMode ? "Edit Profile" : "New Profile"}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {isDebtorContext
-                  ? "Register a Company or Travel Agent as a Debtors credit account."
-                  : isEditMode ? `Updating Profile` : "Fill out the details to register a new profile."}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 max-md:hidden">
-            <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" className="flex-1 sm:flex-none" disabled={submitting || !form.formState.isValid}>
-              <Save className="mr-2 h-4 w-4" /> {submitting ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 pb-12">
+        {/* Sticky Header. Breadcrumbs ("Client Relations › New") replace the back arrow from
+            md up; the debtors page renders its own breadcrumb and tab title around this form. */}
+        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex items-start gap-4 max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
+          <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back" className="shrink-0 md:hidden">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <PageHeader
+            className="min-w-0 flex-1"
+            crumb={isDebtorContext ? undefined : isEditMode ? "Edit" : "New"}
+            title={<>{formTitle}</>}
+            tabTitle={isDebtorContext ? null : formTitle}
+            hint={
+              isDebtorContext
+                ? "Register a Company or Travel Agent as a Debtors credit account."
+                : isEditMode ? undefined : "Fill out the details to register a new profile."
+            }
+            actionsClassName="gap-2 max-md:hidden"
+            actions={
+              <>
+                <Button type="button" variant="outline" className="flex-1 sm:flex-none" onClick={() => router.back()}>Cancel</Button>
+                <SubmitButton className="flex-1 sm:flex-none" pending={submitting} disabled={!form.formState.isValid}>
+                  <Save className="mr-2 h-4 w-4" /> Save profile
+                </SubmitButton>
+              </>
+            }
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mt-4 items-start">
@@ -267,7 +293,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Personal Information */}
             <Card id="personal-info">
               <CardHeader>
-                <CardTitle>{isB2B ? "Company Details" : "Personal Information"}</CardTitle>
+                <CardTitle>{isB2B ? "Company details" : "Personal information"}</CardTitle>
                 <CardDescription>
                   {isB2B ? "Primary identification details for this entity." : "Primary identification details for this profile."}
                 </CardDescription>
@@ -279,7 +305,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                     name="companyName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Company / Agency Name <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel>Company / agency name <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input placeholder="Acme Corp" {...field} value={field.value || ""} />
                         </FormControl>
@@ -307,7 +333,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                       name="firstName"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>First Name <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>First name <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} />
                           </FormControl>
@@ -333,7 +359,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                       name="lastName"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>Last Name <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>Last name <span className="text-destructive">*</span></FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} />
                           </FormControl>
@@ -437,7 +463,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                       name="initialFullAddress"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>Full Address</FormLabel>
+                          <FormLabel>Full address</FormLabel>
                           <FormControl>
                             <Input placeholder="123 Main St, Apt 4B" {...field} value={field.value || ""} />
                           </FormControl>
@@ -476,7 +502,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                       name="initialPostalCode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ZIP / Postal Code</FormLabel>
+                          <FormLabel>ZIP / postal code</FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} />
                           </FormControl>
@@ -511,7 +537,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
             Identification
-            <InfoHint label="Identification">Passport or National ID documents — one may be marked primary.</InfoHint>
+            <InfoHint label="Identification">Passport or national ID documents — one may be marked primary.</InfoHint>
           </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -588,7 +614,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                     name="vipLevel"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>VIP Level</FormLabel>
+                        <FormLabel>VIP level</FormLabel>
                         <FormControl>
                           <SystemCodeSelect category="VIP_LEVEL" value={field.value || ""} onValueChange={field.onChange} placeholder="None" />
                         </FormControl>
@@ -601,18 +627,18 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                 {isEditMode && (
                   <div className="grid grid-cols-2 gap-4 rounded-md border p-3 bg-muted/30">
                     <div>
-                      <Label className="text-xs text-muted-foreground">Visits to This Property</Label>
+                      <Label className="text-xs text-muted-foreground">Visits to this property</Label>
                       <p className="text-lg font-semibold">{visitsToProperty ?? "—"}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Visits to Property Chain (Enterprise)</Label>
+                      <Label className="text-xs text-muted-foreground">Visits to property chain (enterprise)</Label>
                       <p className="text-lg font-semibold">{initialData?.totalStays ?? 0}</p>
                     </div>
                   </div>
                 )}
 
                 <div className="grid gap-2">
-                  <Label>Dietary Requirements</Label>
+                  <Label>Dietary requirements</Label>
                   {isEditMode ? (
                     <PreferencesEditor upid={upid!} category="DIETARY" lovCategory="DIETARY_REQ" />
                   ) : (
@@ -634,7 +660,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                   name="membershipNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Membership Number</FormLabel>
+                      <FormLabel>Membership number</FormLabel>
                       <FormControl>
                         <Input placeholder="MEM-12345" {...field} value={field.value || ""} />
                       </FormControl>
@@ -654,8 +680,8 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
               <Card id="negotiated-rates">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-            Negotiated Rates
-            <InfoHint label="Negotiated Rates">Which negotiated Rate Plans this account can book with — restricted to bookings made through this profile.</InfoHint>
+            Negotiated rates
+            <InfoHint label="Negotiated rates">Which negotiated rate plans this account can book with — restricted to bookings made through this profile.</InfoHint>
           </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -710,7 +736,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Profile Status */}
             <Card id="profile-status" className="bg-muted/50">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Profile Settings</CardTitle>
+                <CardTitle className="text-lg">Profile settings</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -718,7 +744,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                   name="profileType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Profile Type</FormLabel>
+                      <FormLabel>Profile type</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger className="bg-card">
@@ -728,7 +754,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <SelectContent>
                           {!isDebtorContext && <SelectItem value="GUEST">Guest</SelectItem>}
                           <SelectItem value="COMPANY">Company</SelectItem>
-                          <SelectItem value="TRAVEL_AGENT">Travel Agent</SelectItem>
+                          <SelectItem value="TRAVEL_AGENT">Travel agent</SelectItem>
                           {!isDebtorContext && <SelectItem value="STAFF">Staff</SelectItem>}
                         </SelectContent>
                       </Select>
@@ -760,7 +786,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Finance & Billing (AR — unchanged) */}
             <Card id="billing-finance">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Finance & Billing</CardTitle>
+                <CardTitle className="text-lg">Finance & billing</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -768,7 +794,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                   name="arNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>AR Number (Accounts Rec.)</FormLabel>
+                      <FormLabel>AR number (accounts rec.)</FormLabel>
                       <FormControl>
                         <Input placeholder="e.g. AR-1002" {...field} value={field.value || ""} />
                       </FormControl>
@@ -781,7 +807,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                   name="creditLimit"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Credit Limit</FormLabel>
+                      <FormLabel>Credit limit</FormLabel>
                       <FormControl>
                         <Input {...INPUT_MONEY} type="number" step="100" placeholder="e.g. 5000" {...field} value={field.value || ""} />
                       </FormControl>
@@ -801,9 +827,9 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                             <Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isDebtorContext} />
                           </FormControl>
                           <div>
-                            <FormLabel className="cursor-pointer text-sm">Credit Account (Debtors)</FormLabel>
+                            <FormLabel className="cursor-pointer text-sm">Credit account (Debtors)</FormLabel>
                             <p className="text-xs text-muted-foreground">
-                              Activates AR Number/Credit Limit as a live account — enables billing charges to this profile from the Debtors module.
+                              Activates the AR number and credit limit as a live account — enables billing charges to this profile from the Debtors module.
                             </p>
                           </div>
                         </FormItem>
@@ -815,9 +841,25 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         name="iataNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>IATA Number</FormLabel>
+                            <FormLabel>IATA number</FormLabel>
                             <FormControl>
                               <Input placeholder="e.g. 12345678" {...field} value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="tinNumber"
+                        render={({ field }) => (
+                          <FormItem className="mt-4">
+                            <FormLabel className="flex items-center gap-1">
+                              TIN
+                              <InfoHint label="TIN">Tax Identification Number. Printed against every invoice booked through this profile on the GST Report.</InfoHint>
+                            </FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g. 1234567GST501" {...field} value={field.value || ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -829,8 +871,8 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         render={({ field }) => (
                           <FormItem className="mt-4">
                             <FormLabel className="flex items-center gap-1">
-                              Booking Method
-                              <InfoHint label="Booking Method">Reported on the MIRA Green Tax sheet for every reservation booked through this profile as its Travel Agent. Guests booked without an agent are reported as FIT.</InfoHint>
+                              Booking method
+                              <InfoHint label="Booking method">Reported on the MIRA Green Tax sheet for every reservation booked through this profile as its Travel Agent. Guests booked without an agent are reported as FIT.</InfoHint>
                             </FormLabel>
                             <Select value={field.value || ""} onValueChange={(v) => field.onChange(v === "NONE" ? "" : v)}>
                               <FormControl>
@@ -858,7 +900,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Marketing / Compliance */}
             <Card id="marketing-compliance">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Marketing & Compliance</CardTitle>
+                <CardTitle className="text-lg">Marketing & compliance</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -866,7 +908,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                   name="photoUrl"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Photo / Logo URL</FormLabel>
+                      <FormLabel>Photo / logo URL</FormLabel>
                       <FormControl>
                         <Input placeholder="https://..." {...field} value={field.value || ""} />
                       </FormControl>
@@ -883,7 +925,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormControl>
                           <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                         </FormControl>
-                        <FormLabel className="cursor-pointer text-sm">Mail List (Marketing)</FormLabel>
+                        <FormLabel className="cursor-pointer text-sm">Mail list (marketing)</FormLabel>
                       </FormItem>
                     )}
                   />
@@ -895,7 +937,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormControl>
                           <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                         </FormControl>
-                        <FormLabel className="cursor-pointer text-sm">Green Tax Exempt</FormLabel>
+                        <FormLabel className="cursor-pointer text-sm">Green Tax exempt</FormLabel>
                       </FormItem>
                     )}
                   />
@@ -907,7 +949,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormControl>
                           <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                         </FormControl>
-                        <FormLabel className="cursor-pointer text-sm">Incognito Mode</FormLabel>
+                        <FormLabel className="cursor-pointer text-sm">Incognito mode</FormLabel>
                       </FormItem>
                     )}
                   />
@@ -922,9 +964,9 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
         {/* Phones: Save stays in reach however far down the form the user is. */}
         <MobileActionBar>
           <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-          <Button type="submit" className="flex-1" disabled={submitting || !form.formState.isValid}>
-            <Save className="mr-2 h-4 w-4" /> {submitting ? "Saving..." : "Save Profile"}
-          </Button>
+          <SubmitButton className="flex-1" pending={submitting} disabled={!form.formState.isValid}>
+            <Save className="mr-2 h-4 w-4" /> Save profile
+          </SubmitButton>
         </MobileActionBar>
       </form>
     </Form>

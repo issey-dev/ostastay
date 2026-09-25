@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { toast } from "@/lib/toast"
 import { Pin, PinOff, Trash2, Send } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,6 +15,7 @@ type Note = { id: string; noteText: string; isPinned: boolean; createdAt: string
 // see .agents/docs/PROFILES_REDESIGN_PLAN.md "Notes". Wires up the previously-dead
 // ProfileNote model.
 export function NotesPanel({ upid }: { upid: string }) {
+  const confirm = useConfirm()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -62,7 +65,9 @@ export function NotesPanel({ upid }: { upid: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/profiles/${upid}/notes/${id}`, { method: "DELETE" })
+    if (!(await confirm({ title: "Delete this note?", description: "This cannot be undone.", confirmLabel: "Delete", destructive: true }))) return
+    const res = await fetch(`/api/profiles/${upid}/notes/${id}`, { method: "DELETE" }).catch(() => null)
+    if (!res?.ok) toast.error("Couldn't delete it. Try again.")
     fetchNotes()
   }
 

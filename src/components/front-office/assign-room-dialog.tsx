@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type AssignRoomDialogProps = {
   isOpen: boolean
@@ -71,20 +72,20 @@ export function AssignRoomDialog({
         onAssigned?.(`Room ${room?.roomNumber ?? ""} assigned.`)
         onClose()
       } else {
-        toast.error(data.error || "Failed to assign room.")
+        toast.error(data.error || "Couldn't assign the room. Try again.")
       }
     } catch {
-      toast.error("An unexpected error occurred.")
+      toast.error("Couldn't assign the room. Try again.")
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent size="sm">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <DialogHeader>
-              <DialogTitle>Assign Room</DialogTitle>
+              <DialogTitle>Assign room</DialogTitle>
               <DialogDescription>
                 Assign an available {roomTypeName || "room"} to this arrival. This does not check the guest in.
               </DialogDescription>
@@ -93,7 +94,7 @@ export function AssignRoomDialog({
             <div className="grid gap-4 py-4">
               {roomTypeName && (
                 <div className="grid gap-2">
-                  <Label>Room Type</Label>
+                  <Label>Room type</Label>
                   <Input disabled value={roomTypeName} className="bg-muted" />
                 </div>
               )}
@@ -104,7 +105,7 @@ export function AssignRoomDialog({
                     <SearchableSelect
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder={loading ? "Loading rooms..." : availableRooms.length ? "Select Room" : "No rooms available"}
+                      placeholder={loading ? "Loading rooms…" : availableRooms.length ? "Select room" : "No rooms available"}
                       options={availableRooms.map((rm) => ({ value: rm.id, label: `Room ${rm.roomNumber}` }))}
                     />
                   </FormControl>
@@ -115,9 +116,9 @@ export function AssignRoomDialog({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting || !availableRooms.length}>
-                {form.formState.isSubmitting ? "Assigning..." : "Assign Room"}
-              </Button>
+              <SubmitButton pending={form.formState.isSubmitting} pendingLabel="Assigning…" disabled={!availableRooms.length}>
+                Assign room
+              </SubmitButton>
             </DialogFooter>
           </form>
         </Form>

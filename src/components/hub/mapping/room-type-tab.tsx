@@ -1,6 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MappingInput } from "@/components/hub/mapping/mapping-input"
@@ -40,7 +41,7 @@ export function RoomTypeTab({
             subtitle={<span className="font-mono">{rt.roomTypeCode}</span>}
             badge={
               <>
-                {!rt.isActive && <Badge variant="secondary">Inactive</Badge>}
+                {!rt.isActive && <StatusBadge status="INACTIVE" label="Inactive" />}
                 <span className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Share</span>
                   <Switch

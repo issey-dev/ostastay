@@ -4,16 +4,20 @@ import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Send, FileStack, Mail, Ban, Loader2, CheckCircle2 } from "@/components/icons"
+import { Send, FileStack, Mail, Ban, Loader2 } from "@/components/icons"
 import { toast } from "@/lib/toast"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import type { StatusTone } from "@/lib/status-tone"
 
 type Slot = { id: string; slotIndex: number; isPrimary: boolean; status: string; firstName: string | null; lastName: string | null }
 type Pickup = { id: string; confirmationNo: string; slots: Slot[] }
 type LinkStatus = { id: string; status: string; expiresAt: string } | null
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: "Active", EXPIRED: "Expired", REVOKED: "Revoked", COMPLETED: "Completed" }
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  ACTIVE: "default", EXPIRED: "destructive", REVOKED: "outline", COMPLETED: "secondary",
+const STATUS_TONE: Record<string, StatusTone> = {
+  ACTIVE: "success", EXPIRED: "danger", REVOKED: "neutral", COMPLETED: "info",
 }
 
 // Group-scoped eRegistration: one link sent to the block's organizer (payeeProfile),
@@ -26,6 +30,7 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [sessionUrl, setSessionUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const refetch = useCallback(() => {
     setLoading(true)
@@ -43,7 +48,7 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
     try {
       const res = await fetch(`/api/groups/${groupId}/eregistration-link`, { method: "POST" })
       const body = await res.json()
-      if (!res.ok) { toast.error(body.error || "Failed to generate link."); return }
+      if (!res.ok) { toast.error(body.error || "Couldn't generate the link. Try again."); return }
       setSessionToken(body.token)
       setSessionUrl(body.url)
       if (Array.isArray(body.warnings) && body.warnings.length > 0) body.warnings.forEach((w: string) => toast.warning(w))
@@ -55,11 +60,18 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
   }
 
   const revoke = async () => {
+    const ok = await confirm({
+      title: "Revoke this link?",
+      description: "The organizer's link stops working. Details already submitted are kept.",
+      confirmLabel: "Revoke",
+      destructive: true,
+    })
+    if (!ok) return
     setBusy("revoke")
     try {
       const res = await fetch(`/api/groups/${groupId}/eregistration-link/revoke`, { method: "POST" })
       const body = await res.json()
-      if (!res.ok) { toast.error(body.error || "Failed to revoke."); return }
+      if (!res.ok) { toast.error(body.error || "Couldn't revoke the link. Try again."); return }
       setSessionToken(null); setSessionUrl(null)
       toast.success("Link revoked")
       refetch()
@@ -82,7 +94,7 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: sessionToken }),
       })
       const body = await res.json()
-      if (!res.ok) { toast.error(body.error || "Failed to send email."); return }
+      if (!res.ok) { toast.error(body.error || "Couldn't send the email. Try again."); return }
       toast.success(`Sent to ${body.sentTo}`)
     } finally {
       setBusy(null)
@@ -101,14 +113,14 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <InlineLoading lines={2} label="Loading eRegistration" />
         ) : (
           <>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">
                 {link ? (
                   <>
-                    <Badge variant={STATUS_VARIANT[link.status] ?? "outline"}>{STATUS_LABEL[link.status] ?? link.status}</Badge>
+                    <StatusBadge label={STATUS_LABEL[link.status] ?? link.status} tone={STATUS_TONE[link.status] ?? "neutral"} />
                     {totalSlots > 0 && <span className="text-muted-foreground">{doneSlots}/{totalSlots} guests submitted</span>}
                   </>
                 ) : (
@@ -123,7 +135,7 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
                 )}
                 <Button size="sm" onClick={generate} disabled={!!busy}>
                   {busy === "generate" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
-                  {link ? "Regenerate" : "Generate Link"}
+                  {link ? "Regenerate" : "Generate link"}
                 </Button>
               </div>
             </div>
@@ -131,9 +143,9 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
             {activeAndUsable && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2.5">
                 <code className="flex-1 min-w-0 truncate text-xs text-muted-foreground">{sessionUrl}</code>
-                <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy Link</Button>
+                <Button size="sm" variant="outline" onClick={copyLink}><FileStack className="h-3.5 w-3.5 mr-1.5" /> Copy link</Button>
                 <Button size="sm" variant="outline" onClick={sendEmail} disabled={busy === "email"}>
-                  {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send to Organizer
+                  {busy === "email" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1.5" />} Send to organizer
                 </Button>
               </div>
             )}
@@ -152,11 +164,11 @@ export function GroupERegistrationPanel({ groupId }: { groupId: string }) {
                       <div key={s.id} className="flex items-center justify-between text-sm">
                         <span>{[s.firstName, s.lastName].filter(Boolean).join(" ") || `Guest ${s.slotIndex + 1}`}{s.isPrimary && <Badge variant="outline" className="ml-2 text-[10px] uppercase">Lead</Badge>}</span>
                         {s.status === "APPLIED" ? (
-                          <Badge variant="secondary" className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Applied</Badge>
+                          <StatusBadge label="Applied" tone="success" />
                         ) : s.status === "SUBMITTED" ? (
-                          <Badge>Submitted</Badge>
+                          <StatusBadge label="Submitted" tone="info" />
                         ) : (
-                          <Badge variant="outline">Pending</Badge>
+                          <StatusBadge label="Pending" tone="neutral" />
                         )}
                       </div>
                     ))}

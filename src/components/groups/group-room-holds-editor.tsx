@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Plus, Trash2, AlertTriangle } from "@/components/icons"
+import { EmptyState } from "@/components/ui/empty-state"
 
 export type RoomHold = { roomTypeId: string; quantity: number }
 
@@ -59,7 +60,7 @@ export function GroupRoomHoldsEditor({
 
   return (
     <div className="space-y-2">
-      {value.length === 0 && <p className="text-xs text-muted-foreground">No room types held yet — add one to reserve inventory.</p>}
+      {value.length === 0 && <EmptyState size="inline" title="No room types held yet — add one to reserve inventory" />}
       {value.map((row, i) => {
         const max = available && row.roomTypeId in available ? available[row.roomTypeId] : null
         const overbooked = max != null && row.quantity > max

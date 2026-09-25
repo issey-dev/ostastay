@@ -5,6 +5,10 @@ import { Check, Loader2 } from "@/components/icons"
 import { usePropertyValue, type HubPropertyDetail } from "@/components/hub/property-detail"
 import { STATIONERY_FONTS, DEFAULT_STATIONERY_FONT, resolveStationeryFontClass } from "@/lib/stationery-fonts"
 import { cn } from "@/lib/utils"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { SavedTick, useSavedFlash } from "@/components/controls/save-status"
 
 // Sets the CURRENT property's stationery typeface — inherited by every printed document
 // (Invoices, Receipts, Confirmation Letters, Registration Cards, Statements). Lives in the
@@ -15,9 +19,10 @@ import { cn } from "@/lib/utils"
 export function PropertyStationeryFontManager({ property }: { property: HubPropertyDetail }) {
   const [currentProperty, applySaved] = usePropertyValue(property)
   const [saving, setSaving] = useState<string | null>(null)
+  const [savedShown, flashSaved] = useSavedFlash()
 
   if (!currentProperty) {
-    return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
+    return <InlineLoading className="py-8" label="Loading property" />
   }
 
   const selected = currentProperty.stationeryFont ?? DEFAULT_STATIONERY_FONT
@@ -33,7 +38,12 @@ export function PropertyStationeryFontManager({ property }: { property: HubPrope
       })
       if (res.ok) {
         applySaved({ stationeryFont: font })
+        flashSaved()
+      } else {
+        toast.error(await apiError(res, "Couldn't save the stationery font. Try again."))
       }
+    } catch {
+      toast.error("Couldn't save the stationery font. Try again.")
     } finally {
       setSaving(null)
     }
@@ -42,7 +52,10 @@ export function PropertyStationeryFontManager({ property }: { property: HubPrope
   return (
     <div className="space-y-5 border-t border-border pt-6">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">Stationery Font</h3>
+        <h3 className="flex items-center gap-3 text-sm font-semibold text-foreground">
+          Stationery font
+          <SavedTick show={savedShown} />
+        </h3>
         <p className="text-sm text-muted-foreground max-w-[60ch]">
           The typeface used on every printed document for{" "}
           <strong className="text-foreground">{currentProperty.name}</strong> — invoices, receipts, confirmation

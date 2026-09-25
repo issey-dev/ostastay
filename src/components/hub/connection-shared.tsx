@@ -46,7 +46,9 @@ export function formatDateTime(iso: string | null) {
   return new Date(iso).toLocaleString()
 }
 
-export function StatusBadge({ status }: { status: string }) {
+// A channel connection's state. Named ConnectionBadge so it can't be confused with the
+// app-wide StatusBadge (components/ui/status-badge).
+export function ConnectionBadge({ status }: { status: string }) {
   if (status === "CONNECTED") return <Badge variant="default">Connected</Badge>
   if (status === "ERROR") return <Badge variant="destructive">Error</Badge>
   return <Badge variant="secondary">Not connected</Badge>

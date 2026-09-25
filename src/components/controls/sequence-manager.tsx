@@ -215,7 +215,7 @@ export function SequenceManager({ propertyId }: { propertyId: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Document</TableHead>
-                <TableHead>Current Sequence</TableHead>
+                <TableHead>Current sequence</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>

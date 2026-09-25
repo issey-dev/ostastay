@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save } from "@/components/icons"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SectionSaveFooter } from "@/components/controls/save-status"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
 
 type PaymentMethod = { id: string; name: string; type: string; isActive: boolean }
 
@@ -16,9 +17,11 @@ type PaymentMethod = { id: string; name: string; type: string; isActive: boolean
 export function SettlementDefaultsManager({ propertyId }: { propertyId: string }) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [cityLedgerId, setCityLedgerId] = useState("")
+  // The value last loaded/saved — the footer's Save stays off until the pick differs.
+  const [savedId, setSavedId] = useState("")
+  const [justSaved, setJustSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -28,13 +31,14 @@ export function SettlementDefaultsManager({ propertyId }: { propertyId: string }
       .then(([pm, settings]) => {
         if (Array.isArray(pm)) setPaymentMethods(pm)
         setCityLedgerId(settings?.cityLedgerPaymentMethodId || "")
+        setSavedId(settings?.cityLedgerPaymentMethodId || "")
       })
       .finally(() => setLoading(false))
   }, [propertyId])
 
-  const handleSave = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
     setSaving(true)
-    setMessage(null)
     try {
       const res = await fetch(`/api/properties/${propertyId}/settings`, {
         method: "PATCH",
@@ -42,11 +46,13 @@ export function SettlementDefaultsManager({ propertyId }: { propertyId: string }
         body: JSON.stringify({ cityLedgerPaymentMethodId: cityLedgerId || "" }),
       })
       if (res.ok) {
-        setMessage({ text: "Settlement default saved." })
+        setSavedId(cityLedgerId)
+        setJustSaved(true)
       } else {
-        const body = await res.json().catch(() => null)
-        setMessage({ text: body?.error || "Failed to save.", error: true })
+        toast.error(await apiError(res, "Couldn't save the settlement default. Try again."))
       }
+    } catch {
+      toast.error("Couldn't save the settlement default. Try again.")
     } finally {
       setSaving(false)
     }
@@ -55,14 +61,15 @@ export function SettlementDefaultsManager({ propertyId }: { propertyId: string }
   if (loading) return <Skeleton className="h-10 w-full" />
 
   const cityLedgerMethods = paymentMethods.filter(pm => pm.type === "CITY_LEDGER")
+  const status = cityLedgerId !== savedId ? "dirty" : justSaved ? "saved" : "idle"
 
   return (
-    <div className="space-y-5 max-w-xl">
+    <form onSubmit={handleSave} className="space-y-5 max-w-xl">
       <div className="space-y-2">
-        <Label>City Ledger Settlement Method</Label>
+        <Label>City Ledger settlement method</Label>
         <SearchableSelect
           value={cityLedgerId}
-          onChange={setCityLedgerId}
+          onChange={(v) => { setCityLedgerId(v); setJustSaved(false) }}
           placeholder="Select a City Ledger payment method..."
           options={[
             { value: "", label: "None" },
@@ -75,13 +82,7 @@ export function SettlementDefaultsManager({ propertyId }: { propertyId: string }
         </p>
       </div>
 
-      {message && (
-        <p className={`text-sm ${message.error ? "text-destructive" : "text-success"}`}>{message.text}</p>
-      )}
-
-      <Button onClick={handleSave} disabled={saving} className="shadow-sm">
-        <Save className="w-4 h-4 mr-2" /> {saving ? "Saving..." : "Save Default"}
-      </Button>
-    </div>
+      <SectionSaveFooter status={status} saving={saving} />
+    </form>
   )
 }

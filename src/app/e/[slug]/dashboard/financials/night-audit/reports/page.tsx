@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Printer, FileText, ArrowLeft } from "@/components/icons"
-import { InfoHint } from "@/components/ui/info-hint"
 import Link from "next/link"
 import { format } from "date-fns"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatTile } from "@/components/ui/stat-tile"
+import { EmptyState } from "@/components/ui/empty-state"
 
 type DateItem = { businessDate: string; generatedAt: string }
 type ReportsPayload = {
@@ -67,7 +69,7 @@ export default function EodReportsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="space-y-6">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
@@ -75,18 +77,20 @@ export default function EodReportsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 print:hidden">
-        <div>
-          <Link href="../night-audit" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-1">
-            <ArrowLeft className="w-3.5 h-3.5" /> End of Day
-          </Link>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            EOD Report Archive
-            <InfoHint label="EOD Report Archive">Frozen snapshots of each closed business date&apos;s reports.</InfoHint>
-          </h2>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+    <div className="space-y-6">
+      {/* Phones only: the breadcrumb is the way back on desktop. */}
+      <Link href="../night-audit" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1 md:hidden print:hidden">
+        <ArrowLeft className="w-3.5 h-3.5" /> Night Audit
+      </Link>
+      <PageHeader
+        className="print:hidden"
+        align="end"
+        crumb="Report archive"
+        title="Report archive"
+        tabTitle="Report archive · Night Audit"
+        hint="Frozen snapshots of each closed business date's reports."
+        actionsClassName="flex-col gap-2 max-sm:w-full sm:flex-row sm:items-end"
+        actions={<>
           <div className="w-full sm:w-64">
             <SearchableSelect
               value={selected}
@@ -98,14 +102,16 @@ export default function EodReportsPage() {
           <Button variant="outline" className="w-full sm:w-auto max-md:hidden" onClick={() => window.print()} disabled={!payload}>
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {dates.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
-          <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>No reports yet. They are generated during the End-of-Day reports step.</p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No reports yet"
+          description="They are generated during the End-of-Day reports step."
+          className="rounded-xl border border-dashed border-border"
+        />
       )}
 
       {loadingReports && <Skeleton className="h-64 rounded-xl" />}
@@ -113,7 +119,8 @@ export default function EodReportsPage() {
       {!loadingReports && payload && (
         <div className="space-y-8">
           <div className="hidden print:block">
-            <h1 className="text-2xl font-bold">{currentProperty?.name}</h1>
+            {/* Print-only letterhead — not a heading: the page's one <h1> is its title. */}
+            <p className="text-2xl font-bold">{currentProperty?.name}</p>
             <p className="text-sm">Business date: {format(new Date(payload.businessDate), "EEEE, dd MMM yyyy")}</p>
           </div>
           {payload.order.map((type) => (
@@ -146,7 +153,7 @@ const Th = ({ children, right }: { children: React.ReactNode; right?: boolean })
 const Td = ({ children, right, bold }: { children?: React.ReactNode; right?: boolean; bold?: boolean }) => (
   <td className={`py-1.5 px-2 text-sm ${right ? "text-right tabular-nums" : ""} ${bold ? "font-semibold" : ""}`}>{children}</td>
 )
-const Empty = ({ msg }: { msg: string }) => <p className="text-sm text-muted-foreground py-2">{msg}</p>
+const Empty = ({ msg }: { msg: string }) => <EmptyState size="inline" title={msg} />
 
 // Mobile fallback for the report tables below (§4.2 — stacked card-per-row under md,
 // real <table> + horizontal scroll from md up). Each report row becomes one shared MobileCard.
@@ -184,7 +191,7 @@ function TrialBalance({ d }: { d: any }) {
         <p className="text-xs font-medium text-muted-foreground mb-1">Debits — charges posted</p>
         <MobileCardList>
           {d.charges.byCategory.length === 0 ? (
-            <Empty msg="No charges posted." />
+            <Empty msg="No charges posted" />
           ) : (
             d.charges.byCategory.map((c: any) => (
               <MobileFieldCard
@@ -204,7 +211,7 @@ function TrialBalance({ d }: { d: any }) {
           <table className="w-full">
             <thead><tr className="border-b border-border"><Th>Category</Th><Th right>Amount</Th><Th right>Tax</Th><Th right>Total</Th></tr></thead>
             <tbody>
-              {d.charges.byCategory.length === 0 && <tr><td colSpan={4}><Empty msg="No charges posted." /></td></tr>}
+              {d.charges.byCategory.length === 0 && <tr><td colSpan={4}><Empty msg="No charges posted" /></td></tr>}
               {d.charges.byCategory.map((c: any) => (
                 <tr key={c.category} className="border-b border-border/50">
                   <Td>{reportBucketLabel(c.category)}</Td><Td right>{n2(c.amount)}</Td><Td right>{n2(c.tax + c.serviceCharge)}</Td><Td right>{n2(c.total)}</Td>
@@ -219,7 +226,7 @@ function TrialBalance({ d }: { d: any }) {
         <p className="text-xs font-medium text-muted-foreground mb-1">Credits — payments received</p>
         <MobileCardList>
           {d.payments.byMethod.length === 0 ? (
-            <Empty msg="No payments received." />
+            <Empty msg="No payments received" />
           ) : (
             d.payments.byMethod.map((m: any) => (
               <MobileFieldCard
@@ -239,7 +246,7 @@ function TrialBalance({ d }: { d: any }) {
           <table className="w-full">
             <thead><tr className="border-b border-border"><Th>Method</Th><Th right>Received</Th><Th right>Refunded</Th><Th right>Net</Th></tr></thead>
             <tbody>
-              {d.payments.byMethod.length === 0 && <tr><td colSpan={4}><Empty msg="No payments received." /></td></tr>}
+              {d.payments.byMethod.length === 0 && <tr><td colSpan={4}><Empty msg="No payments received" /></td></tr>}
               {d.payments.byMethod.map((m: any) => (
                 <tr key={m.method} className="border-b border-border/50">
                   <Td>{m.method}</Td><Td right>{n2(m.received)}</Td><Td right>{n2(m.refunded)}</Td><Td right>{n2(m.net)}</Td>
@@ -261,7 +268,7 @@ function TrialBalance({ d }: { d: any }) {
 }
 
 function LedgerTable({ d, kind }: { d: any; kind: "guest" | "ar" }) {
-  if (d.rows.length === 0) return <Empty msg={kind === "guest" ? "No open in-house folios." : "No outstanding debtor balances."} />
+  if (d.rows.length === 0) return <Empty msg={kind === "guest" ? "No open in-house folios" : "No outstanding debtor balances"} />
   return (
     <>
       <MobileCardList>
@@ -309,7 +316,7 @@ function LedgerTable({ d, kind }: { d: any; kind: "guest" | "ar" }) {
 }
 
 function DepositLedger({ d }: { d: any }) {
-  if (d.rows.length === 0) return <Empty msg="No pre-arrival deposits held." />
+  if (d.rows.length === 0) return <Empty msg="No pre-arrival deposits held" />
   return (
     <>
       <MobileCardList>
@@ -353,7 +360,7 @@ function DepositLedger({ d }: { d: any }) {
 }
 
 function CashierSummary({ d }: { d: any }) {
-  if (d.rows.length === 0) return <Empty msg="No collections recorded for the day." />
+  if (d.rows.length === 0) return <Empty msg="No collections recorded for the day" />
   return (
     <div className="space-y-4">
       {d.rows.map((r: any) => (
@@ -396,19 +403,13 @@ function CashierSummary({ d }: { d: any }) {
 }
 
 function ManagerFlash({ d }: { d: any }) {
-  const Stat = ({ label, value }: { label: string; value: string }) => (
-    <div className="rounded-lg bg-muted/50 p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-xl font-bold tabular-nums">{value}</div>
-    </div>
-  )
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Occupancy" value={`${n2(d.occupancy.occupancyPct)}%`} />
-        <Stat label="Rooms occupied" value={`${d.occupancy.roomsOccupied} / ${d.occupancy.roomsAvailable}`} />
-        <Stat label="ADR" value={n2(d.occupancy.adr)} />
-        <Stat label="RevPAR" value={n2(d.occupancy.revPar)} />
+        <StatTile label="Occupancy" value={`${n2(d.occupancy.occupancyPct)}%`} />
+        <StatTile label="Rooms occupied" value={`${d.occupancy.roomsOccupied} / ${d.occupancy.roomsAvailable}`} />
+        <StatTile label="ADR" value={n2(d.occupancy.adr)} />
+        <StatTile label="RevPAR" value={n2(d.occupancy.revPar)} />
       </div>
       <div className="grid gap-6 md:grid-cols-2">
         <div>
@@ -417,7 +418,7 @@ function ManagerFlash({ d }: { d: any }) {
             <table className="w-full">
               <thead><tr className="border-b border-border"><Th>Category</Th><Th right>Total</Th></tr></thead>
               <tbody>
-                {d.revenue.byCategory.length === 0 && <tr><td colSpan={2}><Empty msg="No revenue posted." /></td></tr>}
+                {d.revenue.byCategory.length === 0 && <tr><td colSpan={2}><Empty msg="No revenue posted" /></td></tr>}
                 {d.revenue.byCategory.map((c: any) => (
                   <tr key={c.category} className="border-b border-border/50"><Td>{reportBucketLabel(c.category)}</Td><Td right>{n2(c.total)}</Td></tr>
                 ))}

@@ -7,7 +7,6 @@ import * as z from "zod"
 import { Plus, Pencil, Trash2, Sparkles } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -15,6 +14,11 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 
 export type SpaTreatmentCategoryDto = {
   id: string
@@ -39,12 +43,11 @@ const emptyValues: CategoryFormValues = { name: "", description: "", displayOrde
 // SpaTreatmentsManager (which needs the current category list for its own dropdown)
 // can refetch — the two managers don't share React state, only this callback.
 export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: string; onChanged?: () => void }) {
-
+  const confirm = useConfirm()
   const [categories, setCategories] = useState<SpaTreatmentCategoryDto[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SpaTreatmentCategoryDto | null>(null)
-  const [deleting, setDeleting] = useState<SpaTreatmentCategoryDto | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -91,28 +94,33 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
       })
       if (res.ok) {
         setIsDialogOpen(false)
+        toast.success("Category saved")
         fetchCategories()
         onChanged?.()
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save category")
+        setServerError(await apiError(res, "Couldn't save the category. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: SpaTreatmentCategoryDto) => {
+    const ok = await confirm({
+      title: "Delete category?",
+      description: `Delete "${deleting.name}"? If it has any treatments assigned this will be blocked — deactivate instead.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/spa/treatment-categories/${deleting.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to delete category")
+      toast.error(await apiError(res, "Couldn't delete the category. Try again."))
     } else {
       setServerError(null)
+      toast.success("Category deleted")
       onChanged?.()
     }
-    setDeleting(null)
     fetchCategories()
   }
 
@@ -120,7 +128,7 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button onClick={openCreate} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" /> New Category
+          <Plus className="mr-2 h-4 w-4" /> Add category
         </Button>
       </div>
 
@@ -143,11 +151,7 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
                 subtitle={c.description || undefined}
                 tone={c.isActive ? undefined : "muted"}
                 badge={
-                  c.isActive ? (
-                    <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                  )
+                  <StatusBadge status={c.isActive ? "ACTIVE" : "INACTIVE"} label={c.isActive ? "Active" : "Inactive"} />
                 }
                 meta={[{ label: "Order", value: c.displayOrder }]}
                 onClick={() => openEdit(c)}
@@ -156,7 +160,7 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
                     <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(c)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
+                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => confirmDelete(c)}>
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
                     </Button>
                   </>
@@ -183,17 +187,13 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
                     <TableCell className="text-sm text-muted-foreground">{c.description || "—"}</TableCell>
                     <TableCell className="text-sm">{c.displayOrder}</TableCell>
                     <TableCell>
-                      {c.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                      )}
+                      <StatusBadge status={c.isActive ? "ACTIVE" : "INACTIVE"} label={c.isActive ? "Active" : "Inactive"} />
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="icon" aria-label="Edit category" onClick={() => openEdit(c)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" aria-label="Delete category" className="text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
+                      <Button variant="outline" size="icon" aria-label="Delete category" className="text-destructive hover:text-destructive" onClick={() => confirmDelete(c)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -206,11 +206,11 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent size="sm">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{editing ? "Edit Category" : "New Category"}</DialogTitle>
+                <DialogTitle>{editing ? "Edit category" : "Add category"}</DialogTitle>
                 <DialogDescription>Groups treatments for display — e.g. Massage, Facial, Body Treatment.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -230,7 +230,7 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
                 )} />
                 <FormField control={form.control} name="displayOrder" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Display Order</FormLabel>
+                    <FormLabel>Display order</FormLabel>
                     <FormControl><Input type="number" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -245,27 +245,13 @@ export function SpaCategoriesManager({ propertyId, onChanged }: { propertyId: st
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Category"}</Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Category</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{deleting?.name}&quot;? If it has any treatments assigned this will be blocked — deactivate instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

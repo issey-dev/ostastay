@@ -12,7 +12,7 @@ function ProfileFormWrapper() {
 
 export default function NewProfilePage() {
   return (
-    <div className="container mx-auto p-4 md:p-8">
+    <div className="space-y-6">
       <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
         <ProfileFormWrapper />
       </Suspense>

@@ -7,6 +7,8 @@ import {
 } from "date-fns"
 import { ChevronLeft, ChevronRight } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -193,7 +195,7 @@ export function SpaSchedule({
     return (
       <div>
         {headerControls}{legendRow}
-        {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+        {loading ? <InlineLoading lines={4} label="Loading appointments" /> : (
           <div className="space-y-4">
             {days.map((day) => {
               const list = byDay.get(format(day, "yyyy-MM-dd")) ?? []
@@ -205,7 +207,7 @@ export function SpaSchedule({
                 </div>
               )
             })}
-            {days.every((day) => (byDay.get(format(day, "yyyy-MM-dd")) ?? []).length === 0) && <p className="text-sm text-muted-foreground">No appointments in this range.</p>}
+            {days.every((day) => (byDay.get(format(day, "yyyy-MM-dd")) ?? []).length === 0) && <EmptyState size="inline" title="No appointments in this range" />}
           </div>
         )}
       </div>
@@ -217,7 +219,7 @@ export function SpaSchedule({
   return (
     <div>
       {headerControls}{legendRow}
-      {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+      {loading ? <InlineLoading lines={4} label="Loading appointments" /> : (
         <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border border-border">
           {WEEKDAY_LABELS.map((label) => <div key={label} className="bg-muted text-center text-xs font-medium text-muted-foreground py-2">{label}</div>)}
           {days.map((day) => {

@@ -30,8 +30,10 @@ export function ControlsCard({
   children: React.ReactNode
   className?: string
 }) {
+  // data-section + id: the long-page section links (HubSectionNav) find sections by these.
+  const id = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`
   return (
-    <Card className={cn(className)}>
+    <Card id={id} data-section={title} className={cn("scroll-mt-24", className)}>
       {/* No pb override: CardHeader's own symmetric py keeps the accent-edged header
           box balanced (equal space above the title and below the description). The
           content's pt-0 compensates, so the total title→content rhythm matches the

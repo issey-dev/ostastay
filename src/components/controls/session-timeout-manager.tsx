@@ -96,7 +96,7 @@ export function SessionTimeoutManager({ property }: { property: HubPropertyDetai
           />
         </div>
         <Button variant="outline" disabled={saving} onClick={() => save(minutes)}>
-          {saving ? "Saving..." : "Save"}
+          {saving ? "Saving…" : "Save"}
         </Button>
       </div>
 

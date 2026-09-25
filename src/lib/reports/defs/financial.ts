@@ -466,56 +466,128 @@ const greenTaxMissing: ReportDef = {
   },
 };
 
-// ─── GST Report (invoice amount + tax per invoice) ──────────────────────────
+// ─── GST Report (one line per invoice, for the MIRA GST return) ─────────────
+// An invoice is a folio with posted charges, dated the day it was settled: a stay's
+// folio on the reservation's departure date (an early check-out has already moved
+// checkOutDate to the actual day), a walk-in / non-stay folio on the business date it
+// was closed. Only final bills — a stay still in house, or an open walk-in bill, has no
+// invoice yet.
+//
+// Amounts sum the folio's own columns, the same way the printed Tax Invoice totals
+// them: a routed Service Charge / GST line keeps its figure in serviceChargeAmount /
+// taxAmount with amount 0, and a levy (postingType TAX — Green Tax) carries its figure
+// in amount, outside the GST base. Every non-void line counts, whatever its date.
 const gst: ReportDef = {
   key: "fin-gst",
   module: "FINANCIAL",
   name: "GST Report",
-  description: "Tax invoices with net, service charge and GST — for the GST return.",
-  params: [{ key: "range", label: "Invoiced between", type: "dateRange", required: true, defaultToday: true }],
+  description: "One line per invoice for the GST return, dated on departure: agent and TIN, stay dates, amount excluding tax, service charge, GST, Green Tax and total including tax.",
+  params: [{ key: "range", label: "Invoice date", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
     const range = rc.params.range as { from: Date; to: Date };
     const { gte, lt } = rangeBounds(range.from, range.to);
-    // Folios that carry a tax invoice number, with charges posted in the window.
     const folios = await prisma.folio.findMany({
-      where: { propertyId, taxInvoiceNumber: { not: null }, lineItems: { some: { date: { gte, lt } } } },
-      include: {
-        lineItems: { include: { chargeCode: { select: { code: true, postingType: true } } } },
-        reservation: { select: { primaryGuest: guestSelect } },
+      where: {
+        propertyId,
+        lineItems: { some: { isVoid: false } },
+        OR: [
+          { reservation: { status: "CHECKED_OUT", checkOutDate: { gte, lt } } },
+          { reservationId: null, isClosed: true, closedBusinessDate: { gte, lt } },
+        ],
       },
-      orderBy: { taxInvoiceNumber: "asc" },
+      select: {
+        folioNumber: true, taxInvoiceNumber: true, closedBusinessDate: true, walkInGuestName: true,
+        payeeProfile: guestSelect,
+        lineItems: {
+          where: { isVoid: false },
+          select: { amount: true, taxAmount: true, serviceChargeAmount: true, chargeCode: { select: { code: true, postingType: true } } },
+        },
+        reservation: {
+          select: {
+            confirmationNo: true, checkInDate: true, checkOutDate: true,
+            primaryGuest: guestSelect,
+            travelAgent: { select: { firstName: true, lastName: true, companyName: true, profileType: true, tinNumber: true } },
+          },
+        },
+      },
     });
-    const rows = folios.map((f) => {
-      let base = 0, sc = 0, gstAmt = 0;
-      for (const li of f.lineItems) {
-        if (li.isVoid || li.date < gte || li.date >= lt) continue;
-        if (isLevyLine(li.chargeCode)) { base += li.amount; continue; } // a levy is not GST-bearing
-        base += li.amount; sc += li.serviceChargeAmount || 0; gstAmt += li.taxAmount;
-      }
-      return {
-        invoice: f.taxInvoiceNumber,
-        guest: f.reservation ? guestName(f.reservation.primaryGuest) : (f.walkInGuestName ?? "—"),
-        net: round2(base), serviceCharge: round2(sc), gst: round2(gstAmt), total: round2(base + sc + gstAmt),
-      };
-    });
+
+    let unnumbered = 0;
+    const rows = folios
+      .map((f) => {
+        let net = 0, sc = 0, gstAmt = 0, greenTax = 0;
+        for (const li of f.lineItems) {
+          if (isLevyLine(li.chargeCode)) greenTax += li.amount;
+          else net += li.amount;
+          sc += li.serviceChargeAmount || 0;
+          gstAmt += li.taxAmount || 0;
+        }
+        const res = f.reservation;
+        if (!f.taxInvoiceNumber) unnumbered++;
+        const ta = res?.travelAgent ?? null;
+        return {
+          invoiceDate: res ? res.checkOutDate : f.closedBusinessDate!,
+          // A folio whose tax invoice was never printed has no invoice number yet — shown
+          // by its confirmation and folio number so it can still be found and printed.
+          invoiceNo: f.taxInvoiceNumber ?? (res ? `${res.confirmationNo} / F${f.folioNumber}` : `Folio ${f.folioNumber}`),
+          guest: res ? guestName(res.primaryGuest) : f.payeeProfile ? guestName(f.payeeProfile) : (f.walkInGuestName ?? "Walk-in"),
+          travelAgent: ta ? guestName(ta) : "",
+          tin: ta?.tinNumber ?? "",
+          arrival: res?.checkInDate ?? null,
+          departure: res?.checkOutDate ?? null,
+          net: round2(net),
+          serviceCharge: round2(sc),
+          gst: round2(gstAmt),
+          greenTax: round2(greenTax),
+          total: round2(net + sc + gstAmt + greenTax),
+          _numbered: !!f.taxInvoiceNumber,
+        };
+      })
+      // Ordered on invoice date, then invoice number (INV-00012 is zero-padded, so it
+      // sorts as text); a folio with no number yet sorts after the numbered ones that day.
+      .sort(
+        (a, b) =>
+          a.invoiceDate.getTime() - b.invoiceDate.getTime() ||
+          Number(b._numbered) - Number(a._numbered) ||
+          a.invoiceNo.localeCompare(b.invoiceNo, undefined, { numeric: true })
+      )
+      .map(({ _numbered, ...r }) => r);
+
+    const missingTin = rows.filter((r) => r.travelAgent && !r.tin).length;
+    const gaps = [
+      unnumbered && `${unnumbered} without a tax invoice no. (print the Tax Invoice)`,
+      missingTin && `${missingTin} through an agent with no TIN (set it on the agent profile)`,
+    ].filter(Boolean);
+    const sum = (k: "net" | "serviceCharge" | "gst" | "greenTax" | "total") => round2(rows.reduce((s, r) => s + r[k], 0));
     return {
       title: "GST Report",
-      subtitle: `Invoices with activity ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} invoice(s)`,
+      subtitle: `Invoiced ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} invoice(s)`,
+      note: gaps.length
+        ? `Check before filing: ${gaps.join("; ")}.`
+        : "Invoice date is the departure date (walk-in bills: the day the bill was closed).",
       columns: [
-        { key: "invoice", label: "Invoice No", width: 1 },
-        { key: "guest", label: "Guest", width: 2 },
-        { key: "net", label: "Net", width: 1, format: "currency" },
-        { key: "serviceCharge", label: "Service Chg", width: 1, format: "currency" },
-        { key: "gst", label: "GST", width: 1, format: "currency" },
-        { key: "total", label: "Total", width: 1, format: "currency" },
+        { key: "invoiceDate", label: "Invoice Date", width: 0.9, format: "date" },
+        { key: "invoiceNo", label: "Invoice No", width: 1 },
+        { key: "guest", label: "Guest Name", width: 1.4 },
+        { key: "travelAgent", label: "Travel Agent", width: 1.3 },
+        { key: "tin", label: "Agent TIN", width: 1 },
+        { key: "arrival", label: "Arrival", width: 0.85, format: "date" },
+        { key: "departure", label: "Departure", width: 0.85, format: "date" },
+        { key: "net", label: "Excl Tax", width: 0.9, format: "currency" },
+        { key: "serviceCharge", label: "Svc Charge", width: 0.9, format: "currency" },
+        { key: "gst", label: "GST", width: 0.8, format: "currency" },
+        { key: "greenTax", label: "Green Tax", width: 0.85, format: "currency" },
+        { key: "total", label: "Incl Tax", width: 0.95, format: "currency" },
       ],
       rows,
       totals: {
-        net: round2(rows.reduce((s, r) => s + r.net, 0)),
-        serviceCharge: round2(rows.reduce((s, r) => s + r.serviceCharge, 0)),
-        gst: round2(rows.reduce((s, r) => s + r.gst, 0)),
-        total: round2(rows.reduce((s, r) => s + r.total, 0)),
+        invoiceDate: "Total",
+        net: sum("net"),
+        serviceCharge: sum("serviceCharge"),
+        gst: sum("gst"),
+        greenTax: sum("greenTax"),
+        total: sum("total"),
       },
     };
   },

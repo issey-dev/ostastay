@@ -358,7 +358,7 @@ function Nav({
             ? `Go to the previous ${
                 displayYears.to - displayYears.from + 1
               } years`
-            : "Previous Month"
+            : "Previous month"
         }
         onClick={handlePreviousClick}
       >
@@ -374,7 +374,7 @@ function Nav({
         aria-label={
           navView === "years"
             ? `Go to the next ${displayYears.to - displayYears.from + 1} years`
-            : "Next Month"
+            : "Next month"
         }
         onClick={handleNextClick}
       >

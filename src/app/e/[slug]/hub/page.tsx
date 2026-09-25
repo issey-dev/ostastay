@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/scope"
 import { loadHubOverview, type ChannelStatus, type OverviewBanner } from "@/lib/hub-overview"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { InfoHint } from "@/components/ui/info-hint"
+import { HubPageHeader } from "@/components/hub/hub-page-header"
 import { AlertTriangle, ArrowLeftRight, ArrowRight, CheckCircle2, XCircle } from "@/components/icons"
 import { cn } from "@/lib/utils"
 
@@ -19,20 +19,15 @@ export default async function HubOverviewPage({ params }: { params: Promise<{ sl
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
-          Overview
-          <InfoHint label="Overview">
-            What needs attention across the properties you set up: missing setup, Green Tax register issues, channel
-            manager problems and failed background jobs. Nothing shows here when everything is in order.
-          </InfoHint>
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {banners.length === 0
+      <HubPageHeader
+        title="Overview"
+        hint="What needs attention across the properties you set up: missing setup, Green Tax register issues, channel manager problems and failed background jobs. Nothing shows here when everything is in order."
+        description={
+          banners.length === 0
             ? "Everything is set up — nothing needs attention."
-            : `${banners.length} item${banners.length === 1 ? "" : "s"} need${banners.length === 1 ? "s" : ""} attention${critical ? ` — ${critical} blocking` : ""}.`}
-        </p>
-      </div>
+            : `${banners.length} item${banners.length === 1 ? "" : "s"} need${banners.length === 1 ? "s" : ""} attention${critical ? ` — ${critical} blocking` : ""}.`
+        }
+      />
 
       {banners.length === 0 ? (
         <div className="flex items-center gap-3 rounded-lg border border-success/30 bg-success-muted px-4 py-3 text-sm text-success">

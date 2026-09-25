@@ -63,6 +63,11 @@ read `.agents/docs/`:
   Fixed, plain language for hotel staff, no file paths, PR numbers or customer names), then
   `npm run docs:pdf -- release-notes`.
 
+- [`.agents/docs/DESKTOP_PLAN.md`](.agents/docs/DESKTOP_PLAN.md) — desktop polish: root causes
+  (blocking success modals, no next step after actions, tabs/filters not in the URL, no page-shell
+  standard), per-screen audit, shared components to build, phases and owner questions. Read before
+  changing page headers, feedback/toasts, list tables, dialogs or the reservation/folio screens.
+
 - [`.agents/docs/MOBILE_PLAN.md`](.agents/docs/MOBILE_PLAN.md) — phones: desktop is the source of
   truth, mobile changes live behind `max-sm:`/`max-md:`/`md:hidden` or `pointer-coarse:`. Dialogs are
   bottom sheets on phones (`DialogContent mobile="sheet"|"fullscreen"|"none"`); use the shared

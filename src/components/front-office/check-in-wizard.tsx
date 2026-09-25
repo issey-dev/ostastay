@@ -19,13 +19,34 @@ import { IdentificationManager } from "@/components/profiles/identification-mana
 import { EregistrationReviewDialog } from "@/components/front-office/eregistration-review-dialog"
 import { Key, BedDouble, Contact, ReceiptText, CheckCircle2, AlertTriangle, Printer, Send } from "@/components/icons"
 import { INPUT_MONEY } from "@/lib/input-presets"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { InlineLoading } from "@/components/ui/inline-loading"
 
 type WizardProps = {
   reservationId: string | null
   propertyId: string
   isOpen: boolean
   onClose: () => void
-  onDone: (result: { title: string; message: string; isError?: boolean }) => void
+  /** `title`/`message` keep older callers working; newer callers toast from the extra fields. */
+  onDone: (result: CheckInResult) => void
+  /** Used by the "Open folio" action on the payment-failed toast. Without it the action
+      opens the folio page in a new tab. */
+  onOpenFolio?: (reservationId: string) => void
+}
+
+export type CheckInResult = {
+  title: string
+  message: string
+  isError?: boolean
+  reservationId?: string
+  guestName?: string
+  /** The server's non-blocking room warning (e.g. room not yet clean). */
+  roomWarning?: string
+  /** True when the optional payment failed — the wizard already raised an error toast. */
+  paymentFailed?: boolean
 }
 
 type Step = "room" | "identification" | "regcard" | "confirm"
@@ -66,8 +87,9 @@ const formatHeldNight = (ymd: string) =>
 const profName = (p: any) => p?.companyName || [p?.title, p?.firstName, p?.middleName, p?.lastName].filter(Boolean).join(" ")
 const isExpired = (d?: string | null) => !!d && new Date(d).getTime() < Date.now()
 
-export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDone }: WizardProps) {
+export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDone, onOpenFolio }: WizardProps) {
   const { slug } = useParams<{ slug: string }>()
+  const confirm = useConfirm()
 
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>(null)
@@ -200,7 +222,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
           }).catch(() => {})
         }
       })
-      .catch(() => setError("Failed to load the reservation."))
+      .catch(() => setError("Couldn't load the reservation."))
       .finally(() => setLoading(false))
     fetch(`/api/payment-methods?propertyId=${propertyId}`).then((r) => r.json()).then((d) => {
       if (Array.isArray(d)) setPaymentMethods(d.filter((m: any) => m.isActive !== false))
@@ -225,7 +247,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
     const e = idEdits[upid]
     if (!e) return { complete: false, missing: ["details"] as string[], hasExpired: false }
     const missing: string[] = []
-    if (!e.dateOfBirth) missing.push("Date of Birth")
+    if (!e.dateOfBirth) missing.push("Date of birth")
     if (!e.nationality) missing.push("Nationality")
     if (e.docCount === 0) missing.push("ID record")
     return { complete: missing.length === 0, missing, hasExpired: e.hasExpired }
@@ -284,7 +306,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
         const res = await fetch(`/api/reservations/assignments/${activeAssignment.id}/reassign`, {
           method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ roomId: selectedRoomId }),
         })
-        if (!res.ok) { setError((await res.json()).error || "Failed to assign the room."); setSubmitting(false); return }
+        if (!res.ok) { setError(await apiError(res, "Couldn't assign the room. Try again.")); setSubmitting(false); return }
       }
       // 2. Check in.
       const res = await fetch(`/api/reservations/${reservationId}/check-in`, {
@@ -297,19 +319,50 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
         ),
       })
       const checkInData = await res.json()
-      if (!res.ok) { setError(checkInData.error || "Check-in failed."); setSubmitting(false); return }
+      if (!res.ok) { setError(checkInData.error || "Couldn't check in. Try again."); setSubmitting(false); return }
       // 3. Optional payment.
+      // The guest IS checked in at this point, so a failed payment must not undo or hide
+      // that — it is surfaced separately with a way to the folio to retry.
       const amt = parseFloat(payment.amount)
+      let paymentFailed = false
       if (payment.methodId && Number.isFinite(amt) && amt > 0 && checkInData.folioId) {
-        await fetch(`/api/folios/${checkInData.folioId}/payments`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paymentMethodId: payment.methodId, amount: amt, referenceNumber: payment.reference }),
-        })
+        let paymentError: string | undefined
+        try {
+          const payRes = await fetch(`/api/folios/${checkInData.folioId}/payments`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentMethodId: payment.methodId, amount: amt, referenceNumber: payment.reference }),
+          })
+          if (!payRes.ok) {
+            paymentFailed = true
+            paymentError = (await payRes.json().catch(() => ({}))).error
+          }
+        } catch {
+          paymentFailed = true
+        }
+        if (paymentFailed) {
+          const resId = reservationId
+          toast.error("Checked in, but the payment wasn't recorded", {
+            description: paymentError || "Post it from the folio.",
+            action: {
+              label: "Open folio",
+              onClick: () =>
+                onOpenFolio ? onOpenFolio(resId) : window.open(`/e/${slug}/dashboard/reservations/${resId}/folio`, "_blank"),
+            },
+          })
+        }
       }
-      onDone({ title: "Checked In", message: `${profName(reservation.primaryGuest)} is now In-House.${checkInData.roomWarning ? ` (${checkInData.roomWarning})` : ""}` })
+      const guestName = profName(reservation.primaryGuest)
+      onDone({
+        title: "Checked in",
+        message: `${guestName} is now In-House.${checkInData.roomWarning ? ` (${checkInData.roomWarning})` : ""}${paymentFailed ? " The payment wasn't recorded — post it from the folio." : ""}`,
+        reservationId,
+        guestName,
+        roomWarning: checkInData.roomWarning || undefined,
+        paymentFailed,
+      })
       onClose()
     } catch {
-      setError("An error occurred during check-in.")
+      setError("Couldn't check in. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -318,7 +371,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   const stepList: { key: Step; label: string; icon: any }[] = [
     { key: "room", label: "Room", icon: BedDouble },
     { key: "identification", label: "Identification", icon: Contact },
-    ...(regCardEnabled ? [{ key: "regcard" as Step, label: "Registration Card", icon: ReceiptText }] : []),
+    ...(regCardEnabled ? [{ key: "regcard" as Step, label: "Registration card", icon: ReceiptText }] : []),
     { key: "confirm", label: "Confirm", icon: CheckCircle2 },
   ]
   const stepIndex = stepList.findIndex((s) => s.key === step)
@@ -328,14 +381,47 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId)
   const roomBlocked = selectedRoom && (selectedRoom.status === "OUT_OF_ORDER" || selectedRoom.status === "OUT_OF_SERVICE")
 
+  // Enter runs the step's primary action — Next / Next guest / Continue / Check In — the same
+  // button the footer shows (DESKTOP_PLAN D10). stopPropagation: React submit events bubble
+  // through the dialog's portal to any form the caller renders the wizard inside.
+  const onWizardSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading || !reservation || submitting) return
+    if (step === "room") {
+      if (selectedRoomId && !roomBlocked) goNextStep()
+    } else if (step === "identification" || step === "regcard") {
+      if (guestIdx < guests.length - 1) setGuestIdx((i) => i + 1)
+      else { setGuestIdx(0); goNextStep() }
+    } else if (step === "confirm" && selectedRoomId) {
+      void doCheckIn()
+    }
+  }
+
+  // Unsaved wizard input — a changed room, a payment or held-nights decision, cards ticked
+  // as collected. (DOB, nationality and ID documents save as they are entered.)
+  const dirty =
+    (!!activeAssignment && selectedRoomId !== (activeAssignment.roomId ?? "")) ||
+    paymentForm.formState.isDirty ||
+    heldForm.formState.isDirty ||
+    regCollected.size > 0
+  // Esc, the overlay, X and Cancel all come through here (DESKTOP_PLAN D11).
+  const requestClose = async () => {
+    if (submitting) return
+    if (dirty && !(await confirm({ title: "Discard changes?", confirmLabel: "Discard", destructive: true }))) return
+    onClose()
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(o) => !o && requestClose()}>
       {/* A multi-step wizard: the whole screen on a phone, Next / Check In pinned. */}
-      <DialogContent mobile="fullscreen" className="w-[95vw] max-w-7xl sm:max-w-7xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent mobile="fullscreen" size="xl" className="max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Key className="w-5 h-5" /> Check In — {reservation ? reservation.confirmationNo : ""}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Key className="w-5 h-5" /> Check in — {reservation ? reservation.confirmationNo : ""}</DialogTitle>
           <DialogDescription>{reservation ? profName(reservation.primaryGuest) : ""}</DialogDescription>
         </DialogHeader>
+
+        <form onSubmit={onWizardSubmit} className="contents">
 
         {/* Stepper — on a phone just "Step 2 of 4 · Identification". */}
         {stepIndex >= 0 && (
@@ -352,7 +438,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
         </div>
 
         {loading ? (
-          <div className="py-12 text-center text-muted-foreground">Loading…</div>
+          <InlineLoading lines={5} label="Loading the reservation" />
         ) : !reservation ? (
           <div className="py-12 text-center text-destructive">{error || "Reservation not found."}</div>
         ) : (
@@ -411,7 +497,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   {eregSlot && (
                     <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2">
                       <p className="text-sm flex items-center gap-1.5"><Send className="w-4 h-4" /> This guest completed eRegistration{eregSlot.submittedAt ? ` on ${new Date(eregSlot.submittedAt).toLocaleDateString()}` : ""}.</p>
-                      <Button size="sm" onClick={() => setReviewSlot(eregSlot)}>Review &amp; Apply</Button>
+                      <Button size="sm" onClick={() => setReviewSlot(eregSlot)}>Review &amp; apply</Button>
                     </div>
                   )}
 
@@ -423,7 +509,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
 
                   <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Date of Birth</Label>
+                      <Label className="text-xs">Date of birth</Label>
                       <DatePicker value={e?.dateOfBirth ?? undefined} onChange={(v: any) => updateGuestBasics(upid, { dateOfBirth: v ?? null })} />
                     </div>
                     <div className="space-y-1.5">
@@ -434,8 +520,9 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                   <p className="text-xs text-muted-foreground">{savingId ? "Saving…" : "Date of birth & nationality save automatically."}</p>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Identification Documents</Label>
-                    <div className="rounded-lg border p-3">
+                    <Label className="text-xs">Identification documents</Label>
+                    {/* Enter while typing a document must not jump to the next guest. */}
+                    <div className="rounded-lg border p-3" onKeyDown={(ev) => { if (ev.key === "Enter" && ev.target instanceof HTMLInputElement) ev.preventDefault() }}>
                       <IdentificationManager upid={upid} onChange={() => refreshDocs(upid)} />
                     </div>
                   </div>
@@ -468,7 +555,7 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
                     <p className="text-sm text-muted-foreground">Print the registration card for the guest to complete and physically sign.</p>
                   )}
                   <Button variant="outline" onClick={() => window.open(`/e/${slug}/dashboard/reservations/${reservationId}/registration-card?guest=${upid}`, "_blank")}>
-                    <Printer className="w-4 h-4 mr-2" /> Print Registration Card
+                    <Printer className="w-4 h-4 mr-2" /> Print registration card
                   </Button>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox checked={regCollected.has(upid) || !!signedSlot} onCheckedChange={(v) => setRegCollected((prev) => { const n = new Set(prev); if (v) n.add(upid); else n.delete(upid); return n })} />
@@ -559,20 +646,24 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
 
         <DialogFooter className="flex items-center justify-between max-sm:flex-row max-sm:flex-wrap sm:justify-between">
           <div>
-            {stepIndex > 0 && step !== "confirm" && guestIdx === 0 && <Button variant="ghost" onClick={goPrevStep}>Back</Button>}
-            {(step === "identification" || step === "regcard") && guestIdx > 0 && <Button variant="ghost" onClick={() => setGuestIdx((i) => i - 1)}>Previous guest</Button>}
+            {stepIndex > 0 && step !== "confirm" && guestIdx === 0 && <Button type="button" variant="ghost" onClick={goPrevStep}>Back</Button>}
+            {(step === "identification" || step === "regcard") && guestIdx > 0 && <Button type="button" variant="ghost" onClick={() => setGuestIdx((i) => i - 1)}>Previous guest</Button>}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            {step === "room" && <Button onClick={goNextStep} disabled={!selectedRoomId || !!roomBlocked}>Next</Button>}
+            <Button type="button" variant="outline" onClick={requestClose}>Cancel</Button>
+            {/* One submit per step — Enter presses the same button (see onWizardSubmit). */}
+            {step === "room" && <Button type="submit" disabled={!selectedRoomId || !!roomBlocked}>Next</Button>}
             {(step === "identification" || step === "regcard") && (
-              guestIdx < guests.length - 1
-                ? <Button onClick={() => setGuestIdx((i) => i + 1)}>Next guest</Button>
-                : <Button onClick={() => { setGuestIdx(0); goNextStep() }}>Continue</Button>
+              <Button type="submit">{guestIdx < guests.length - 1 ? "Next guest" : "Continue"}</Button>
             )}
-            {step === "confirm" && <Button onClick={doCheckIn} disabled={submitting || !selectedRoomId}><Key className="w-4 h-4 mr-2" /> {submitting ? "Checking in…" : "Check In"}</Button>}
+            {step === "confirm" && (
+              <SubmitButton pending={submitting} pendingLabel="Checking in…" disabled={!selectedRoomId}>
+                <Key className="w-4 h-4 mr-2" /> Check in
+              </SubmitButton>
+            )}
           </div>
         </DialogFooter>
+        </form>
       </DialogContent>
 
       <EregistrationReviewDialog

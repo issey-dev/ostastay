@@ -155,13 +155,13 @@ export function OstaInvoicingManager() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            Platform Identity
-            <InfoHint label="Platform Identity">Who the licensing invoice comes from. Client enterprises see this in the header of every invoice and payment receipt Osta issues to them.</InfoHint>
+            Platform identity
+            <InfoHint label="Platform identity">Who the licensing invoice comes from. Client enterprises see this in the header of every invoice and payment receipt Osta issues to them.</InfoHint>
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="brandName">Company Name</Label>
+            <Label htmlFor="brandName">Company name</Label>
             <Input id="brandName" value={form.invoiceBrandName} onChange={set("invoiceBrandName")} placeholder="Uppsolut Pvt Ltd" />
           </div>
           <div className="space-y-1.5">
@@ -169,7 +169,7 @@ export function OstaInvoicingManager() {
             <Input id="logoUrl" value={form.invoiceLogoUrl} onChange={set("invoiceLogoUrl")} placeholder="https://…/logo.png" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="taxId">Tax ID / Registration</Label>
+            <Label htmlFor="taxId">Tax ID / registration</Label>
             <Input id="taxId" value={form.invoiceTaxId} onChange={set("invoiceTaxId")} placeholder="TIN 1234567" />
           </div>
           <div className="space-y-1.5">
@@ -181,7 +181,7 @@ export function OstaInvoicingManager() {
             <Input id="email" value={form.invoiceEmail} onChange={set("invoiceEmail")} placeholder="billing@uppsolut.com" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="brandColor">Accent Color</Label>
+            <Label htmlFor="brandColor">Accent color</Label>
             <div className="flex gap-2 items-center">
               <input
                 type="color"
@@ -198,7 +198,7 @@ export function OstaInvoicingManager() {
             <Textarea id="address" value={form.invoiceAddress} onChange={set("invoiceAddress")} rows={2} placeholder="Malé, Republic of Maldives" />
           </div>
           <div className="space-y-1.5">
-            <Label>Document Font</Label>
+            <Label>Document font</Label>
             <Select value={form.invoiceFontFamily} onValueChange={(v) => setForm((f) => ({ ...f, invoiceFontFamily: v ?? DEFAULT_STATIONERY_FONT }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -214,30 +214,30 @@ export function OstaInvoicingManager() {
       <Tabs defaultValue="invoice">
         <TabsList>
           <TabsTrigger value="invoice"><FileText className="h-4 w-4 mr-1.5" />Invoice</TabsTrigger>
-          <TabsTrigger value="receipt"><Receipt className="h-4 w-4 mr-1.5" />Payment Receipt</TabsTrigger>
+          <TabsTrigger value="receipt"><Receipt className="h-4 w-4 mr-1.5" />Payment receipt</TabsTrigger>
         </TabsList>
 
         <TabsContent value="invoice" className="pt-4">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="invHeader">Header Text</Label>
+                <Label htmlFor="invHeader">Header text</Label>
                 <Textarea id="invHeader" value={form.invoiceHeaderText} onChange={set("invoiceHeaderText")} rows={2} placeholder="Shown under the invoice title." />
               </div>
               <Card size="sm">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm">
-            Payment Instructions
-            <InfoHint label="Payment Instructions">Bank details a client enterprise pays the license fee to.</InfoHint>
+            Payment instructions
+            <InfoHint label="Payment instructions">Bank details a client enterprise pays the license fee to.</InfoHint>
           </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="payName">Account Name</Label>
+                    <Label htmlFor="payName">Account name</Label>
                     <Input id="payName" value={form.invoicePaymentAccountName} onChange={set("invoicePaymentAccountName")} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="payNo">Account Number</Label>
+                    <Label htmlFor="payNo">Account number</Label>
                     <Input id="payNo" value={form.invoicePaymentAccountNumber} onChange={set("invoicePaymentAccountNumber")} />
                   </div>
                   <div className="space-y-1.5">
@@ -249,18 +249,18 @@ export function OstaInvoicingManager() {
                     <Input id="payBank" value={form.invoicePaymentBankInfo} onChange={set("invoicePaymentBankInfo")} />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="payTerms">Payment Terms</Label>
+                    <Label htmlFor="payTerms">Payment terms</Label>
                     <Textarea id="payTerms" value={form.invoicePaymentTerms} onChange={set("invoicePaymentTerms")} rows={2} placeholder="e.g. Due within 14 days of issue." />
                   </div>
                 </CardContent>
               </Card>
               <div className="space-y-1.5">
-                <Label htmlFor="invFooter">Footer Text</Label>
+                <Label htmlFor="invFooter">Footer text</Label>
                 <Textarea id="invFooter" value={form.invoiceFooterText} onChange={set("invoiceFooterText")} rows={2} placeholder="Closing line at the bottom of the invoice." />
               </div>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Live Preview</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Live preview</p>
               <StationeryPreviewFrame>
                 <LicenseTaxInvoiceDocument {...buildSampleLicenseInvoice(brand, form)} />
               </StationeryPreviewFrame>
@@ -272,7 +272,7 @@ export function OstaInvoicingManager() {
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="rcptFooter">Footer Text</Label>
+                <Label htmlFor="rcptFooter">Footer text</Label>
                 <Textarea id="rcptFooter" value={form.receiptFooterText} onChange={set("receiptFooterText")} rows={2} placeholder="Closing line at the bottom of the receipt." />
               </div>
               <div className="space-y-1.5">
@@ -281,7 +281,7 @@ export function OstaInvoicingManager() {
               </div>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Live Preview</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Live preview</p>
               <StationeryPreviewFrame>
                 <LicenseReceiptDocument {...buildSampleLicenseReceipt(brand, form)} />
               </StationeryPreviewFrame>
@@ -293,7 +293,7 @@ export function OstaInvoicingManager() {
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving}>
           {saving ? <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-          Save Settings
+          Save settings
         </Button>
       </div>
     </div>

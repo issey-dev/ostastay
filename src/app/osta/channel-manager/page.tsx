@@ -1,6 +1,6 @@
 import { requireSession, hasPermission } from "@/lib/scope"
 import { ChannelConnectionsAdmin } from "@/components/osta/channel-connections-admin"
-import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { DesktopOnlyNotice } from "@/components/ui/mobile"
 
 // Cross-tenant channel-manager administration — the master-account topology's control
@@ -13,12 +13,7 @@ export default async function OstaChannelManagerPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Channel Manager
-            <InfoHint label="Channel Manager">Every enterprise&rsquo;s Beds24 connection, run from the master account: setup, health, webhooks and the shared rate-limit pool. Room and rate mapping stays in each enterprise&rsquo;s own Hub.</InfoHint>
-          </h2>
-      </div>
+      <PageHeader title="Channel Manager" tabTitle="Channel Manager · Osta" hint={<>Every enterprise&rsquo;s Beds24 connection, run from the master account: setup, health, webhooks and the shared rate-limit pool. Room and rate mapping stays in each enterprise&rsquo;s own Hub.</>} />
       <DesktopOnlyNotice feature="Channel Manager administration" description="You can still read everything below. To make changes comfortably, open the console on a tablet or computer." />
       <ChannelConnectionsAdmin canManage={canManage} />
     </div>

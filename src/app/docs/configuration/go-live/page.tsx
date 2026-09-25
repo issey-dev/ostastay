@@ -31,13 +31,13 @@ export default function GoLive() {
       <ul>
         <Check>Currency, time zone and business date are right. The business date is your go-live day.</Check>
         <Check>Name, legal name, address, tax ID, phone, email and logo are correct: print a test invoice to check.</Check>
-        <Check>Prices Include Taxes is set as intended, and the tax rates match your registration.</Check>
+        <Check>Prices include taxes is set as intended, and the tax rates match your registration.</Check>
         <Check>Payment methods exist for every way guests pay, including City Ledger if you invoice companies; the settlement default is set.</Check>
         <Check>Revenue charge codes exist for everything you sell, and each generates the right taxes.</Check>
         <Check>Every outlet sells the right charge codes; spa and excursion outlets are linked.</Check>
         <Check>Every room exists with the right room type, building and floor. Room count matches reality.</Check>
-        <Check>The Base Rate and every independent rate plan are priced at least a year ahead: check the calendars for &quot;No Rate&quot; days.</Check>
-        <Check>Allocations have prices covering the year; meal plans include the right allocations; the Allocation Calculation mode is the one you want.</Check>
+        <Check>The Base Rate and every independent rate plan are priced at least a year ahead: check the calendars for &quot;No rate&quot; days.</Check>
+        <Check>Allocations have prices covering the year; meal plans include the right allocations; the Allocation calculation mode is the one you want.</Check>
         <Check>Booking number format is right. Sequences continue from your old system if needed.</Check>
         <Check>Fee rules are active with the right amounts, if you charge cancellation or no-show fees.</Check>
         <Check>Night audit: nightly postings, no-show timing and room-status options chosen. Decide who runs the first audits by hand.</Check>

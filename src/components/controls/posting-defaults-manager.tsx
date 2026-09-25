@@ -1,5 +1,6 @@
 "use client"
 
+import { apiError } from "@/lib/api-error"
 import { useEffect, useState } from "react"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Save } from "@/components/icons"
@@ -63,8 +64,7 @@ export function PostingDefaultsManager({ propertyId }: { propertyId: string }) {
       if (res.ok) {
         setMessage({ text: "Posting defaults saved." })
       } else {
-        const body = await res.json().catch(() => null)
-        setMessage({ text: body?.error || "Failed to save.", error: true })
+        setMessage({ text: await apiError(res, "Couldn't save the posting defaults. Try again."), error: true })
       }
     } finally {
       setSaving(false)
@@ -83,7 +83,7 @@ export function PostingDefaultsManager({ propertyId }: { propertyId: string }) {
     <div className="space-y-5 max-w-xl md:max-w-4xl">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Accommodation Charge Code</Label>
+          <Label>Accommodation charge code</Label>
           <SearchableSelect
             value={accommodationId}
             onChange={setAccommodationId}
@@ -97,7 +97,7 @@ export function PostingDefaultsManager({ propertyId }: { propertyId: string }) {
         </div>
 
         <div className="space-y-2">
-          <Label>Green Tax Charge Code</Label>
+          <Label>Green Tax charge code</Label>
           <SearchableSelect
             value={greenTaxId}
             onChange={setGreenTaxId}
@@ -112,7 +112,7 @@ export function PostingDefaultsManager({ propertyId }: { propertyId: string }) {
         </div>
 
         <div className="space-y-2">
-          <Label>Commission Charge Code</Label>
+          <Label>Commission charge code</Label>
           <SearchableSelect
             value={commissionId}
             onChange={setCommissionId}
@@ -136,7 +136,7 @@ export function PostingDefaultsManager({ propertyId }: { propertyId: string }) {
       )}
 
       <Button onClick={handleSave} disabled={saving} className="shadow-sm">
-        <Save className="w-4 h-4 mr-2" /> {saving ? "Saving..." : "Save Defaults"}
+        <Save className="w-4 h-4 mr-2" /> {saving ? "Saving…" : "Save"}
       </Button>
     </div>
   )

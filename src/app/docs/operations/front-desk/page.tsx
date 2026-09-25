@@ -42,7 +42,10 @@ export default function FrontDesk() {
           ["Complete", "If the spa charges at completion, the charge is posted now, at the price agreed at booking."],
         ]}
       />
-      <p>The panel tells you what it did with the charge each time — voided, fee posted, or left for cashiering.</p>
+      <p>
+        Each time, a small notice in the top-right corner of the screen (at the bottom on a phone) confirms the action and says
+        what happened to the charge — voided, fee posted, or left for cashiering.
+      </p>
 
       <H2>Refunds for paid online bookings</H2>
       <Callout>

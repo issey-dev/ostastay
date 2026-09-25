@@ -1,5 +1,6 @@
 "use client"
 
+import { apiError } from "@/lib/api-error"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -54,8 +55,7 @@ export function ModuleOutletPicker({ propertyId, module }: { propertyId: string;
         setSaved(true)
         setSavedOutletId(outletId)
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save")
+        setServerError(await apiError(res, "Couldn't save the outlet. Try again."))
       }
     } finally {
       setSaving(false)
@@ -100,7 +100,7 @@ export function ModuleOutletPicker({ propertyId, module }: { propertyId: string;
       {saved && !serverError && <p className="text-sm text-success">Settings saved.</p>}
 
       <div className="flex justify-end">
-        <Button onClick={onSave} disabled={saving || outletId === savedOutletId}>{saving ? "Saving..." : "Save"}</Button>
+        <Button onClick={onSave} disabled={saving || outletId === savedOutletId}>{saving ? "Saving…" : "Save"}</Button>
       </div>
     </div>
   )

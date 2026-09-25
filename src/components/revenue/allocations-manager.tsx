@@ -7,7 +7,7 @@ import * as z from "zod"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Plus, Pencil, Trash2, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,11 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 import {
   Form,
   FormControl,
@@ -70,8 +75,8 @@ const RHYTHM_LABELS: Record<string, string> = {
 }
 
 const MODE_LABELS: Record<string, string> = {
-  INCLUDE_IN_RATE: "Include in Rate",
-  ADD_TO_RATE: "Add to Rate",
+  INCLUDE_IN_RATE: "Include in rate",
+  ADD_TO_RATE: "Add to rate",
 }
 
 const MODE_HINTS: Record<string, string> = {
@@ -143,13 +148,13 @@ const emptyValues: AllocationFormValues = {
 export function AllocationsManager() {
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
+  const confirm = useConfirm()
 
   const [allocations, setAllocations] = useState<AllocationDto[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<AllocationDto | null>(null)
-  const [deleting, setDeleting] = useState<AllocationDto | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -232,26 +237,31 @@ export function AllocationsManager() {
       })
       if (res.ok) {
         setIsDialogOpen(false)
+        toast.success("Allocation saved")
         fetchAllocations()
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save allocation")
+        setServerError(await apiError(res, "Couldn't save the allocation. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: AllocationDto) => {
+    const ok = await confirm({
+      title: "Delete allocation?",
+      description: `Delete "${deleting.name}" (${deleting.code})? If it is attached to any reservation this will be blocked — deactivate instead to retire it.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/allocations/${deleting.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to delete allocation")
+      toast.error(await apiError(res, "Couldn't delete the allocation. Try again."))
     } else {
       setServerError(null)
+      toast.success("Allocation deleted")
     }
-    setDeleting(null)
     fetchAllocations()
   }
 
@@ -274,7 +284,7 @@ export function AllocationsManager() {
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button onClick={openCreate} className="shadow-sm max-md:hidden">
-          <Plus className="mr-2 h-4 w-4" /> New Allocation
+          <Plus className="mr-2 h-4 w-4" /> Add allocation
         </Button>
         <DesktopOnlyNotice
           className="w-full"
@@ -315,34 +325,19 @@ export function AllocationsManager() {
                     subtitle={<span className="font-mono font-bold text-info">{a.code}</span>}
                     tone={a.isActive ? undefined : "muted"}
                     badge={
-                      a.isActive ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                      )
+                      <StatusBadge status={a.isActive ? "ACTIVE" : "INACTIVE"} label={a.isActive ? "Active" : "Inactive"} />
                     }
                     meta={[
-                      { label: "Charge Code", value: <span className="font-mono text-xs">{a.chargeCode?.code}</span> },
+                      { label: "Charge code", value: <span className="font-mono text-xs">{a.chargeCode?.code}</span> },
                       { label: "Rhythm", value: RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm },
-                      { label: "Current Price", value: currentPriceLabel(a), wide: true },
+                      { label: "Current price", value: currentPriceLabel(a), wide: true },
                     ]}
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Badge variant="outline">{TYPE_LABELS[a.type] ?? a.type}</Badge>
-                      <Badge
-                        variant="outline"
-                        className={
-                          a.mode === "INCLUDE_IN_RATE"
-                            ? "bg-info-muted text-info border-info/30"
-                            : "bg-success-muted text-success border-success/30"
-                        }
-                      >
-                        {MODE_LABELS[a.mode] ?? a.mode}
-                      </Badge>
+                      <StatusBadge tone={a.mode === "INCLUDE_IN_RATE" ? "info" : "success"} label={MODE_LABELS[a.mode] ?? a.mode} />
                       {a.sellSeparate && (
-                        <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">
-                          Sell Separate
-                        </Badge>
+                        <StatusBadge tone="warning" label="Sell separate" />
                       )}
                       {a.sellSeparate && a.publishToApi && (
                         <Badge variant="outline" title="Offered by the booking APIs — set in Hub → Website">
@@ -361,10 +356,10 @@ export function AllocationsManager() {
                       <TableHead>Code</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Charge Code</TableHead>
+                      <TableHead>Charge code</TableHead>
                       <TableHead>Rhythm</TableHead>
                       <TableHead>Mode</TableHead>
-                      <TableHead>Current Price</TableHead>
+                      <TableHead>Current price</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -381,20 +376,9 @@ export function AllocationsManager() {
                         <TableCell className="text-sm">{RHYTHM_LABELS[a.postingRhythm] ?? a.postingRhythm}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            <Badge
-                              variant="outline"
-                              className={
-                                a.mode === "INCLUDE_IN_RATE"
-                                  ? "bg-info-muted text-info border-info/30"
-                                  : "bg-success-muted text-success border-success/30"
-                              }
-                            >
-                              {MODE_LABELS[a.mode] ?? a.mode}
-                            </Badge>
+                            <StatusBadge tone={a.mode === "INCLUDE_IN_RATE" ? "info" : "success"} label={MODE_LABELS[a.mode] ?? a.mode} />
                             {a.sellSeparate && (
-                              <Badge variant="outline" className="bg-warning-muted text-warning border-warning/30">
-                                Sell Separate
-                              </Badge>
+                              <StatusBadge tone="warning" label="Sell separate" />
                             )}
                             {a.sellSeparate && a.publishToApi && (
                               <Badge variant="outline" title="Offered by the booking APIs — set in Hub → Website">
@@ -405,11 +389,7 @@ export function AllocationsManager() {
                         </TableCell>
                         <TableCell>{currentPriceLabel(a)}</TableCell>
                         <TableCell>
-                          {a.isActive ? (
-                            <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-muted-foreground">Inactive</Badge>
-                          )}
+                          <StatusBadge status={a.isActive ? "ACTIVE" : "INACTIVE"} label={a.isActive ? "Active" : "Inactive"} />
                         </TableCell>
                         <TableCell className="text-right space-x-2">
                           <Button variant="outline" size="icon" aria-label="Edit allocation" onClick={() => openEdit(a)}>
@@ -420,7 +400,7 @@ export function AllocationsManager() {
                             size="icon"
                             aria-label="Delete allocation"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleting(a)}
+                            onClick={() => confirmDelete(a)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -437,11 +417,11 @@ export function AllocationsManager() {
 
       {/* Create / Edit dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
+        <DialogContent size="lg">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{editing ? "Edit Allocation" : "New Allocation"}</DialogTitle>
+                <DialogTitle>{editing ? "Edit allocation" : "Add allocation"}</DialogTitle>
                 <DialogDescription>
                   {editing
                     ? "Modify this allocation's configuration and pricing."
@@ -511,7 +491,7 @@ export function AllocationsManager() {
                     name="chargeCodeId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Charge Code *</FormLabel>
+                        <FormLabel>Charge code *</FormLabel>
                         <FormControl>
                           <SearchableSelect
                             value={field.value}
@@ -534,7 +514,7 @@ export function AllocationsManager() {
                   name="postingRhythm"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Posting Rhythm *</FormLabel>
+                      <FormLabel>Posting rhythm *</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger>
@@ -557,7 +537,7 @@ export function AllocationsManager() {
                   name="mode"
                   render={({ field }) => (
                     <FormItem className="border rounded-lg p-4 bg-muted/30">
-                      <FormLabel>Rate Behaviour *</FormLabel>
+                      <FormLabel>Rate behaviour *</FormLabel>
                       <p className="text-xs text-muted-foreground -mt-1">
                         How this allocation posts when it is part of a package rate.
                       </p>
@@ -590,7 +570,7 @@ export function AllocationsManager() {
                   render={({ field }) => (
                     <FormItem className="border rounded-lg p-4 flex items-start justify-between gap-4">
                       <div>
-                        <FormLabel className="cursor-pointer">Sell Separately</FormLabel>
+                        <FormLabel className="cursor-pointer">Sell separately</FormLabel>
                         <p className="text-xs text-muted-foreground mt-1">
                           Independent of the rate behaviour above — when on, this allocation can also be
                           attached manually to any reservation (as an add-on), whether or not it is part
@@ -717,31 +697,13 @@ export function AllocationsManager() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "Saving..." : "Save Allocation"}
-                </Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Allocation</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{deleting?.name}&quot; ({deleting?.code})? If it is attached to any
-              reservation this will be blocked — deactivate instead to retire it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

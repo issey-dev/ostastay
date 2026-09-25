@@ -15,6 +15,8 @@ import { DoorOpen } from "@/components/icons"
 import { RoomFeaturePicker, ROOM_FEATURE_CATEGORY_LABELS, useRoomFeatureOptions, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { SubmitButton } from "@/components/ui/submit-button"
 import {
   buildingFormSchema,
   emptyRoomForm,
@@ -44,7 +46,6 @@ import { useTableSort, SortableTableHead } from "@/components/controls/use-table
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -75,6 +76,7 @@ export function RoomManager({
   addSignal?: number
   hideAddButton?: boolean
 }) {
+  const confirm = useConfirm()
   const [buildings, setBuildings] = useState<any[]>([])
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
@@ -88,22 +90,16 @@ export function RoomManager({
   // Building Edit/Delete State
   const [editingBuildingId, setEditingBuildingId] = useState<string | null>(null)
   const isBuildingEditMode = editingBuildingId !== null
-  const [isBuildingDeleteDialogOpen, setIsBuildingDeleteDialogOpen] = useState(false)
-  const [deletingBuildingId, setDeletingBuildingId] = useState<string | null>(null)
   const [buildingError, setBuildingError] = useState<string | null>(null)
 
   // Floor Edit/Delete State
   const [editingFloorId, setEditingFloorId] = useState<string | null>(null)
   const isFloorEditMode = editingFloorId !== null
-  const [isFloorDeleteDialogOpen, setIsFloorDeleteDialogOpen] = useState(false)
-  const [deletingFloorId, setDeletingFloorId] = useState<string | null>(null)
   const [floorError, setFloorError] = useState<string | null>(null)
 
   // Room Edit/Delete State
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
   const isRoomEditMode = editingRoomId !== null
-  const [isRoomDeleteDialogOpen, setIsRoomDeleteDialogOpen] = useState(false)
-  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
   const [roomError, setRoomError] = useState<string | null>(null)
 
   const buildingForm = useForm<BuildingFormValues>({
@@ -204,13 +200,6 @@ export function RoomManager({
     fetchData()
   }
 
-  const handleDeleteBuilding = async () => {
-    if (!deletingBuildingId) return
-    await remove(`/api/buildings/${deletingBuildingId}`, "Building")
-    setIsBuildingDeleteDialogOpen(false)
-    setDeletingBuildingId(null)
-  }
-
   const resetBuildingForm = () => {
     buildingForm.reset({ name: "" })
     setEditingBuildingId(null)
@@ -224,9 +213,14 @@ export function RoomManager({
     setIsBuildingDialogOpen(true)
   }
 
-  const openBuildingDelete = (id: string) => {
-    setDeletingBuildingId(id)
-    setIsBuildingDeleteDialogOpen(true)
+  const openBuildingDelete = async (id: string) => {
+    const ok = await confirm({
+      title: "Delete building?",
+      description: "Are you sure you want to delete this building? This will permanently delete all floors and rooms inside this building. If any of those rooms has reservation or maintenance history, the delete is refused.",
+      confirmLabel: "Delete permanently",
+      destructive: true,
+    })
+    if (ok) await remove(`/api/buildings/${id}`, "Building")
   }
 
   // ---- Floors ----
@@ -245,13 +239,6 @@ export function RoomManager({
     fetchData()
   }
 
-  const handleDeleteFloor = async () => {
-    if (!deletingFloorId) return
-    await remove(`/api/floors/${deletingFloorId}`, "Floor")
-    setIsFloorDeleteDialogOpen(false)
-    setDeletingFloorId(null)
-  }
-
   const resetFloorForm = () => {
     floorForm.reset({ name: "", buildingId: "" })
     setEditingFloorId(null)
@@ -265,9 +252,14 @@ export function RoomManager({
     setIsFloorDialogOpen(true)
   }
 
-  const openFloorDelete = (id: string) => {
-    setDeletingFloorId(id)
-    setIsFloorDeleteDialogOpen(true)
+  const openFloorDelete = async (id: string) => {
+    const ok = await confirm({
+      title: "Delete floor?",
+      description: "Are you sure you want to delete this floor? This will permanently delete all rooms on this floor. If any of them has reservation or maintenance history, the delete is refused.",
+      confirmLabel: "Delete permanently",
+      destructive: true,
+    })
+    if (ok) await remove(`/api/floors/${id}`, "Floor")
   }
 
   // ---- Rooms ----
@@ -303,13 +295,6 @@ export function RoomManager({
     fetchData()
   }
 
-  const handleDeleteRoom = async () => {
-    if (!deletingRoomId) return
-    await remove(`/api/rooms/${deletingRoomId}`, "Room")
-    setIsRoomDeleteDialogOpen(false)
-    setDeletingRoomId(null)
-  }
-
   const resetRoomForm = () => {
     roomForm.reset(emptyRoomForm)
     setEditingRoomId(null)
@@ -332,9 +317,14 @@ export function RoomManager({
     setIsRoomDialogOpen(true)
   }
 
-  const openRoomDelete = (id: string) => {
-    setDeletingRoomId(id)
-    setIsRoomDeleteDialogOpen(true)
+  const openRoomDelete = async (id: string) => {
+    const ok = await confirm({
+      title: "Delete room?",
+      description: "Are you sure you want to delete this room? This action cannot be undone. A room with reservation or maintenance history can't be deleted — set it Out of Service instead.",
+      confirmLabel: "Delete permanently",
+      destructive: true,
+    })
+    if (ok) await remove(`/api/rooms/${id}`, "Room")
   }
 
   // Get all floors across all buildings for the room edit form (looking up a room's
@@ -379,7 +369,7 @@ export function RoomManager({
         <ControlsSectionHeader
           action={
             <Button onClick={() => { resetBuildingForm(); setIsBuildingDialogOpen(true) }} className="shadow-sm">
-              <Building2 className="mr-2 h-4 w-4" /> Add Building
+              <Building2 className="mr-2 h-4 w-4" /> Add building
             </Button>
           }
         />
@@ -388,14 +378,14 @@ export function RoomManager({
           setIsBuildingDialogOpen(open)
           if (!open) resetBuildingForm()
         }}>
-            <DialogContent>
+            <DialogContent size="sm">
               <Form {...buildingForm}>
               <form onSubmit={buildingForm.handleSubmit(onSubmitBuilding)} noValidate>
-                <DialogHeader><DialogTitle>{isBuildingEditMode ? "Edit Building" : "Add Building"}</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{isBuildingEditMode ? "Edit building" : "Add building"}</DialogTitle></DialogHeader>
                 <div className="py-4 space-y-4">
                   <FormField control={buildingForm.control} name="name" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Building Name *</FormLabel>
+                      <FormLabel>Building name *</FormLabel>
                       <FormControl><Input placeholder="e.g. Main Tower" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -404,28 +394,12 @@ export function RoomManager({
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsBuildingDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+                  <SubmitButton pending={saving}>{isBuildingEditMode ? "Save" : "Create"}</SubmitButton>
                 </DialogFooter>
               </form>
               </Form>
             </DialogContent>
           </Dialog>
-
-      {/* Delete Building Dialog */}
-      <Dialog open={isBuildingDeleteDialogOpen} onOpenChange={setIsBuildingDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Building</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this building? This will permanently delete all floors and rooms inside this building. If any of those rooms has reservation or maintenance history, the delete is refused.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setIsBuildingDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteBuilding} disabled={saving}>{saving ? "Deleting..." : "Delete Permanently"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ControlsSectionBody>
           {/* Phone — card stack. Table below takes over at md. */}
@@ -455,7 +429,7 @@ export function RoomManager({
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
-                <SortableTableHead columnKey="name" sort={buildingSort} className="px-6 py-4">Building Name</SortableTableHead>
+                <SortableTableHead columnKey="name" sort={buildingSort} className="px-6 py-4">Building name</SortableTableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -499,7 +473,7 @@ export function RoomManager({
         <ControlsSectionHeader
           action={
             <Button onClick={() => { resetFloorForm(); setIsFloorDialogOpen(true) }} className="shadow-sm">
-              <Map className="mr-2 h-4 w-4" /> Add Floor
+              <Map className="mr-2 h-4 w-4" /> Add floor
             </Button>
           }
         />
@@ -508,10 +482,10 @@ export function RoomManager({
           setIsFloorDialogOpen(open)
           if (!open) resetFloorForm()
         }}>
-            <DialogContent>
+            <DialogContent size="sm">
               <Form {...floorForm}>
               <form onSubmit={floorForm.handleSubmit(onSubmitFloor)} noValidate>
-                <DialogHeader><DialogTitle>{isFloorEditMode ? "Edit Floor" : "Add Floor"}</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{isFloorEditMode ? "Edit floor" : "Add floor"}</DialogTitle></DialogHeader>
                 <div className="py-4 space-y-4">
                   <FormField control={floorForm.control} name="buildingId" render={({ field }) => (
                     <FormItem>
@@ -519,8 +493,8 @@ export function RoomManager({
                       <Select value={field.value} onValueChange={(v) => field.onChange(v ?? "")}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select Building">
-                              {field.value ? buildings.find(b => b.id === field.value)?.name : "Select Building"}
+                            <SelectValue placeholder="Select building">
+                              {field.value ? buildings.find(b => b.id === field.value)?.name : "Select building"}
                             </SelectValue>
                           </SelectTrigger>
                         </FormControl>
@@ -536,7 +510,7 @@ export function RoomManager({
                   )} />
                   <FormField control={floorForm.control} name="name" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Floor Name/Number *</FormLabel>
+                      <FormLabel>Floor name/number *</FormLabel>
                       <FormControl><Input placeholder="e.g. 1st Floor" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -545,28 +519,12 @@ export function RoomManager({
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsFloorDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+                  <SubmitButton pending={saving}>{isFloorEditMode ? "Save" : "Create"}</SubmitButton>
                 </DialogFooter>
               </form>
               </Form>
             </DialogContent>
           </Dialog>
-
-      {/* Delete Floor Dialog */}
-      <Dialog open={isFloorDeleteDialogOpen} onOpenChange={setIsFloorDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Floor</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this floor? This will permanently delete all rooms on this floor. If any of them has reservation or maintenance history, the delete is refused.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setIsFloorDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteFloor} disabled={saving}>{saving ? "Deleting..." : "Delete Permanently"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ControlsSectionBody>
           {/* Phone — card stack. Table below takes over at md. */}
@@ -577,7 +535,7 @@ export function RoomManager({
                   <MobileCard
                     key={floor.id}
                     title={floor.name}
-                    subtitle={buildings.find(b => b.id === floor.buildingId)?.name || "Unknown Building"}
+                    subtitle={buildings.find(b => b.id === floor.buildingId)?.name || "Unknown building"}
                     onClick={() => openFloorEdit(floor)}
                     actions={
                       <>
@@ -597,7 +555,7 @@ export function RoomManager({
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border">
-                <SortableTableHead columnKey="name" sort={floorSort} className="px-6 py-4">Floor Name</SortableTableHead>
+                <SortableTableHead columnKey="name" sort={floorSort} className="px-6 py-4">Floor name</SortableTableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Building</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
               </TableRow>
@@ -616,7 +574,7 @@ export function RoomManager({
                   <TableRow key={floor.id} className="group hover:bg-muted/40">
                     <TableCell className="px-6 py-3 font-semibold text-foreground">{floor.name}</TableCell>
                     <TableCell className="px-6 py-3 text-muted-foreground">
-                      {buildings.find(b => b.id === floor.buildingId)?.name || "Unknown Building"}
+                      {buildings.find(b => b.id === floor.buildingId)?.name || "Unknown building"}
                     </TableCell>
                     <TableCell className="px-6 py-3 text-right">
                       <div className="flex justify-end gap-2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -644,7 +602,7 @@ export function RoomManager({
         <ControlsSectionHeader
           action={
             <Button onClick={() => { resetRoomForm(); setIsRoomDialogOpen(true) }} className="shadow-sm">
-              <Plus className="mr-2 h-4 w-4" /> Add Room
+              <Plus className="mr-2 h-4 w-4" /> Add room
             </Button>
           }
         />
@@ -653,21 +611,21 @@ export function RoomManager({
           setIsRoomDialogOpen(open)
           if (!open) resetRoomForm()
         }}>
-            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+            <DialogContent size="md">
               <Form {...roomForm}>
               <form onSubmit={roomForm.handleSubmit(onSubmitRoom)} noValidate>
-                <DialogHeader><DialogTitle>{isRoomEditMode ? "Edit Room" : "Create Room"}</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{isRoomEditMode ? "Edit room" : "Add room"}</DialogTitle></DialogHeader>
                 <div className="py-4 space-y-4">
                   <FormField control={roomForm.control} name="roomNumber" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Room Number / Name *</FormLabel>
+                      <FormLabel>Room number / name *</FormLabel>
                       <FormControl><Input placeholder="e.g. 101" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={roomForm.control} name="roomTypeId" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Room Type *</FormLabel>
+                      <FormLabel>Room type *</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={(v) => {
@@ -683,8 +641,8 @@ export function RoomManager({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select Type">
-                              {field.value ? roomTypes.find(rt => rt.id === field.value)?.name : "Select Type"}
+                            <SelectValue placeholder="Select type">
+                              {field.value ? roomTypes.find(rt => rt.id === field.value)?.name : "Select type"}
                             </SelectValue>
                           </SelectTrigger>
                         </FormControl>
@@ -719,8 +677,8 @@ export function RoomManager({
                             >
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select Building">
-                                    {field.value ? buildings.find(b => b.id === field.value)?.name : "Select Building"}
+                                  <SelectValue placeholder="Select building">
+                                    {field.value ? buildings.find(b => b.id === field.value)?.name : "Select building"}
                                   </SelectValue>
                                 </SelectTrigger>
                               </FormControl>
@@ -741,7 +699,7 @@ export function RoomManager({
                             >
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder={roomBuildingId ? "Select Floor" : "Select a building first"}>
+                                  <SelectValue placeholder={roomBuildingId ? "Select floor" : "Select a building first"}>
                                     {field.value ? floorsForSelectedBuilding.find(f => f.id === field.value)?.name : undefined}
                                   </SelectValue>
                                 </SelectTrigger>
@@ -756,10 +714,10 @@ export function RoomManager({
                       </div>
 
                       <div className="border-t border-border pt-4">
-                        <h4 className="text-sm font-semibold text-foreground mb-2">Room Features</h4>
+                        <h4 className="text-sm font-semibold text-foreground mb-2">Room features</h4>
                         {inheritedFeatures.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-xs text-muted-foreground mb-1">Inherited from Room Type (fixed here):</p>
+                            <p className="text-xs text-muted-foreground mb-1">Inherited from room type (fixed here):</p>
                             <div className="flex flex-wrap gap-1.5">
                               {inheritedFeatures.map((f) => (
                                 <span key={`${f.category}:${f.code}`} className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">
@@ -785,28 +743,12 @@ export function RoomManager({
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsRoomDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+                  <SubmitButton pending={saving}>{isRoomEditMode ? "Save" : "Create"}</SubmitButton>
                 </DialogFooter>
               </form>
               </Form>
             </DialogContent>
           </Dialog>
-
-      {/* Delete Room Dialog */}
-      <Dialog open={isRoomDeleteDialogOpen} onOpenChange={setIsRoomDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Room</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this room? This action cannot be undone. A room with reservation or maintenance history can&apos;t be deleted — set it Out of Service instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setIsRoomDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteRoom} disabled={saving}>{saving ? "Deleting..." : "Delete Permanently"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ControlsSectionBody>
           {/* Phone — card stack. Table below takes over at md. */}
@@ -857,7 +799,7 @@ export function RoomManager({
               <TableRow className="border-border">
                 <SortableTableHead columnKey="roomNumber" sort={roomSort} className="px-6 py-4">Room</SortableTableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Floor</TableHead>
-                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Room Type</TableHead>
+                <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Room type</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Status</TableHead>
                 <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
               </TableRow>

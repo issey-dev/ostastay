@@ -2,15 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { CheckCircle2, Loader2, LogOut, CalendarClock, AlertTriangle, ArrowRight, FileText, Sparkles } from "@/components/icons"
+import { CheckCircle2, Loader2, LogOut, AlertTriangle, ArrowRight, FileText, Sparkles } from "@/components/icons"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Skeleton } from "@/components/ui/skeleton"
-import { InfoHint } from "@/components/ui/info-hint"
 import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { RollForwardDialog } from "@/components/front-office/roll-forward-dialog"
 import Link from "next/link"
 import { format } from "date-fns"
+import { PageHeader } from "@/components/ui/page-header"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { FolioPanel } from "@/components/front-office/folio-panel"
+import { toast } from "@/lib/toast"
+import { useParams } from "next/navigation"
 
 type StepState = { key: string; label: string; detail: string; done: boolean; at: string | null }
 type Departure = { id: string; confirmationNo: string; guestName: string; roomNumber: string | null; checkOutDate: string }
@@ -21,6 +25,7 @@ type EodStatus = {
   nextStep: string | null
   pendingDepartures: Departure[]
   pendingArrivals: number
+  pendingArrivalList?: { id: string; confirmationNo: string; guestName: string | null; checkInDate: string }[]
   openShifts: { id: string; userId: string; openingFloat: number }[]
 }
 
@@ -41,6 +46,12 @@ export default function EndOfDayPage() {
   const [extendDate, setExtendDate] = useState("")
   // Guards against a double-start of autopilot (button + resume both firing).
   const autoRef = useRef(false)
+  // Autopilot stops before posting while un-arrived bookings would become no-shows, until
+  // the auditor has looked at the list once (per business date).
+  const arrivalsReviewedRef = useRef<string | null>(null)
+  const [arrivalsReviewedFor, setArrivalsReviewedFor] = useState<string | null>(null)
+  const [folioFor, setFolioFor] = useState<string | null>(null)
+  const { slug } = useParams<{ slug: string }>()
 
   const fetchStatus = useCallback(async (): Promise<EodStatus | null> => {
     if (!currentProperty) return null
@@ -111,6 +122,7 @@ export default function EndOfDayPage() {
         const next = current.nextStep
         if (!next) break // fully closed
         if (next === "departures" && (current.pendingDepartures?.length ?? 0) > 0) break // needs resolution
+        if (next === "post" && current.pendingArrivals > 0 && arrivalsReviewedRef.current !== current.businessDate) break // review no-shows first
         if (next === CONFIRM_STEP) break // require explicit confirmation for the irreversible close
         await sleep(750) // let the just-finished step's animation land before the next
         const res = await runStepRaw(next)
@@ -133,7 +145,15 @@ export default function EndOfDayPage() {
         body: JSON.stringify({ early: false }),
       })
       const data = await res.json()
-      if (!res.ok) setError(data.error || "Check-out failed.")
+      if (!res.ok) {
+        // A balance blocks check-out — settle it in the folio right here, not on Front Desk.
+        if (typeof data.balance === "number") {
+          toast.error(`Balance of $${Number(data.balance).toFixed(2)} still due`, {
+            description: "Settle the folio, then check out.",
+            action: { label: "Open folio", onClick: () => setFolioFor(id) },
+          })
+        } else setError(data.error || "Check-out failed.")
+      } else toast.success("Checked out")
       await fetchStatus()
     } finally {
       setBusy(null)
@@ -161,7 +181,7 @@ export default function EndOfDayPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="space-y-6">
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
@@ -179,18 +199,20 @@ export default function EndOfDayPage() {
   // Where autopilot is paused, if it is — drives the contextual hint under the banner.
   const pausedForDepartures = !autoRunning && nextStep === "departures" && (status?.pendingDepartures?.length ?? 0) > 0
   const pausedForConfirm = !autoRunning && nextStep === CONFIRM_STEP
+  const pausedForArrivals =
+    !autoRunning && nextStep === "post" && (status?.pendingArrivals ?? 0) > 0 && arrivalsReviewedFor !== status?.businessDate
   const anyBusy = autoRunning || !!busy
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            End of Day
-            <InfoHint label="End of Day">Close the business date step by step. The date stays open until every step is done.</InfoHint>
-          </h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-6">
+      <PageHeader
+        align="end"
+        actionsClassName="gap-3"
+        title={<>Night Audit <StatusBadge label={allDone ? "Closed" : "Open"} tone={allDone ? "success" : "warning"} /></>}
+        tabTitle="Night Audit"
+        description={`Business date ${fmtDate(businessDate)}`}
+        hint="Close the business date step by step. The date stays open until every step is done."
+        actions={<>
         {/* Skips the date over a CLOSED period without an audit per day — refuses while
             the range holds any activity. See the dialog and /api/eod/roll-forward. */}
         {currentProperty?.id && businessDate && (
@@ -203,17 +225,8 @@ export default function EndOfDayPage() {
         <Link href="night-audit/reports" className={buttonVariants({ variant: "outline", size: "sm" })}>
           <FileText className="w-4 h-4 mr-2" /> Report archive
         </Link>
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-          <CalendarClock className="w-5 h-5 text-muted-foreground" />
-          <div className="text-sm">
-            <div className="font-semibold text-foreground">{fmtDate(businessDate)}</div>
-            <div className="text-xs">
-              <span className={`font-medium ${allDone ? "text-success" : "text-warning"}`}>{allDone ? "CLOSED" : "OPEN"}</span>
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Phones: informational only — End of Day still runs here. */}
       <DesktopOnlyNotice
@@ -253,11 +266,13 @@ export default function EndOfDayPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border bg-card p-4">
             <div className="text-sm">
               <p className="font-semibold text-foreground">
-                {pausedForDepartures ? "Paused — guests still due out" : pausedForConfirm ? "Ready to close the day" : doneCount > 0 ? "Continue End of Day" : "Run End of Day"}
+                {pausedForDepartures ? "Paused — guests still due out" : pausedForArrivals ? "Paused — check the expected arrivals" : pausedForConfirm ? "Ready to close the day" : doneCount > 0 ? "Continue End of Day" : "Run End of Day"}
               </p>
               <p className="text-muted-foreground">
                 {pausedForDepartures
                   ? "Resolve the departures below, then resume — the rest runs automatically."
+                  : pausedForArrivals
+                    ? "These bookings never checked in and become no-shows when posting runs. Check in anyone who has arrived first."
                   : pausedForConfirm
                     ? "Every step is done except the final roll. Confirm below to sign staff out and close."
                     : "Runs each step for you and only stops if something needs a decision. The final close still asks for confirmation."}
@@ -265,7 +280,7 @@ export default function EndOfDayPage() {
             </div>
             {/* When paused for departures or the final confirm, the actionable control
                 lives in the step panel below — keep this card informational only. */}
-            {!pausedForConfirm && !pausedForDepartures && (
+            {!pausedForConfirm && !pausedForDepartures && !pausedForArrivals && (
               <Button onClick={autoRun} disabled={anyBusy} className="shrink-0">
                 <Sparkles className="w-4 h-4 mr-2" />
                 {doneCount > 0 ? "Resume auto-run" : "Run End of Day"}
@@ -337,6 +352,16 @@ export default function EndOfDayPage() {
           <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
         </div>
       )}
+
+      {currentProperty && (
+        <FolioPanel
+          reservationId={folioFor}
+          propertyId={currentProperty.id}
+          isOpen={!!folioFor}
+          onClose={() => { setFolioFor(null); void fetchStatus() }}
+          onCheckedOut={() => { void fetchStatus() }}
+        />
+      )}
     </div>
   )
 
@@ -357,7 +382,8 @@ export default function EndOfDayPage() {
                       <span className="font-medium max-md:block">{d.guestName}</span>
                       <span className="text-muted-foreground max-md:text-xs"> · {d.confirmationNo} · Room {d.roomNumber ?? "—"} · out {format(new Date(d.checkOutDate), "dd MMM")}</span>
                     </div>
-                    <div className="flex gap-2 max-md:grid max-md:grid-cols-2">
+                    <div className="flex gap-2 max-md:grid max-md:grid-cols-3">
+                      <Button size="sm" variant="outline" onClick={() => setFolioFor(d.id)}>Folio</Button>
                       <Button size="sm" variant="outline" disabled={busy === `co-${d.id}`} onClick={() => forceCheckout(d.id)}>
                         {busy === `co-${d.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : "Check out"}
                       </Button>
@@ -398,8 +424,44 @@ export default function EndOfDayPage() {
       )
     }
     if (key === "post") {
+      const arrivals = status?.pendingArrivalList ?? []
       return (
         <div className="space-y-3">
+          {arrivals.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-warning">
+                {status?.pendingArrivals} booking{status?.pendingArrivals === 1 ? "" : "s"} will be marked no-show:
+              </p>
+              <ul className="divide-y divide-border border border-border text-sm">
+                {arrivals.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span>
+                      <span className="font-medium">{a.guestName}</span>
+                      <span className="text-muted-foreground"> · {a.confirmationNo} · due {format(new Date(a.checkInDate), "dd MMM")}</span>
+                    </span>
+                    <Link href={`/e/${slug}/dashboard/reservations/${a.id}`} target="_blank" className="text-sm hover:underline">
+                      Open
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {pausedForArrivals && (
+                <Button
+                  variant="outline"
+                  disabled={anyBusy}
+                  onClick={async () => {
+                    const fresh = await fetchStatus()
+                    const bd = fresh?.businessDate ?? status?.businessDate ?? null
+                    arrivalsReviewedRef.current = bd
+                    setArrivalsReviewedFor(bd)
+                    void autoRun()
+                  }}
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" /> Reviewed, continue auto-run
+                </Button>
+              )}
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
             Posts room charges, extra occupancy, packages, and Green Tax to every in-house folio, marks {status?.pendingArrivals ?? 0} un-arrived booking{(status?.pendingArrivals ?? 0) === 1 ? "" : "s"} as no-show, and rolls the business date forward. Protected against double posting.
           </p>

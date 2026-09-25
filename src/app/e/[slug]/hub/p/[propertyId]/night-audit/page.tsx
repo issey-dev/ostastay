@@ -35,7 +35,7 @@ export default async function HubPropertyNightAuditPage({ params }: { params: Pr
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
       <ControlsCard
-        title="Business Date"
+        title="Business date"
         description="The property's working day. Night Audit moves it forward one day at a time; it can be moved by hand only when nothing would be skipped over — or to any date while the property has no activity at all."
       >
         <BusinessDateManager
@@ -45,7 +45,7 @@ export default async function HubPropertyNightAuditPage({ params }: { params: Pr
         />
       </ControlsCard>
       <ControlsCard
-        title="Nightly Tax Postings"
+        title="Nightly tax postings"
         description="Which Maldives levies Night Audit calculates and posts each night. Their rates and amounts are set under Finance."
       >
         <NightlyPostingsManager
@@ -75,7 +75,7 @@ export default async function HubPropertyNightAuditPage({ params }: { params: Pr
           initial={{ autoAuditEnabled: settings.autoAuditEnabled, autoAuditTime: settings.autoAuditTime }}
         />
       </ControlsCard>
-      <ControlsCard title="Room Status at Night Audit" description="What Night Audit does to vacant rooms' housekeeping status when it runs.">
+      <ControlsCard title="Room status at Night Audit" description="What Night Audit does to vacant rooms' housekeeping status when it runs.">
         <EodRoomStatusManager
           propertyId={property.id}
           canEdit={editable}

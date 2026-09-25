@@ -13,25 +13,25 @@ export default function Outlets() {
       <Where path="Hub › Controls › Outlets" who="Property Setup" />
 
       <H2>Adding an outlet</H2>
-      <p>Create one outlet for each place that sells to guests. Choose <strong>Add Outlet</strong>:</p>
-      <Shot name="prop-outlet-dialog" alt="The Add Outlet dialog: outlet information on the left, tax rule and charge code picker on the right." />
-      <H3>Outlet Information</H3>
+      <p>Create one outlet for each place that sells to guests. Choose <strong>Add outlet</strong>, fill in both sides and choose <strong>Create</strong>:</p>
+      <Shot name="prop-outlet-dialog" alt="The Add outlet dialog: outlet information on the left, tax rule and charge code picker on the right." />
+      <H3>Outlet information</H3>
       <Table
         head={["Field", "Notes"]}
         rows={[
           ["Name", "e.g. Reef Restaurant."],
           ["Type", "Spa, Restaurant, Bar, Retail, Transport, Recreation or Other. For grouping and reports."],
           ["Code", "2–8 letters or digits, unique at the property, e.g. REEF. It prefixes the outlet's sales-check numbers (REEF-00001). Numbers are never reused."],
-          ["Address, Email, Phone, Tax No", "Optional. Printed on walk-in bills the outlet raises in its own name."],
+          ["Address, Email, Phone, Tax no", "Optional. Printed on walk-in bills the outlet raises in its own name."],
           ["Description", "Optional."],
         ]}
       />
-      <H3>Financial Information</H3>
+      <H3>Financial information</H3>
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Tax Rule", "Default: each charge code keeps its own tax (usual). Custom: force the Maldives defaults, or a custom tax profile, on everything sold here."],
-          ["Charge Codes", "Tick what this outlet sells. Tick a group or subgroup to take everything under it. Only active revenue codes are listed, because taxes post automatically."],
+          ["Tax rule", "Default: each charge code keeps its own tax (usual). Custom: force the Maldives defaults, or a custom tax profile, on everything sold here."],
+          ["Charge codes", "Tick what this outlet sells. Tick a group or subgroup to take everything under it. Only active revenue codes are listed, because taxes post automatically."],
         ]}
       />
       <p>
@@ -42,7 +42,7 @@ export default function Outlets() {
       <Callout title="Spa and excursions">
         <p>
           If you have these add-ons, create an outlet for each (e.g. a Spa outlet and an excursions desk), then link them on{" "}
-          <strong>Charge Codes › Spa Outlet / Excursion Outlet</strong>. Until they are linked, spa and excursion charges can&apos;t post,
+          <strong>Charge Codes › Spa outlet / Excursion outlet</strong>. Until they are linked, spa and excursion charges can&apos;t post,
           and the Hub Overview says so.
         </p>
       </Callout>
@@ -54,8 +54,8 @@ export default function Outlets() {
       <p>
         The <strong>Amenities</strong> card lists the property&apos;s facilities, such as the pool, gym, dive centre or kids&apos;
         club, with an optional description. They are shown to guests on your website through the Booking API. Type a{" "}
-        <strong>Facility Name</strong> and choose <strong>Add</strong>. Each name can be used once; edit or delete an amenity from
-        its row.
+        <strong>Facility name</strong> and choose <strong>Add</strong>. Each name can be used once; edit or delete an amenity from
+        its row (deleting asks you to confirm).
       </p>
       <Pager href="/docs/configuration/property/outlets" />
     </>

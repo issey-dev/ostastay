@@ -21,26 +21,33 @@ export async function GET(request: Request) {
     const search = searchParams.get("search"); // Used for global search
     const profileType = searchParams.get("profileType");
 
-    const profiles = await prisma.profile.findMany({
-      where: {
-        enterpriseId: ctx.enterpriseId,
-        profileType: profileType ? profileType : undefined,
-        OR: search ? [
-          { firstName: { contains: search, mode: "insensitive" as const } },
-          { lastName: { contains: search, mode: "insensitive" as const } },
-          { companyName: { contains: search, mode: "insensitive" as const } },
-          { communications: { some: { value: { contains: search, mode: "insensitive" as const } } } },
-          { addresses: { some: { fullAddress: { contains: search, mode: "insensitive" as const } } } },
-        ] : undefined
-      },
-      include: {
-        communications: true,
-        addresses: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 50 // Limit results for dashboard
-    });
-    return NextResponse.json(profiles);
+    const where = {
+      enterpriseId: ctx.enterpriseId,
+      profileType: profileType ? profileType : undefined,
+      OR: search ? [
+        { firstName: { contains: search, mode: "insensitive" as const } },
+        { lastName: { contains: search, mode: "insensitive" as const } },
+        { companyName: { contains: search, mode: "insensitive" as const } },
+        { communications: { some: { value: { contains: search, mode: "insensitive" as const } } } },
+        { addresses: { some: { fullAddress: { contains: search, mode: "insensitive" as const } } } },
+      ] : undefined
+    };
+
+    // The body stays a plain array (several pickers read it as one); the number of matching
+    // profiles beyond the 50 returned rides in X-Total-Count so the list can say "50 of 312".
+    const [profiles, total] = await Promise.all([
+      prisma.profile.findMany({
+        where,
+        include: {
+          communications: true,
+          addresses: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 50 // Limit results for dashboard
+      }),
+      prisma.profile.count({ where }),
+    ]);
+    return NextResponse.json(profiles, { headers: { "X-Total-Count": String(total) } });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -85,6 +92,7 @@ export async function POST(request: Request) {
         vipLevel: body.vipLevel || null,
         photoUrl: body.photoUrl,
         iataNumber: body.iataNumber,
+        tinNumber: body.tinNumber?.trim() || null,
         commissionRate: body.commissionRate ? parseFloat(body.commissionRate) : null,
         // MIRA Booking Method — only the fixed list is accepted; anything else clears it.
         bookingMethod: isBookingMethod(body.bookingMethod) ? body.bookingMethod : null,

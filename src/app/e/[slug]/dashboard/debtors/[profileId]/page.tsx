@@ -15,6 +15,7 @@ import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { INPUT_MONEY } from "@/lib/input-presets"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
+import { PageHeader } from "@/components/ui/page-header"
 
 const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" })
 const dateStr = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—")
@@ -115,33 +116,43 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
   const accountName = profile.companyName || [profile.firstName, profile.lastName].filter(Boolean).join(" ")
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-md:p-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Link href={`/e/${slug}/dashboard/debtors`} className="shrink-0">
-            <Button variant="ghost" size="icon" aria-label="Back"><ArrowLeft className="w-4 h-4" /></Button>
-          </Link>
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold tracking-tight flex flex-wrap items-center gap-2 sm:text-2xl">
+    <div className="space-y-6">
+      <div className="flex items-start gap-3">
+        {/* Phones only: the breadcrumb is the way back on desktop. */}
+        <Link href={`/e/${slug}/dashboard/debtors`} className="shrink-0 md:hidden">
+          <Button variant="ghost" size="icon" aria-label="Back"><ArrowLeft className="w-4 h-4" /></Button>
+        </Link>
+        <PageHeader
+          className="min-w-0 flex-1"
+          align="end"
+          crumb={accountName}
+          tabTitle={`${accountName} · Debtors`}
+          title={
+            <span className="flex flex-wrap items-center gap-2">
               {accountName}
-              <Badge variant="outline">{profile.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"}</Badge>
-            </h2>
-            <p className="text-sm text-muted-foreground">
+              <Badge variant="outline">{profile.profileType === "TRAVEL_AGENT" ? "Travel agent" : "Company"}</Badge>
+            </span>
+          }
+          description={
+            <>
               {profile.arNumber ? `AR Number: ${profile.arNumber}` : "No AR number set"}
               {profile.creditLimit != null && ` · Credit Limit: ${money(profile.creditLimit)}`}
-            </p>
-          </div>
-        </div>
-        <Link href={`/e/${slug}/dashboard/debtors/${profileId}/statement`} target="_blank" className="sm:shrink-0">
-          <Button variant="outline" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Statement</Button>
-        </Link>
+            </>
+          }
+          actionsClassName="gap-2 max-sm:w-full"
+          actions={
+            <Link href={`/e/${slug}/dashboard/debtors/${profileId}/statement`} target="_blank" className="max-sm:w-full">
+              <Button variant="outline" className="w-full sm:w-auto"><Printer className="w-4 h-4 mr-2" /> Statement</Button>
+            </Link>
+          }
+        />
       </div>
 
       {/* Phones: balance and aging in one compact card instead of six stacked tiles. */}
       <Card className="md:hidden">
         <CardContent className="space-y-3">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Outstanding Balance</p>
+            <p className="text-sm font-medium text-muted-foreground">Outstanding balance</p>
             <div className={`text-2xl font-bold flex items-center gap-2 ${overLimit ? "text-destructive" : ""}`}>
               {overLimit && <AlertTriangle className="w-5 h-5" />}
               {money(balance)}
@@ -161,7 +172,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
 
       <div className="hidden md:grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="col-span-2 md:col-span-2">
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground font-medium">Outstanding Balance</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground font-medium">Outstanding balance</CardTitle></CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold flex items-center gap-2 ${overLimit ? "text-destructive" : ""}`}>
               {overLimit && <AlertTriangle className="w-5 h-5" />}
@@ -199,7 +210,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
               actions={
                 inv.isOpen ? (
                   <Button variant="outline" size="sm" className="w-full" onClick={() => openPayDialog(inv)}>
-                    <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
+                    <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record payment
                   </Button>
                 ) : undefined
               }
@@ -238,7 +249,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
                     <TableCell>
                       {inv.isOpen && (
                         <Button variant="outline" size="sm" onClick={() => openPayDialog(inv)}>
-                          <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record Payment
+                          <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Record payment
                         </Button>
                       )}
                     </TableCell>
@@ -253,14 +264,14 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
       <Dialog open={!!payingInvoice} onOpenChange={(open) => { if (!open) setPayingInvoice(null) }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>Record payment</DialogTitle>
             <DialogDescription>
               {payingInvoice && `Against ${payingInvoice.guestName}'s invoice (${payingInvoice.confirmationNo || "—"}), balance ${money(payingInvoice.balance)}.`}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRecordPayment} className="space-y-3">
             <div className="grid gap-2">
-              <Label>Payment Method</Label>
+              <Label>Payment method</Label>
               <Select value={payForm.paymentMethodId} onValueChange={(v) => setPayForm((p) => ({ ...p, paymentMethodId: v ?? "" }))}>
                 <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
                 <SelectContent>
@@ -280,7 +291,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPayingInvoice(null)}>Cancel</Button>
               <Button type="submit" disabled={paying || !payForm.paymentMethodId || !payForm.amount}>
-                {paying ? "Recording..." : "Record Payment"}
+                {paying ? "Recording..." : "Record payment"}
               </Button>
             </DialogFooter>
           </form>

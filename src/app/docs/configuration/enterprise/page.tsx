@@ -25,7 +25,7 @@ export default function EnterpriseSetup() {
         ]}
       />
       <p>
-        Only people with access to <strong>All Properties</strong> see the enterprise area. Staff tied to a single property never
+        Only people with access to <strong>All properties</strong> see the enterprise area. Staff tied to a single property never
         do.
       </p>
 
@@ -65,23 +65,23 @@ export default function EnterpriseSetup() {
       </ul>
 
       <H3>Adding another property</H3>
-      <p>Choose <strong>Add Property</strong> and fill in the form:</p>
-      <Shot name="ent-property-dialog" alt="The Create New Property dialog with name, short code, legal entity name, check-in and check-out times, go-live date and add-on switches." />
+      <p>Choose <strong>Add property</strong> and fill in the form:</p>
+      <Shot name="ent-property-dialog" alt="The Add property dialog with name, short code, legal entity name, check-in and check-out times, go-live date and add-on switches." />
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Property Name", "At least 2 characters."],
-          ["Short Code", "2–5 characters, unique across Uppsolut Stay. Choose it carefully: it prefixes booking numbers."],
-          ["Legal Entity Name", "The company name printed on invoices."],
+          ["Property name", "At least 2 characters."],
+          ["Short code", "2–5 characters, unique across Uppsolut Stay. Choose it carefully: it prefixes booking numbers."],
+          ["Legal entity name", "The company name printed on invoices."],
           ["Currency", "3 letters, e.g. USD. Every price and posting at the property is in it."],
           ["Time zone", "Where the property is, e.g. Indian/Maldives. Night audit and the business day follow it."],
-          ["Check-in / Check-out Time", "HH:MM, 24-hour. Defaults 14:00 and 11:00."],
+          ["Check-in / check-out time", "HH:MM, 24-hour. Defaults 14:00 and 11:00."],
           ["Go-live date", "The property's first business date."],
           ["This property offers: Spa / Excursions", "Only if your enterprise has these add-ons. A property without a spa gets no spa charge codes."],
         ]}
       />
       <p>
-        Choose <strong>Create Property</strong>. The new property is <strong>PENDING</strong> until Uppsolut approves it, and it
+        Choose <strong>Create property</strong>. The new property is <strong>PENDING</strong> until Uppsolut approves it, and it
         can&apos;t be configured until then. While it is pending you can still edit it, including its currency and time zone; once it
         is active, those two are fixed.
       </p>

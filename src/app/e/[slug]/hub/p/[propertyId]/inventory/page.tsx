@@ -16,7 +16,7 @@ export default async function HubPropertyInventoryPage({ params }: { params: Pro
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
       <HubSetupNotice title={item.title} />
       <ControlsCard
-        title="Property Architecture"
+        title="Property architecture"
         description="This property's room types, buildings, floors and rooms. Copying brings room types (with their features) — rooms are physical, and each property builds its own."
         action={canEdit("create") && <CopyFromPropertyButton propertyId={property.id} section="room-types" title="room types" />}
       >
@@ -26,14 +26,14 @@ export default async function HubPropertyInventoryPage({ params }: { params: Pro
         <PropertySwitchSetting
           propertyId={property.id}
           field="requireInspectionOnCheckIn"
-          label="Require Inspected Room at Check-In"
+          label="Require inspected room at check-in"
           initial={requireInspectionOnCheckIn}
           canEdit={canEdit("update")}
           description="On: guests can only be checked into rooms housekeeping has marked Inspected — a supervisor must sign off each room before an arrival. Off: a dirty room warns but doesn't block."
         />
       </ControlsCard>
       <ControlsCard
-        title="Room Features"
+        title="Room features"
         description="The bed type, view and amenity options this property's room types and rooms choose from."
         action={canEdit("create") && (
           <CopyFromPropertyButton

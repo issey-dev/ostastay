@@ -131,7 +131,7 @@ export function PropertyApprovalQueue() {
                       <div className="flex gap-2 justify-end max-sm:[&>*]:flex-1">
                         <Button variant="ghost" size="sm" onClick={() => { setRejectingId(null); setRejectionReason("") }}>Cancel</Button>
                         <Button variant="destructive" size="sm" disabled={busyId === p.id || !rejectionReason.trim()} onClick={() => reject(p.id)}>
-                          {busyId === p.id ? "Rejecting..." : "Confirm Reject"}
+                          {busyId === p.id ? "Rejecting..." : "Confirm reject"}
                         </Button>
                       </div>
                     </div>

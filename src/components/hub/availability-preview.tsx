@@ -1,11 +1,12 @@
 "use client"
 
+import { EmptyState } from "@/components/ui/empty-state"
 import { Fragment, useCallback, useEffect, useState } from "react"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -162,14 +163,20 @@ export function AvailabilityPreview({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] w-full max-w-7xl sm:max-w-7xl flex-col gap-0 p-0">
-        <DialogHeader className="p-4 pb-0">
-          <DialogTitle>{title ?? `What would be sent — ${propertyName}`}</DialogTitle>
-          <DialogDescription>
+    // A side sheet, not a dialog (DESKTOP_PLAN D10): a nights-by-room-type grid wants all
+    // the width it can get, and a full-height panel gives it that without a 7xl modal.
+    // Full width on a phone (ui/sheet.tsx).
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[min(1200px,95vw)]"
+      >
+        <SheetHeader className="p-4 pb-0 pr-12">
+          <SheetTitle>{title ?? `What would be sent — ${propertyName}`}</SheetTitle>
+          <SheetDescription>
             {description ?? "Pick a date range, computed from live inventory. Nothing is sent by opening this."}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
         <div className="flex flex-wrap items-end gap-3 p-4 pb-0">
           <div className="space-y-1.5">
@@ -197,7 +204,7 @@ export function AvailabilityPreview({
               )}
 
               {plan.roomTypes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No room types would be published.</p>
+                <EmptyState size="inline" title="No room types would be published." />
               ) : (
                 // A date-by-room-type grid, same shape as the tape chart — it doesn't
                 // reduce to card-stacking cleanly (the point is comparing nights across
@@ -293,18 +300,19 @@ export function AvailabilityPreview({
         </div>
 
         {!loading && !failed && plan && (
-          <DialogFooter className="border-t border-border p-4">
+          <SheetFooter className="mt-0 flex-row justify-end border-t border-border max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
             {/* Sending is only offered when the operator has already turned sharing on —
                 the push itself refuses otherwise, so offering it would just produce a
                 confusing failure. */}
+            <SheetClose render={<Button variant="outline" />}>Close</SheetClose>
             {canPush && plan.syncEnabled && plan.roomTypes.length > 0 && (
               <Button onClick={() => void handlePush()} disabled={pushing}>
-                {pushing ? "Sending..." : actionLabel}
+                {pushing ? "Sending…" : actionLabel}
               </Button>
             )}
-          </DialogFooter>
+          </SheetFooter>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }

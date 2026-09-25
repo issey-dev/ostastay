@@ -14,6 +14,9 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { REPORT_BUCKETS, REPORT_BUCKET_LABELS, type ReportBucket } from "@/lib/posting/charge-tree"
 
 export type ChargeSubgroup = {
@@ -41,6 +44,7 @@ export type ChargeGroup = {
 // code and reporting bucket are locked (every revenue report keys off the bucket), but a
 // property can rename them and add its own groups and subgroups alongside.
 export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: string; onChanged?: () => void }) {
+  const confirm = useConfirm()
   const [groups, setGroups] = useState<ChargeGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -52,8 +56,6 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
   const [subDialogOpen, setSubDialogOpen] = useState(false)
   const [editingSub, setEditingSub] = useState<ChargeSubgroup | null>(null)
   const [subForm, setSubForm] = useState({ code: "", name: "", chargeGroupId: "" })
-
-  const [deleting, setDeleting] = useState<{ kind: "group" | "subgroup"; id: string; label: string } | null>(null)
 
   const fetchGroups = useCallback(async () => {
     setLoading(true)
@@ -93,9 +95,10 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
       })
       if (res.ok) {
         setGroupDialogOpen(false)
+        toast.success("Charge group saved")
         afterWrite()
       } else {
-        toast.error((await res.json().catch(() => null))?.error || "Failed to save charge group")
+        toast.error(await apiError(res, "Couldn't save the charge group. Try again."))
       }
     } finally {
       setSubmitting(false)
@@ -124,24 +127,36 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
       })
       if (res.ok) {
         setSubDialogOpen(false)
+        toast.success("Subgroup saved")
         afterWrite()
       } else {
-        toast.error((await res.json().catch(() => null))?.error || "Failed to save subgroup")
+        toast.error(await apiError(res, "Couldn't save the subgroup. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: { kind: "group" | "subgroup"; id: string; label: string }) => {
+    const ok = await confirm({
+      title: deleting.kind === "group" ? "Delete charge group?" : "Delete subgroup?",
+      description: (
+        <>
+          Delete <strong>{deleting.label}</strong>? This is only possible while no charge
+          codes are classified under it.
+        </>
+      ),
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const url = deleting.kind === "group" ? `/api/charge-groups/${deleting.id}` : `/api/charge-subgroups/${deleting.id}`
     const res = await fetch(url, { method: "DELETE" })
     if (res.ok) {
-      setDeleting(null)
+      toast.success(deleting.kind === "group" ? "Charge group deleted" : "Subgroup deleted")
       afterWrite()
     } else {
-      toast.error((await res.json().catch(() => null))?.error || "Failed to delete")
+      toast.error(await apiError(res, "Couldn't delete. Try again."))
     }
   }
 
@@ -153,7 +168,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
     <div className="w-full space-y-4">
       <div className="flex justify-end">
         <Button size="sm" className="shadow-sm" onClick={openGroupCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Add Group
+          <Plus className="w-4 h-4 mr-2" /> Add group
         </Button>
       </div>
 
@@ -192,7 +207,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
                     className="h-9 w-9 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
                     disabled={g.isSystem}
                     aria-label={g.isSystem ? "System groups can't be deleted" : "Delete group"}
-                    onClick={() => setDeleting({ kind: "group", id: g.id, label: `${g.code} — ${g.name}` })}
+                    onClick={() => confirmDelete({ kind: "group", id: g.id, label: `${g.code} — ${g.name}` })}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -219,7 +234,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
                           className="h-8 w-8 text-destructive border-destructive/40 hover:bg-destructive-muted disabled:opacity-30"
                           disabled={s.isSystem}
                           aria-label={s.isSystem ? "System subgroups can't be deleted" : "Delete subgroup"}
-                          onClick={() => setDeleting({ kind: "subgroup", id: s.id, label: `${s.code} — ${s.name}` })}
+                          onClick={() => confirmDelete({ kind: "subgroup", id: s.id, label: `${s.code} — ${s.name}` })}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -237,7 +252,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
           <TableHeader className="bg-muted/80">
             <TableRow>
               <TableHead>Group / Subgroup</TableHead>
-              <TableHead>Reports As</TableHead>
+              <TableHead>Reports as</TableHead>
               <TableHead>Codes</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -270,7 +285,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
                       className="text-destructive hover:bg-destructive-muted disabled:opacity-30"
                       disabled={g.isSystem}
                       title={g.isSystem ? "System groups can't be deleted" : "Delete group"}
-                      onClick={() => setDeleting({ kind: "group", id: g.id, label: `${g.code} — ${g.name}` })}
+                      onClick={() => confirmDelete({ kind: "group", id: g.id, label: `${g.code} — ${g.name}` })}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -295,7 +310,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
                         className="text-destructive hover:bg-destructive-muted disabled:opacity-30"
                         disabled={s.isSystem}
                         title={s.isSystem ? "System subgroups can't be deleted" : "Delete subgroup"}
-                        onClick={() => setDeleting({ kind: "subgroup", id: s.id, label: `${s.code} — ${s.name}` })}
+                        onClick={() => confirmDelete({ kind: "subgroup", id: s.id, label: `${s.code} — ${s.name}` })}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -318,9 +333,9 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
 
       {/* Group create / edit */}
       <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>{editingGroup ? "Edit Charge Group" : "Add Charge Group"}</DialogTitle>
+            <DialogTitle>{editingGroup ? "Edit charge group" : "Add charge group"}</DialogTitle>
             <DialogDescription>
               A group decides which reporting bucket everything beneath it rolls up into.
               System groups keep their code and bucket — rename them freely.
@@ -338,7 +353,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
                 />
               </div>
               <div className="space-y-2">
-                <Label>Reports As *</Label>
+                <Label>Reports as *</Label>
                 <Select
                   value={groupForm.reportBucket}
                   onValueChange={(v) => setGroupForm((p) => ({ ...p, reportBucket: (v ?? "OTHER") as ReportBucket }))}
@@ -373,7 +388,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
             </p>
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => setGroupDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={submitting}>Save</Button>
+              <SubmitButton pending={submitting}>{editingGroup ? "Save" : "Create"}</SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -381,9 +396,9 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
 
       {/* Subgroup create / edit */}
       <Dialog open={subDialogOpen} onOpenChange={setSubDialogOpen}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
-            <DialogTitle>{editingSub ? "Edit Subgroup" : "Add Subgroup"}</DialogTitle>
+            <DialogTitle>{editingSub ? "Edit subgroup" : "Add subgroup"}</DialogTitle>
             <DialogDescription>
               A subgroup is a reporting split inside its group — it carries no bucket of
               its own, so adding one never changes how revenue rolls up.
@@ -398,7 +413,7 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
                 disabled={!!editingSub?.isSystem}
               >
                 <SelectTrigger>
-                  <SelectValue>{groups.find((g) => g.id === subForm.chargeGroupId)?.name ?? "Select Group"}</SelectValue>
+                  <SelectValue>{groups.find((g) => g.id === subForm.chargeGroupId)?.name ?? "Select group"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
@@ -422,27 +437,12 @@ export function ChargeGroupsManager({ propertyId, onChanged }: { propertyId: str
             </div>
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => setSubDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={submitting}>Save</Button>
+              <SubmitButton pending={submitting}>{editingSub ? "Save" : "Create"}</SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete {deleting?.kind === "group" ? "Charge Group" : "Subgroup"}</DialogTitle>
-            <DialogDescription>
-              Delete <strong>{deleting?.label}</strong>? This is only possible while no charge
-              codes are classified under it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

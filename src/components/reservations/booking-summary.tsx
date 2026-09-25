@@ -52,7 +52,7 @@ type BookingSummaryProps = {
 export function BookingSummary({ checkInDate, checkOutDate, adults, children, infants, quote, quoteLoading, roomTypes, ratePlans }: BookingSummaryProps) {
   return (
     <Card>
-      <CardHeader><CardTitle className="text-lg">Booking Summary</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-lg">Booking summary</CardTitle></CardHeader>
       <CardContent className="flex flex-col gap-4">
         {checkInDate && checkOutDate && (
           <div className="text-sm">
@@ -149,7 +149,7 @@ export function BookingSummary({ checkInDate, checkOutDate, adults, children, in
             </div>
 
             <div className="flex justify-between items-baseline border-t pt-3">
-              <span className="font-semibold">Grand Total</span>
+              <span className="font-semibold">Grand total</span>
               <span className="font-mono font-bold text-lg">{money(quote.totals.grandTotal)}</span>
             </div>
 

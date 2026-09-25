@@ -17,6 +17,11 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { apiError } from "@/lib/api-error"
+import { toast } from "@/lib/toast"
 
 type RoomExceptionRow = { id: string; date: string; startTime: string | null; endTime: string | null; exceptionType: string; reason: string | null }
 
@@ -54,12 +59,11 @@ const emptyValues: RoomFormValues = {
 const EXCEPTION_TYPES = ["MAINTENANCE", "CLEANING", "RENOVATION", "PRIVATE_EVENT", "UNAVAILABLE"] as const
 
 export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
-
+  const confirm = useConfirm()
   const [rooms, setRooms] = useState<SpaRoomDto[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SpaRoomDto | null>(null)
-  const [deleting, setDeleting] = useState<SpaRoomDto | null>(null)
   const [exceptionsFor, setExceptionsFor] = useState<SpaRoomDto | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -116,26 +120,31 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
       })
       if (res.ok) {
         setIsDialogOpen(false)
+        toast.success("Room saved")
         fetchRooms()
       } else {
-        const body = await res.json().catch(() => null)
-        setServerError(body?.error || "Failed to save room")
+        setServerError(await apiError(res, "Couldn't save the room. Try again."))
       }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const confirmDelete = async () => {
-    if (!deleting) return
+  const confirmDelete = async (deleting: SpaRoomDto) => {
+    const ok = await confirm({
+      title: "Delete room?",
+      description: `Delete "${deleting.name}"? If it has any appointments booked this will be blocked — mark inactive instead.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     const res = await fetch(`/api/spa/rooms/${deleting.id}`, { method: "DELETE" })
     if (!res.ok) {
-      const body = await res.json().catch(() => null)
-      setServerError(body?.error || "Failed to delete room")
+      toast.error(await apiError(res, "Couldn't delete the room. Try again."))
     } else {
       setServerError(null)
+      toast.success("Room deleted")
     }
-    setDeleting(null)
     fetchRooms()
   }
 
@@ -143,7 +152,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button onClick={openCreate} className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" /> New Room
+          <Plus className="mr-2 h-4 w-4" /> Add room
         </Button>
       </div>
 
@@ -166,11 +175,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
                 title={r.name}
                 subtitle={r.code ? <span className="font-mono">{r.code}</span> : undefined}
                 badge={
-                  r.isActive && r.bookable ? (
-                    <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">{r.isActive ? "Not bookable" : "Inactive"}</Badge>
-                  )
+                  <StatusBadge tone={r.isActive && r.bookable ? "success" : "neutral"} label={r.isActive && r.bookable ? "Active" : r.isActive ? "Not bookable" : "Inactive"} />
                 }
                 meta={[
                   { label: "Capacity", value: r.capacity },
@@ -185,7 +190,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
                     <Button variant="outline" size="sm" className="h-9 flex-1" onClick={() => openEdit(r)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => setDeleting(r)}>
+                    <Button variant="outline" size="sm" className="h-9 flex-1 text-destructive hover:text-destructive" onClick={() => confirmDelete(r)}>
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
                     </Button>
                   </>
@@ -214,11 +219,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
                     <TableCell className="text-sm">{r.capacity}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.roomType || "—"}</TableCell>
                     <TableCell>
-                      {r.isActive && r.bookable ? (
-                        <Badge variant="outline" className="bg-success-muted text-success border-success/30">Active</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">{r.isActive ? "Not bookable" : "Inactive"}</Badge>
-                      )}
+                      <StatusBadge tone={r.isActive && r.bookable ? "success" : "neutral"} label={r.isActive && r.bookable ? "Active" : r.isActive ? "Not bookable" : "Inactive"} />
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => setExceptionsFor(r)}>
@@ -227,7 +228,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
                       <Button variant="outline" size="icon" aria-label="Edit spa room" onClick={() => openEdit(r)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" aria-label="Delete spa room" className="text-destructive hover:text-destructive" onClick={() => setDeleting(r)}>
+                      <Button variant="outline" size="icon" aria-label="Delete spa room" className="text-destructive hover:text-destructive" onClick={() => confirmDelete(r)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -241,11 +242,11 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
 
       {/* Create / Edit dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent size="sm">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>{editing ? "Edit Room" : "New Room"}</DialogTitle>
+                <DialogTitle>{editing ? "Edit room" : "Add room"}</DialogTitle>
                 <DialogDescription>A treatment room — capacity 2+ enables couple treatments.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -283,7 +284,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
                   )} />
                   <FormField control={form.control} name="roomType" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Room Type</FormLabel>
+                      <FormLabel>Room type</FormLabel>
                       <FormControl><Input placeholder="e.g. MASSAGE, SALON" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -307,26 +308,10 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : "Save Room"}</Button>
+                <SubmitButton pending={submitting}>{editing ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirmation */}
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Room</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{deleting?.name}&quot;? If it has any appointments booked this will be blocked — mark inactive instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -343,6 +328,7 @@ export function SpaRoomsManager({ propertyId }: { propertyId: string }) {
 }
 
 function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; onClose: () => void; onChanged: () => void }) {
+  const confirmRemove = useConfirm()
   const [exceptions, setExceptions] = useState<RoomExceptionRow[]>(room.exceptions)
   const [date, setDate] = useState<string | null>(null)
   const [exceptionType, setExceptionType] = useState<string>("MAINTENANCE")
@@ -350,7 +336,8 @@ function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; 
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const add = async () => {
+  const add = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!date) {
       setError("Date is required")
       return
@@ -370,8 +357,7 @@ function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; 
         setReason("")
         onChanged()
       } else {
-        const body = await res.json().catch(() => null)
-        setError(body?.error || "Failed to add closure")
+        setError(await apiError(res, "Couldn't add the closure. Try again."))
       }
     } finally {
       setSaving(false)
@@ -379,6 +365,7 @@ function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; 
   }
 
   const remove = async (id: string) => {
+    if (!(await confirmRemove({ title: "Remove this closure?", confirmLabel: "Remove", destructive: true }))) return
     const res = await fetch(`/api/spa/rooms/${room.id}/exceptions/${id}`, { method: "DELETE" })
     if (res.ok) {
       setExceptions((prev) => prev.filter((e) => e.id !== id))
@@ -388,13 +375,13 @@ function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Closures — {room.name}</DialogTitle>
           <DialogDescription>Maintenance, deep cleaning, renovation, or a private-event hold.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 gap-2 items-end py-2 md:grid-cols-[1fr_1fr]">
+        <form onSubmit={add} className="grid grid-cols-1 gap-2 items-end py-2 md:grid-cols-[1fr_1fr]">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Date *</p>
             <DatePicker value={date} onChange={setDate} placeholder="Select date" />
@@ -406,15 +393,15 @@ function RoomExceptionsDialog({ room, onClose, onChanged }: { room: SpaRoomDto; 
             </SelectContent>
           </Select>
           <Input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="md:col-span-2" />
-          <Button type="button" onClick={add} disabled={saving} className="md:col-span-2">
-            <Plus className="h-4 w-4 mr-1.5" /> Add Closure
-          </Button>
-        </div>
+          <SubmitButton pending={saving} pendingLabel="Adding…" className="md:col-span-2">
+            <Plus className="h-4 w-4 mr-1.5" /> Add closure
+          </SubmitButton>
+        </form>
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="max-h-[35vh] overflow-y-auto space-y-2">
           {exceptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No closures recorded.</p>
+            <EmptyState size="inline" title="No closures recorded." />
           ) : (
             exceptions.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-sm">

@@ -2,6 +2,7 @@
 
 import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import Link from "next/link"
+import { EmptyState } from "@/components/ui/empty-state"
 
 // A compact tape-chart for a group block: one row per pickup, a bar spanning the
 // guest's stay across the block's date range. Read-only, click a bar to open the
@@ -48,7 +49,7 @@ export function GroupScheduleTimeline({
   const roomLabel = (p: Pickup) => p.assignments?.[0]?.room?.roomNumber || p.assignments?.[0]?.roomType?.code || "TBA"
 
   if (pickups.length === 0) {
-    return <p className="text-sm text-muted-foreground px-6 py-8 text-center">No pickups yet — the schedule fills in as rooms are picked up.</p>
+    return <EmptyState size="inline" className="justify-center px-6 py-8" title="No pickups yet — the schedule fills in as rooms are picked up" />
   }
 
   return (

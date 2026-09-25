@@ -14,6 +14,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { RoomFeaturePicker, type RoomFeature } from "@/components/inventory/room-feature-picker"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/lib/toast"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { SubmitButton } from "@/components/ui/submit-button"
 import {
   emptyRoomTypeForm,
   readApiError,
@@ -68,6 +70,7 @@ export function RoomTypeManager({
   addSignal?: number
   hideAddButton?: boolean
 }) {
+  const confirm = useConfirm()
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -75,9 +78,6 @@ export function RoomTypeManager({
   const [editingId, setEditingId] = useState<string | null>(null)
   const isEditMode = editingId !== null
   const [serverError, setServerError] = useState<string | null>(null)
-
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const form = useForm<RoomTypeFormValues>({
     resolver: zodResolver(roomTypeFormSchema),
@@ -138,8 +138,7 @@ export function RoomTypeManager({
     }
   }
 
-  const handleDelete = async () => {
-    if (!deletingId) return
+  const handleDelete = async (deletingId: string) => {
     setIsSubmitting(true)
     try {
       const response = await fetch(`/api/room-types/${deletingId}`, {
@@ -154,8 +153,6 @@ export function RoomTypeManager({
     } catch {
       toast.error("Could not reach the server — please try again.")
     } finally {
-      setIsDeleteDialogOpen(false)
-      setDeletingId(null)
       setIsSubmitting(false)
     }
   }
@@ -183,9 +180,15 @@ export function RoomTypeManager({
     setIsDialogOpen(true)
   }
 
-  const openDelete = (id: string) => {
-    setDeletingId(id)
-    setIsDeleteDialogOpen(true)
+  const openDelete = async (id: string) => {
+    const deletingRoomType = roomTypes.find((rt) => rt.id === id)
+    const ok = await confirm({
+      title: "Delete room type?",
+      description: `Delete ${deletingRoomType ? `"${deletingRoomType.name}"` : "this room type"} and all of its rooms? This cannot be undone. If it or any of its rooms has reservations, group blocks or maintenance history, the delete is refused — make it inactive instead.`,
+      confirmLabel: "Delete permanently",
+      destructive: true,
+    })
+    if (ok) await handleDelete(id)
   }
 
   // Open the Add dialog when FacilitiesManager's shared Add button is clicked. We compare
@@ -205,7 +208,6 @@ export function RoomTypeManager({
 
   // First-column (Code) sorting, asc<->desc.
   const { sorted: sortedRoomTypes, sort } = useTableSort(roomTypes, { code: (rt) => rt.code }, "code")
-  const deletingRoomType = roomTypes.find((rt) => rt.id === deletingId)
 
   return (
     <div className="mt-6">
@@ -213,7 +215,7 @@ export function RoomTypeManager({
         <ControlsSectionHeader
           action={
             <Button onClick={() => { resetForm(); setIsDialogOpen(true) }} className="shadow-sm">
-              <Plus className="mr-2 h-4 w-4" /> Add Room Type
+              <Plus className="mr-2 h-4 w-4" /> Add room type
             </Button>
           }
         />
@@ -223,11 +225,11 @@ export function RoomTypeManager({
         setIsDialogOpen(open)
         if (!open) resetForm()
       }}>
-          <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
+          <DialogContent size="md">
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
               <DialogHeader>
-                <DialogTitle>{isEditMode ? "Edit Room Type" : "Create Room Type"}</DialogTitle>
+                <DialogTitle>{isEditMode ? "Edit room type" : "Add room type"}</DialogTitle>
                 <DialogDescription>
                   {isEditMode ? "Update the details for this room category." : "Define a new category of rooms for this property."}
                 </DialogDescription>
@@ -235,7 +237,7 @@ export function RoomTypeManager({
               <div className="grid gap-4 py-4">
                 <FormField control={form.control} name="name" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type Name *</FormLabel>
+                    <FormLabel>Type name *</FormLabel>
                     <FormControl><Input placeholder="e.g. Deluxe Ocean View" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -250,7 +252,7 @@ export function RoomTypeManager({
                   )} />
                   <FormField control={form.control} name="maxOccupancy" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Max Occupancy *</FormLabel>
+                      <FormLabel>Max occupancy *</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -271,9 +273,9 @@ export function RoomTypeManager({
                 </div>
                 <FormField control={form.control} name="baseOccupancy" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Base Occupancy (Adults) *</FormLabel>
+                    <FormLabel>Base occupancy (adults) *</FormLabel>
                     <FormControl><Input type="number" min="1" {...field} /></FormControl>
-                    <FormDescription>Adults included before Extra Adult Price (set on Revenue &gt; Rate Seasons) applies. Cannot exceed Max Occupancy.</FormDescription>
+                    <FormDescription>Adults included before the extra adult price (set on Revenue &gt; Rate seasons) applies. Cannot exceed max occupancy.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -282,7 +284,7 @@ export function RoomTypeManager({
                 </p>
                 <FormField control={form.control} name="description" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormLabel>Description (optional)</FormLabel>
                     <FormControl><Input placeholder="Brief description of the room amenities" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -303,7 +305,7 @@ export function RoomTypeManager({
                 <FormField control={form.control} name="isPseudo" render={({ field }) => (
                   <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
                     <div>
-                      <FormLabel>Pseudo Room Type</FormLabel>
+                      <FormLabel>Pseudo room type</FormLabel>
                       <FormDescription>Dummy category with no physical room attached (e.g. day-use, overbooking buffer).</FormDescription>
                     </div>
                     <FormControl><Switch checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} /></FormControl>
@@ -313,7 +315,7 @@ export function RoomTypeManager({
                 <FormField control={form.control} name="housekeepingEnabled" render={({ field }) => (
                   <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
                     <div>
-                      <FormLabel>Housekeeping Enabled</FormLabel>
+                      <FormLabel>Housekeeping enabled</FormLabel>
                       <FormDescription>Off hides Housekeeping/Maintenance options for rooms of this type.</FormDescription>
                     </div>
                     <FormControl><Switch checked={field.value} onCheckedChange={(v) => field.onChange(!!v)} /></FormControl>
@@ -321,7 +323,7 @@ export function RoomTypeManager({
                 )} />
 
                 <div className="border-t border-border pt-4 mt-2">
-                  <h4 className="text-sm font-semibold text-foreground mb-3">Room Features</h4>
+                  <h4 className="text-sm font-semibold text-foreground mb-3">Room features</h4>
                   <FormField control={form.control} name="features" render={({ field }) => (
                     <RoomFeaturePicker
                       propertyId={propertyId}
@@ -337,32 +339,12 @@ export function RoomTypeManager({
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Saving..." : "Save Room Type"}
-                </Button>
+                <SubmitButton pending={isSubmitting}>{isEditMode ? "Save" : "Create"}</SubmitButton>
               </DialogFooter>
             </form>
             </Form>
           </DialogContent>
         </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Room Type</DialogTitle>
-            <DialogDescription>
-              Delete {deletingRoomType ? <>&quot;{deletingRoomType.name}&quot;</> : "this room type"} and all of its rooms? This cannot be undone. If it or any of its rooms has reservations, group blocks or maintenance history, the delete is refused — make it inactive instead.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
-              {isSubmitting ? "Deleting..." : "Delete Permanently"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ControlsSectionBody>
         {loading ? (
@@ -393,7 +375,7 @@ export function RoomTypeManager({
                           <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
                         )}
                         {!rt.housekeepingEnabled && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No housekeeping</span>
                         )}
                       </>
                     ) : undefined
@@ -420,7 +402,7 @@ export function RoomTypeManager({
                   <TableRow className="border-border">
                     <SortableTableHead columnKey="code" sort={sort} className="px-6 py-4">Code</SortableTableHead>
                     <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Name</TableHead>
-                    <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max Occupancy</TableHead>
+                    <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Max occupancy</TableHead>
                     <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4">Flags</TableHead>
                     <TableHead className="text-muted-foreground uppercase tracking-wider text-xs font-semibold px-6 py-4 text-right">Actions</TableHead>
                   </TableRow>
@@ -440,7 +422,7 @@ export function RoomTypeManager({
                             <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">Pseudo</span>
                           )}
                           {!rt.housekeepingEnabled && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No Housekeeping</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium bg-muted text-muted-foreground">No housekeeping</span>
                           )}
                           {rt.isActive && !rt.isPseudo && rt.housekeepingEnabled && "—"}
                         </div>

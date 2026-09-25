@@ -1,5 +1,7 @@
 "use client"
 
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { apiError } from "@/lib/api-error"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Save, RefreshCw, Receipt, FileText, FileStack, Mail, ClipboardList, Landmark, Info, Send } from "@/components/icons"
+import { Save, RefreshCw, Receipt, FileText, Mail, ClipboardList, Landmark, Info, Send } from "@/components/icons"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { resolveStationeryBrand, type PropertyBrandInput } from "@/lib/stationery-brand"
@@ -142,10 +144,9 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
         body: JSON.stringify(formData),
       })
       if (res.ok) {
-        toast.success("Stationery saved for this property.")
+        toast.success("Stationery saved")
       } else {
-        const body = await res.json().catch(() => null)
-        toast.error(body?.error || "Failed to save stationery.")
+        toast.error(await apiError(res, "Couldn't save the stationery. Try again."))
       }
     } catch (e) {
       console.error(e)
@@ -156,7 +157,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading stationery settings...</div>
+    return <InlineLoading className="py-12" label="Loading stationery settings" />
   }
 
   // Branding for the preview: the current property (name/logo/colour/font/contact/address),
@@ -189,7 +190,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
             <TabsTrigger value="invoices"><FileText className="mr-1.5 h-4 w-4" /> Invoices</TabsTrigger>
             <TabsTrigger value="receipts"><Receipt className="mr-1.5 h-4 w-4" /> Receipts</TabsTrigger>
             <TabsTrigger value="letter"><Mail className="mr-1.5 h-4 w-4" /> Letter</TabsTrigger>
-            <TabsTrigger value="regcard"><ClipboardList className="mr-1.5 h-4 w-4" /> Reg. Card</TabsTrigger>
+            <TabsTrigger value="regcard"><ClipboardList className="mr-1.5 h-4 w-4" /> Reg. card</TabsTrigger>
             <TabsTrigger value="statement"><Landmark className="mr-1.5 h-4 w-4" /> Statement</TabsTrigger>
           </TabsList>
 
@@ -200,7 +201,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
               invoice”, Tax shows “Tax invoice”. Everything below applies to both.
             </p>
             <div className="space-y-2">
-              <Label>Header Text <span className="font-normal text-muted-foreground">(registered business info)</span></Label>
+              <Label>Header text <span className="font-normal text-muted-foreground">(registered business info)</span></Label>
               <Textarea
                 rows={2}
                 placeholder="Veyo Beach House Pvt Ltd. Registered in Maldives. Registration #98765"
@@ -210,7 +211,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
             </div>
 
             <div className="space-y-2 rounded-lg border p-4">
-              <Label>Default Folio Style</Label>
+              <Label>Default folio style</Label>
               <Select
                 value={formData.defaultFolioStyle}
                 onValueChange={(v) => set("defaultFolioStyle", (isFolioStyle(v) ? v : "detailed"))}
@@ -235,14 +236,14 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
             </div>
 
             <div className="space-y-3 rounded-lg border p-4">
-              <Label className="flex items-center gap-1"><Receipt className="h-4 w-4" /> Payment Information</Label>
+              <Label className="flex items-center gap-1"><Receipt className="h-4 w-4" /> Payment information</Label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Account Name</Label>
+                  <Label className="text-xs text-muted-foreground">Account name</Label>
                   <Input value={formData.invoicePaymentAccountName} onChange={(e) => set("invoicePaymentAccountName", e.target.value)} placeholder="Veyo Beach House Pvt Ltd" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Account Number</Label>
+                  <Label className="text-xs text-muted-foreground">Account number</Label>
                   <Input value={formData.invoicePaymentAccountNumber} onChange={(e) => set("invoicePaymentAccountNumber", e.target.value)} placeholder="0123456789" />
                 </div>
                 <div className="space-y-2">
@@ -250,19 +251,19 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
                   <Input value={formData.invoicePaymentIban} onChange={(e) => set("invoicePaymentIban", e.target.value)} placeholder="MV.. .... ...." />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Bank Info</Label>
+                  <Label className="text-xs text-muted-foreground">Bank info</Label>
                   <Input value={formData.invoicePaymentBankInfo} onChange={(e) => set("invoicePaymentBankInfo", e.target.value)} placeholder="Bank of Maldives, Swift: MALBMVMV" />
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Terms &amp; Conditions</Label>
+              <Label>Terms &amp; conditions</Label>
               <Textarea rows={3} value={formData.invoicePaymentTerms} onChange={(e) => set("invoicePaymentTerms", e.target.value)} placeholder="Payment due within 30 days of invoice date." />
             </div>
 
             <div className="space-y-2">
-              <Label>Footer Text / Greeting</Label>
+              <Label>Footer text / greeting</Label>
               <Textarea rows={2} value={formData.invoiceFooterText} onChange={(e) => set("invoiceFooterText", e.target.value)} placeholder="Thank you for staying with us! We look forward to welcoming you back." />
             </div>
           </TabsContent>
@@ -273,11 +274,11 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
               Used by Payment Receipts and Currency Exchange Receipts — only the header label differs between them.
             </p>
             <div className="space-y-2">
-              <Label>Footer Text / Greeting</Label>
+              <Label>Footer text / greeting</Label>
               <Textarea rows={2} value={formData.receiptFooterText} onChange={(e) => set("receiptFooterText", e.target.value)} placeholder="Thank you for staying with us!" />
             </div>
             <div className="space-y-2">
-              <Label>Terms &amp; Conditions</Label>
+              <Label>Terms &amp; conditions</Label>
               <Textarea rows={3} value={formData.receiptTerms} onChange={(e) => set("receiptTerms", e.target.value)} placeholder="This receipt confirms the payment recorded above." />
             </div>
           </TabsContent>
@@ -288,7 +289,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
               Shown as the policy paragraph on the guest Confirmation Letter, sent once a stay is confirmed.
             </p>
             <div className="space-y-2">
-              <Label>Policy Text</Label>
+              <Label>Policy text</Label>
               <Textarea
                 rows={6}
                 value={formData.confirmationLetterMessage}
@@ -305,17 +306,17 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
             </p>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <Label>Registration Card step</Label>
+                <Label>Registration card step</Label>
                 <p className="text-xs text-muted-foreground">Prompt to print &amp; collect a signed card during check-in.</p>
               </div>
               <Switch checked={formData.registrationCardEnabled} onCheckedChange={(v) => set("registrationCardEnabled", !!v)} />
             </div>
             <div className="space-y-2">
-              <Label>Welcome / Intro Message</Label>
+              <Label>Welcome / intro message</Label>
               <Input value={formData.registrationCardMessage} onChange={(e) => set("registrationCardMessage", e.target.value)} placeholder="Welcome — please review, complete, and sign below." />
             </div>
             <div className="space-y-2">
-              <Label>Terms &amp; Conditions</Label>
+              <Label>Terms &amp; conditions</Label>
               <Textarea rows={8} value={formData.registrationCardTerms} onChange={(e) => set("registrationCardTerms", e.target.value)} placeholder="Printed above the signature line. Leave blank to use the default wording." />
             </div>
 
@@ -334,7 +335,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Link Validity (hours)</Label>
+                  <Label className="text-xs text-muted-foreground">Link validity (hours)</Label>
                   <Input
                     type="number"
                     min={1}
@@ -344,7 +345,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Guest Email Message</Label>
+                <Label className="text-xs text-muted-foreground">Guest email message</Label>
                 <Textarea
                   rows={2}
                   value={formData.eRegistrationMessage}
@@ -362,11 +363,11 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
               <p>Set the footer and terms printed on account statements. The preview shows the current statement layout.</p>
             </div>
             <div className="space-y-2">
-              <Label>Footer Text / Greeting</Label>
+              <Label>Footer text / greeting</Label>
               <Textarea rows={2} value={formData.statementFooterText} onChange={(e) => set("statementFooterText", e.target.value)} placeholder="Thank you for your business." />
             </div>
             <div className="space-y-2">
-              <Label>Terms &amp; Conditions</Label>
+              <Label>Terms &amp; conditions</Label>
               <Textarea rows={3} value={formData.statementTerms} onChange={(e) => set("statementTerms", e.target.value)} placeholder="Balances are due per the agreed credit terms." />
             </div>
           </TabsContent>
@@ -378,7 +379,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
           </Button>
           <Button type="submit" disabled={saving}>
             <Save className="mr-2 h-4 w-4" />
-            {saving ? "Saving..." : "Save Stationery Settings"}
+            {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </form>
@@ -386,7 +387,7 @@ export function StationariesManager({ propertyId }: { propertyId: string }) {
       {/* Live Preview — follows the active tab; no separate document selector. */}
       <div className="sticky top-6 space-y-2 lg:col-span-2">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live preview</Label>
           {activeTab === "invoices" && (
             <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
               {(["proforma", "tax"] as const).map((v) => (

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { requireSession, hasPermission } from "@/lib/scope"
-import { PROPERTY_NAV, propertyHref, visibleKeys } from "@/components/hub/hub-nav"
+import { PROPERTY_NAV, isControlsSection, navItem, propertyHref, visibleKeys } from "@/components/hub/hub-nav"
+import { HubPageHeader } from "@/components/hub/hub-page-header"
 import { loadHubAddons } from "@/lib/hub-properties"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChevronRight } from "@/components/icons"
@@ -15,17 +16,13 @@ export default async function HubPropertyHomePage({
   const { slug, propertyId } = await params
   const ctx = await requireSession()
   const keys = visibleKeys(PROPERTY_NAV, (m) => hasPermission(ctx, m, "view"), await loadHubAddons(ctx.enterpriseId))
-  // Controls' own sections: not sub-pages, and not the Channel Manager (its own sidebar entry).
-  const sections = PROPERTY_NAV.filter((item) => item.path !== "" && !item.child && !item.ownEntry && keys.includes(item.key))
+  // Controls' own sections — the same list the sidebar shows under "Controls".
+  const sections = PROPERTY_NAV.filter((item) => isControlsSection(item) && keys.includes(item.key))
+  const home = navItem(PROPERTY_NAV, "home")
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Controls</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everything on these pages applies to this property only.
-        </p>
-      </div>
+      <HubPageHeader title={home.title} icon={home.icon} scope="property" />
 
       {sections.length === 0 ? (
         <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">

@@ -1,5 +1,6 @@
 "use client"
 
+import { InlineLoading } from "@/components/ui/inline-loading"
 import { useState, useEffect, useMemo } from "react"
 import { AlertTriangle, CalendarDays, Save } from "@/components/icons"
 import { differenceInCalendarDays, format } from "date-fns"
@@ -143,7 +144,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         setExtraChildPrice("")
         setSelectedRoomTypes([])
       } else {
-        toast.error(data.error || "Failed to push prices")
+        toast.error(data.error || "Couldn't push the prices. Try again.")
       }
     } catch (e) {
       console.error(e)
@@ -154,7 +155,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-muted-foreground">Loading Configuration Tools...</div>
+    return <InlineLoading className="py-12" label="Loading" />
   }
 
   return (
@@ -173,7 +174,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         <CardHeader className="bg-muted/50 border-b border-border pb-4">
           <div className="flex items-center space-x-2">
             <CalendarDays className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">Define a Rate Season</CardTitle>
+            <CardTitle className="text-lg">Define a rate season</CardTitle>
           </div>
           <CardDescription>
             Push one nightly price across a date range and the room types you choose. Prices
@@ -184,11 +185,11 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
           <div className="space-y-8">
 
             <section className="space-y-4">
-              <h3 className="text-sm font-medium text-foreground border-b pb-2">1. Select Target Rate Plan</h3>
+              <h3 className="text-sm font-medium text-foreground border-b pb-2">1. Select target rate plan</h3>
               <div className="max-w-md">
                 <Select required value={ratePlanId} onValueChange={(val) => setRatePlanId(val ?? "")}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a Rate Plan...">
+                    <SelectValue placeholder="Choose a rate plan...">
                       {selectedPlan ? `${selectedPlan.name}${selectedPlan.isNegotiated ? " (Negotiated)" : ""}` : undefined}
                     </SelectValue>
                   </SelectTrigger>
@@ -200,7 +201,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-2">Derived rate plans aren&apos;t listed — their price is computed from their parent plan, not pushed directly. Edit the adjustment on the Rate Plans tab instead.</p>
+                <p className="text-xs text-muted-foreground mt-2">Derived rate plans aren&apos;t listed — their price is computed from their parent plan, not pushed directly. Edit the adjustment on the Rate plans tab instead.</p>
               </div>
             </section>
 
@@ -225,17 +226,17 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Daily Price *</Label>
+                  <Label>Daily price *</Label>
                   <Input type="number" step="0.01" min="0" required placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Per night, per room, at each room type&apos;s Base Occupancy.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Extra Adult Price <span className="text-muted-foreground font-normal">Optional</span></Label>
+                  <Label>Extra adult price <span className="text-muted-foreground font-normal">Optional</span></Label>
                   <Input type="number" step="0.01" min="0" placeholder="0.00" value={extraAdultPrice} onChange={e => setExtraAdultPrice(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Per night, per adult beyond each room type&apos;s Base Occupancy.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Extra Child Price <span className="text-muted-foreground font-normal">Optional</span></Label>
+                  <Label>Extra child price <span className="text-muted-foreground font-normal">Optional</span></Label>
                   <Input type="number" step="0.01" min="0" placeholder="0.00" value={extraChildPrice} onChange={e => setExtraChildPrice(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Per night, per child.</p>
                 </div>
@@ -244,7 +245,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
 
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-3 border-b pb-2">
-                <h3 className="text-sm font-medium text-foreground">3. Apply to Room Types</h3>
+                <h3 className="text-sm font-medium text-foreground">3. Apply to room types</h3>
                 {roomTypes.length > 0 && (
                   <span className="text-xs text-muted-foreground">
                     {selectedRoomTypes.length} of {roomTypes.length} selected
@@ -263,7 +264,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                       indeterminate={someSelected}
                       onCheckedChange={() => handleSelectAllRooms(!allSelected)}
                     />
-                    Select All Room Types
+                    Select all room types
                   </label>
                   {/* auto-fill, not sm:/lg: column counts — those track the viewport, and this
                       grid sits in a column the review panel has already narrowed, which is how
@@ -346,7 +347,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
             disabled={submitting || !!blocker}
           >
             <Save className="w-4 h-4 mr-2" />
-            {submitting ? "Pushing Prices..." : "Push Prices to Calendar"}
+            {submitting ? "Pushing prices…" : "Push prices to calendar"}
           </Button>
           {blocker && <p className="text-center text-xs text-muted-foreground">{blocker}</p>}
         </CardContent>

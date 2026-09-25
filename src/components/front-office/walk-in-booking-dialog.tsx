@@ -6,7 +6,7 @@ import type { DateRange } from "react-day-picker"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { Loader2, UserPlus } from "@/components/icons"
+import { UserPlus } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 type WalkInBookingDialogProps = {
   propertyId: string
@@ -169,7 +170,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         })
         const profileData = await profileRes.json()
         if (!profileRes.ok) {
-          toast.error(profileData.error || "Failed to create the guest profile.")
+          toast.error(profileData.error || "Couldn't create the guest profile. Try again.")
           return
         }
         primaryGuestId = profileData.upid
@@ -207,14 +208,14 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         resData = await resRes.json()
       }
       if (!resRes.ok) {
-        toast.error(resData.error || "Failed to create the reservation.")
+        toast.error(resData.error || "Couldn't create the booking. Try again.")
         return
       }
 
       if (mode === "book") {
         onClose()
         onDone({
-          title: "Booking Created",
+          title: "Booking created",
           message:
             `${resData.confirmationNo} booked.` +
             (resData.capacityWarning ? ` ${resData.capacityWarning}` : ""),
@@ -229,7 +230,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
       onClose()
       if (checkIn.ok) {
         onDone({
-          title: "Walk-in Checked In",
+          title: "Walk-in checked in",
           message:
             `${resData.confirmationNo} created and checked in.` +
             (checkInData.roomWarning ? ` Warning: ${checkInData.roomWarning}` : "") +
@@ -237,21 +238,29 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         })
       } else {
         onDone({
-          title: "Booked, Check-in Failed",
+          title: "Booked, check-in failed",
           message: `${resData.confirmationNo} was created but check-in failed: ${checkInData.error || "unknown error"}. Check them in from the arrivals list.`,
           isError: true,
         })
       }
     } catch {
-      toast.error("An unexpected error occurred.")
+      toast.error("Couldn't create the booking. Try again.")
     }
   }
 
+  // Esc, the overlay, X and Cancel all come through here: a half-filled walk-in is not
+  // thrown away without asking (DESKTOP_PLAN D11).
+  const requestClose = async () => {
+    if (form.formState.isSubmitting) return
+    if (form.formState.isDirty && !(await confirm({ title: "Discard changes?", confirmLabel: "Discard", destructive: true }))) return
+    onClose()
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && requestClose()}>
+      <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>{mode === "book" ? "Quick Booking" : "Walk-in Booking"}</DialogTitle>
+          <DialogTitle>{mode === "book" ? "Quick booking" : "Walk-in booking"}</DialogTitle>
           <DialogDescription>
             {mode === "book"
               ? "Create a booking for the selected room and dates."
@@ -318,7 +327,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
 
               <FormField control={form.control} name="dates" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Stay Dates</FormLabel>
+                  <FormLabel>Stay dates</FormLabel>
                   <FormControl>
                     <DateRangePicker value={field.value} onChange={field.onChange} />
                   </FormControl>
@@ -329,7 +338,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="roomTypeId" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Room Type</FormLabel>
+                    <FormLabel>Room type</FormLabel>
                     <FormControl>
                       <SearchableSelect
                         value={field.value}
@@ -363,7 +372,7 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
               <div className="grid grid-cols-3 gap-3">
                 <FormField control={form.control} name="ratePlanId" render={({ field }) => (
                   <FormItem className="col-span-1">
-                    <FormLabel>Rate Plan</FormLabel>
+                    <FormLabel>Rate plan</FormLabel>
                     <FormControl>
                       <SearchableSelect
                         value={field.value}
@@ -397,11 +406,10 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {mode === "book" ? "Create Booking" : "Book & Check In"}
-              </Button>
+              <Button type="button" variant="outline" onClick={requestClose} disabled={form.formState.isSubmitting}>Cancel</Button>
+              <SubmitButton pending={form.formState.isSubmitting} pendingLabel={mode === "book" ? "Creating…" : "Booking…"}>
+                {mode === "book" ? "Create booking" : "Book & check in"}
+              </SubmitButton>
             </DialogFooter>
           </form>
         </Form>

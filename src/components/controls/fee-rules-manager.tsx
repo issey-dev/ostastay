@@ -1,5 +1,6 @@
 "use client"
 
+import { apiError } from "@/lib/api-error"
 import { useEffect, useRef, useState } from "react"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Button } from "@/components/ui/button"
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Save, Plus, Trash2 } from "@/components/icons"
 import { toast } from "@/lib/toast"
 import { useConfirm } from "@/components/providers/confirm-provider"
@@ -91,10 +93,10 @@ export function FeeRulesManager({ propertyId }: { propertyId: string }) {
         setSavedKey(rule._key)
         setTimeout(() => setSavedKey((k) => (k === rule._key ? null : k)), 2000)
       } else {
-        toast.error((await res.json()).error || "Failed to save the rule.")
+        toast.error(await apiError(res, "Couldn't save the rule. Try again."))
       }
     } catch {
-      toast.error("Failed to save the rule.")
+      toast.error("Couldn't save the rule. Try again.")
     } finally {
       setSavingKey(null)
     }
@@ -105,9 +107,9 @@ export function FeeRulesManager({ propertyId }: { propertyId: string }) {
       if (!(await confirm({ title: `Delete "${rule.name || "this rule"}"?`, description: "Reservations using it will fall back to no fee.", confirmLabel: "Delete", destructive: true }))) return
       try {
         const res = await fetch(`/api/settings/fee-rules?id=${rule.id}`, { method: "DELETE" })
-        if (!res.ok) { toast.error((await res.json()).error || "Failed to delete the rule."); return }
+        if (!res.ok) { toast.error(await apiError(res, "Couldn't delete the rule. Try again.")); return }
       } catch {
-        toast.error("Failed to delete the rule.")
+        toast.error("Couldn't delete the rule. Try again.")
         return
       }
     }
@@ -136,9 +138,7 @@ export function FeeRulesManager({ propertyId }: { propertyId: string }) {
             </div>
 
             {typeRules.length === 0 && (
-              <p className="text-xs text-muted-foreground italic border border-dashed border-border rounded-lg px-3 py-4 text-center">
-                No {meta.label.toLowerCase()} yet.
-              </p>
+              <EmptyState size="inline" title={`No ${meta.label.toLowerCase()} yet.`} />
             )}
 
             {typeRules.map((rule) => {
@@ -194,7 +194,7 @@ export function FeeRulesManager({ propertyId }: { propertyId: string }) {
                     <div className="flex items-end gap-2">
                       <Button size="sm" onClick={() => save(rule)} disabled={savingKey === rule._key}>
                         <Save className="w-4 h-4 mr-2" />
-                        {savingKey === rule._key ? "Saving..." : savedKey === rule._key ? "Saved" : "Save"}
+                        {savingKey === rule._key ? "Saving…" : savedKey === rule._key ? "Saved" : "Save"}
                       </Button>
                       <Button
                         size="icon"

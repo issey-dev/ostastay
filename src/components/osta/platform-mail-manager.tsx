@@ -170,7 +170,7 @@ export function PlatformMailManager() {
               <p className="text-sm text-success">
                 {testResult.stage === "send"
                   ? `Test email sent to ${testResult.sentTo}. Check the inbox — and the spam folder.`
-                  : "Connected and authenticated successfully."}
+                  : "Connected and authenticated."}
               </p>
             ) : (
               <p className="text-sm text-destructive">

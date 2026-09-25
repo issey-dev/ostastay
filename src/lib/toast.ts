@@ -9,7 +9,10 @@ import type * as React from "react"
 // This replaces the app's 42 blocking alert() calls with one consistent, styled surface.
 export const toastManager = Toast.createToastManager()
 
-type ToastOptions = { description?: React.ReactNode; duration?: number }
+// `action` puts one button in the toast — the "next step" after an action (Open folio, View
+// booking) without a blocking dialog. DESKTOP_PLAN D1/D2: success is a toast, never an OK modal.
+type ToastAction = { label: string; onClick: () => void }
+type ToastOptions = { description?: React.ReactNode; duration?: number; action?: ToastAction }
 type ToastType = "success" | "error" | "info" | "warning"
 
 function show(type: ToastType, message: React.ReactNode, opts?: ToastOptions): string {
@@ -17,7 +20,9 @@ function show(type: ToastType, message: React.ReactNode, opts?: ToastOptions): s
     title: message,
     description: opts?.description,
     type,
-    timeout: opts?.duration ?? (type === "error" ? 6000 : 4000),
+    // A toast with an action stays a little longer so there is time to reach the button.
+    timeout: opts?.duration ?? (type === "error" || opts?.action ? 6000 : 4000),
+    actionProps: opts?.action ? { children: opts.action.label, onClick: opts.action.onClick } : undefined,
   })
 }
 

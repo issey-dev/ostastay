@@ -13,6 +13,12 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SystemCodeSelect } from "@/components/ui/system-code-select"
+import { cn } from "@/lib/utils"
+import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
 
 type Dir = "PICKUP" | "DROPOFF"
 
@@ -43,8 +49,8 @@ type FormLeg = {
 }
 
 const DIRECTIONS: { key: Dir; label: string; icon: typeof ArrowRightCircle }[] = [
-  { key: "PICKUP", label: "Pickup (Arrival)", icon: ArrowRightCircle },
-  { key: "DROPOFF", label: "Dropoff (Departure)", icon: ArrowLeftRight },
+  { key: "PICKUP", label: "Pickup (arrival)", icon: ArrowRightCircle },
+  { key: "DROPOFF", label: "Dropoff (departure)", icon: ArrowLeftRight },
 ]
 
 function toLocalInput(iso?: string | null): string {
@@ -83,7 +89,8 @@ export function ReservationTransport({
   checkOutDate,
   transports,
   onChanged,
-  onNotify,
+  openSignal = 0,
+  className,
 }: {
   reservationId: string
   propertyId: string
@@ -91,7 +98,11 @@ export function ReservationTransport({
   checkOutDate: string
   transports: Leg[]
   onChanged: () => void
-  onNotify: (n: { title: string; message: string; isError?: boolean }) => void
+  /** @deprecated Feedback is a toast now (DESKTOP_PLAN D1); kept so callers still type-check. */
+  onNotify?: (n: { title: string; message: string; isError?: boolean }) => void
+  /** Bump to open the editor from outside (the reservation page's "+ Add transport"). */
+  openSignal?: number
+  className?: string
 }) {
   const legFor = (dir: Dir) => transports.find((t) => t.direction === dir)
   // Transport time must fall inside the stay (the charge realizes within these dates);
@@ -120,19 +131,29 @@ export function ReservationTransport({
     setForms({ PICKUP: legToForm(legFor("PICKUP")), DROPOFF: legToForm(legFor("DROPOFF")) })
     setIsEditing(true)
   }
+  // Open when the parent bumps openSignal (skip the initial 0).
+  useEffect(() => {
+    if (openSignal > 0) openEditor()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal])
   const update = (dir: Dir, patch: Partial<FormLeg>) => setForms((f) => ({ ...f, [dir]: { ...f[dir], ...patch } }))
 
-  const handleSave = async () => {
+  // A real <form> so Enter saves (DESKTOP_PLAN D10). stopPropagation: React submit events
+  // bubble through the dialog's portal to any form the card happens to sit in.
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (saving) return
     // Client-side guard (also enforced server-side): transport time within the stay,
     // carrier time not after check-out.
     for (const { key, label } of DIRECTIONS) {
       const f = forms[key]
       if (f.transportTime && (f.transportTime < stayMin || f.transportTime > stayMax)) {
-        onNotify({ title: "Invalid Transport Time", message: `${label}: transport time must fall between check-in and check-out.`, isError: true })
+        toast.error(`${label}: transport time must fall between check-in and check-out`)
         return
       }
       if (f.carrierTime && f.carrierTime > stayMax) {
-        onNotify({ title: "Invalid Carrier Time", message: `${label}: carrier (flight) time cannot be after check-out.`, isError: true })
+        toast.error(`${label}: carrier (flight) time cannot be after check-out`)
         return
       }
     }
@@ -162,11 +183,13 @@ export function ReservationTransport({
       })
       if (res.ok) {
         setIsEditing(false)
+        toast.success("Transport saved")
         onChanged()
       } else {
-        const data = await res.json().catch(() => ({}))
-        onNotify({ title: "Save Failed", message: data.error || "Could not save transport.", isError: true })
+        toast.error(await apiError(res, "Couldn't save the transport. Try again."))
       }
+    } catch {
+      toast.error("Couldn't save the transport. Try again.")
     } finally {
       setSaving(false)
     }
@@ -181,7 +204,7 @@ export function ReservationTransport({
     ) : null
 
   return (
-    <Card className="shadow-elevation-1 lg:col-span-2">
+    <Card className={cn("shadow-elevation-1 lg:col-span-2", className)}>
       <CardHeader className="pb-3 flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
           <Compass className="w-5 h-5 text-muted-foreground" /> Transport
@@ -192,7 +215,7 @@ export function ReservationTransport({
       </CardHeader>
       <CardContent className="text-sm">
         {!hasAny ? (
-          <p className="text-muted-foreground">No pickup or dropoff arranged.</p>
+          <EmptyState size="inline" title="No pickup or dropoff arranged" />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {DIRECTIONS.map(({ key, label, icon: Icon }) => {
@@ -218,13 +241,9 @@ export function ReservationTransport({
                         return (
                           <div className="pt-1">
                             {leg.chargedLineItemId ? (
-                              <Badge variant="outline" className="bg-success-muted text-success border-success/30 text-[10px]">
-                                Charged ${leg.chargeAmount.toFixed(2)}
-                              </Badge>
+                              <StatusBadge label={`Charged $${leg.chargeAmount.toFixed(2)}`} tone="success" />
                             ) : (
-                              <Badge variant="outline" className="text-[10px]">
-                                ${leg.chargeAmount.toFixed(2)} — posts at Night Audit{realizeStr ? ` on ${realizeStr}` : ""}
-                              </Badge>
+                              <StatusBadge label={`$${leg.chargeAmount.toFixed(2)} — posts at Night Audit${realizeStr ? ` on ${realizeStr}` : ""}`} tone="neutral" />
                             )}
                           </div>
                         )
@@ -240,7 +259,8 @@ export function ReservationTransport({
 
       {/* Editor */}
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="lg">
+          <form onSubmit={handleSave} className="contents">
           <DialogHeader>
             <DialogTitle>Transport</DialogTitle>
             <DialogDescription>Pickup and dropoff details. Leave a section blank to remove it.</DialogDescription>
@@ -254,15 +274,15 @@ export function ReservationTransport({
                     <Icon className="w-4 h-4 text-muted-foreground" /> {label}
                   </p>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Carrier Code (Flight No.)</Label>
+                    <Label className="text-xs">Carrier code (flight no.)</Label>
                     <Input value={f.carrierCode} onChange={(e) => update(key, { carrierCode: e.target.value })} placeholder="e.g. Q2-104" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Carrier Time (Flight Time)</Label>
+                    <Label className="text-xs">Carrier time (flight time)</Label>
                     <Input type="datetime-local" max={stayMax} value={f.carrierTime} onChange={(e) => update(key, { carrierTime: e.target.value })} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Transport Type</Label>
+                    <Label className="text-xs">Transport type</Label>
                     <SystemCodeSelect
                       category="TRANSPORT_TYPE"
                       propertyId={propertyId}
@@ -272,16 +292,16 @@ export function ReservationTransport({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Transport No.</Label>
+                    <Label className="text-xs">Transport no.</Label>
                     <Input value={f.transportNo} onChange={(e) => update(key, { transportNo: e.target.value })} placeholder="Vessel / vehicle / ticket no." />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Transport Time</Label>
+                    <Label className="text-xs">Transport time</Label>
                     <Input type="datetime-local" min={stayMin} max={stayMax} value={f.transportTime} onChange={(e) => update(key, { transportTime: e.target.value })} />
                     <p className="text-[11px] text-muted-foreground">Must fall within the stay (check-in to check-out).</p>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Transport Remarks</Label>
+                    <Label className="text-xs">Transport remarks</Label>
                     <Input value={f.remarks} onChange={(e) => update(key, { remarks: e.target.value })} placeholder="Free text" />
                   </div>
                   <div className="flex items-center justify-between pt-1">
@@ -291,7 +311,7 @@ export function ReservationTransport({
                   {f.chargeToGuest && (
                     <div className="space-y-3 rounded-md bg-muted/40 p-3">
                       <div className="space-y-1.5">
-                        <Label className="text-xs">Charge Code</Label>
+                        <Label className="text-xs">Charge code</Label>
                         <Select value={f.chargeCodeId} onValueChange={(v) => update(key, { chargeCodeId: v ?? "" })}>
                           <SelectTrigger>
                             <SelectValue placeholder={chargeCodes.length ? "Select charge code…" : "No transport charge codes"}>
@@ -312,7 +332,7 @@ export function ReservationTransport({
                         )}
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs">Charge Amount</Label>
+                        <Label className="text-xs">Charge amount</Label>
                         <Input type="number" min="0" step="0.01" value={f.chargeAmount} onChange={(e) => update(key, { chargeAmount: e.target.value })} placeholder="0.00" />
                         <p className="text-[11px] text-muted-foreground">Posted to the guest folio (tax applied) after check-in.</p>
                       </div>
@@ -323,9 +343,10 @@ export function ReservationTransport({
             })}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Transport"}</Button>
+            <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+            <SubmitButton pending={saving}>Save transport</SubmitButton>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </Card>

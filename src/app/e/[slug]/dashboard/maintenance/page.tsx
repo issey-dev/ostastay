@@ -9,7 +9,6 @@ import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { ErrorState } from "@/components/ui/error-state"
-import { InfoHint } from "@/components/ui/info-hint"
 import { toneMutedClasses, type StatusTone } from "@/lib/status-tone"
 import { maintenanceStaff } from "@/lib/job-functions"
 import { ReportIssueDialog } from "./report-issue-dialog"
@@ -123,7 +122,7 @@ export default function MaintenanceDashboard() {
 
   const columns: { id: string; title: string; tone: StatusTone; icon: React.ReactNode }[] = [
     { id: "OPEN", title: "Open", tone: "danger", icon: <AlertTriangle className="w-5 h-5" /> },
-    { id: "IN_PROGRESS", title: "In Progress", tone: "info", icon: <Clock className="w-5 h-5" /> },
+    { id: "IN_PROGRESS", title: "In progress", tone: "info", icon: <Clock className="w-5 h-5" /> },
     { id: "RESOLVED", title: "Resolved", tone: "success", icon: <CheckCircle2 className="w-5 h-5" /> }
   ]
 
@@ -151,14 +150,7 @@ export default function MaintenanceDashboard() {
   if (loadError) {
     return (
       <div>
-        <div className="flex justify-between items-end mb-8">
-          <div>
-            <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Maintenance Dashboard
-            <InfoHint label="Maintenance Dashboard">Track, manage, and resolve property maintenance issues.</InfoHint>
-          </h2>
-          </div>
-        </div>
+        <PageHeader className="mb-8" title="Maintenance" hint="Track, manage, and resolve property maintenance issues." />
         <ErrorState title="Couldn't load maintenance tickets" onRetry={() => fetchTickets()} />
       </div>
     )
@@ -169,7 +161,7 @@ export default function MaintenanceDashboard() {
       <PageHeader
         className="mb-8"
         align="end"
-        title="Maintenance Dashboard"
+        title="Maintenance"
         hint="Track, manage, and resolve property maintenance issues."
         actions={<>
           <Button variant="outline" onClick={() => fetchTickets()} className="flex items-center gap-2">
@@ -182,7 +174,7 @@ export default function MaintenanceDashboard() {
             className="flex items-center gap-2 max-md:hidden"
           >
             {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            {showResolved ? "Hide Resolved" : "Show Resolved"}
+            {showResolved ? "Hide resolved" : "Show resolved"}
           </Button>
           <Button onClick={() => setShowReportDialog(true)} className="flex items-center gap-2">
             <Wrench className="w-4 h-4" />
@@ -221,7 +213,7 @@ export default function MaintenanceDashboard() {
 
       <div className={`grid grid-cols-1 ${showResolved ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
         {columns.map(col => {
-          // Resolved is always reachable from the phone switch; desktop still needs "Show Resolved".
+          // Resolved is always reachable from the phone switch; desktop still needs "Show resolved".
           const phoneOnly = col.id === "RESOLVED" && !showResolved
           if (phoneOnly && phoneTab !== "RESOLVED") return null;
           
@@ -252,7 +244,7 @@ export default function MaintenanceDashboard() {
                         onChange={(v) => handleStatusChange(ticket.id, v)}
                         options={[
                           { label: "Open", value: "OPEN" },
-                          { label: "In Progress", value: "IN_PROGRESS" },
+                          { label: "In progress", value: "IN_PROGRESS" },
                           { label: "Resolved", value: "RESOLVED" },
                         ]}
                       />

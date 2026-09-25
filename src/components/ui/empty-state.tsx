@@ -9,11 +9,23 @@ type EmptyStateProps = {
   description?: string
   action?: React.ReactNode
   className?: string
+  /** "inline": one quiet line for a section inside a card ("No notes yet · Add note"). */
+  size?: "default" | "inline"
 }
 
 // The canonical "no data" state — replaces bare "No results" strings scattered across
 // tables/lists so every empty list in the app looks and reads the same way.
-export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, description, action, className, size = "default" }: EmptyStateProps) {
+  if (size === "inline") {
+    return (
+      <div data-slot="empty-state" className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm text-muted-foreground", className)}>
+        {Icon && <Icon className="h-4 w-4 shrink-0" />}
+        <span>{title}</span>
+        {description && <span className="text-xs">{description}</span>}
+        {action}
+      </div>
+    )
+  }
   return (
     <div
       data-slot="empty-state"

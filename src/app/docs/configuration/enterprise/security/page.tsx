@@ -19,7 +19,7 @@ export default function Security() {
       </p>
       <Shot name="ent-sessions" alt="The Active sessions list showing a signed-in user with roles, location, sign-in time, idle time and device." />
       <p>
-        Choose <strong>End</strong> on a row to sign that person out immediately, for example on a shared computer left signed in,
+        Choose <strong>End</strong> on a row and confirm to sign that person out immediately, for example on a shared computer left signed in,
         or when someone leaves. They can sign in again straight away unless you have also changed their password.
       </p>
       <Table
@@ -35,7 +35,7 @@ export default function Security() {
       <H2>Idle timeout</H2>
       <p>
         The idle timeout is set <strong>per property</strong>, on{" "}
-        <a href="/docs/configuration/property/general#idle-sign-out">Property › General › Idle Sign-out</a>: Off, 15 minutes, 30
+        <a href="/docs/configuration/property/general#idle-sign-out">Property › General › Idle sign-out</a>: Off, 15 minutes, 30
         minutes, 1 hour, 4 hours, or a custom number of minutes (at least 5). Front desks with shared computers should use 15 or 30
         minutes.
       </p>

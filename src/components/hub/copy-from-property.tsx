@@ -1,5 +1,6 @@
 "use client"
 
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -137,7 +138,7 @@ export function CopyFromPropertyButton({
         <FileStack className="mr-2 h-4 w-4" /> Copy from…
       </Button>
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[560px]">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>Copy {title} from another property</DialogTitle>
             <DialogDescription>
@@ -214,7 +215,7 @@ export function CopyFromPropertyButton({
                         )}
                       </div>
                       {fresh.length === 0 && (
-                        <p className="text-sm text-muted-foreground">Nothing new to copy — this property already has all of them.</p>
+                        <EmptyState size="inline" title="Nothing new to copy — this property already has all of them." />
                       )}
                       {existing.length > 0 && (
                         <p className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning-muted px-3 py-2 text-xs text-warning">

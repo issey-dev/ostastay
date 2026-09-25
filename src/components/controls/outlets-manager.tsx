@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useTableSort, SortableTableHead } from "@/components/controls/use-table-sort"
 import { ControlsSectionBody } from "@/components/controls/controls-section-header"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,10 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { OutletChargeCodePicker, type ChargeCodeOption } from "@/components/controls/outlet-charge-code-picker"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 const OUTLET_TYPES = [
   { value: "SPA", label: "Spa" },
@@ -50,6 +54,7 @@ const BLANK_FORM = () => ({
 // override and a curated pool of the enterprise's existing charge codes. Sits next to
 // FacilityAmenitiesManager (relocated here from Inventory) per the app owner's request.
 export function OutletsManager({ propertyId }: { propertyId: string }) {
+  const confirm = useConfirm()
   const [outlets, setOutlets] = useState<any[]>([])
   const [taxProfiles, setTaxProfiles] = useState<TaxProfileOption[]>([])
   const [chargeCodes, setChargeCodes] = useState<ChargeCodeOption[]>([])
@@ -59,9 +64,6 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [form, setForm] = useState(BLANK_FORM())
 
@@ -125,10 +127,10 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
       if (res.ok) {
         setIsModalOpen(false)
         resetForm()
+        toast.success("Outlet saved")
         fetchOutlets()
       } else {
-        const error = await res.json()
-        toast.error(error.error || "Failed to save outlet")
+        toast.error(await apiError(res, "Couldn't save the outlet. Try again."))
       }
     } catch (error) {
       console.error(error)
@@ -137,18 +139,21 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
     }
   }
 
-  const handleDelete = async () => {
-    if (!deletingId) return
-    setDeleteError(null)
+  const handleDelete = async (deletingId: string) => {
+    const ok = await confirm({
+      title: "Delete outlet?",
+      description: "Are you sure you want to delete this outlet? This is only possible if it has no posted revenue — otherwise, deactivate it instead.",
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/outlets/${deletingId}`, { method: "DELETE" })
       if (res.ok) {
-        setIsDeleteDialogOpen(false)
-        setDeletingId(null)
+        toast.success("Outlet deleted")
         fetchOutlets()
       } else {
-        const error = await res.json()
-        setDeleteError(error.error || "Failed to delete outlet")
+        toast.error(await apiError(res, "Couldn't delete the outlet. Try again."))
       }
     } catch (e) {
       console.error(e)
@@ -167,12 +172,12 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm() }}>
           <DialogTrigger asChild>
             <Button size="sm" className="shadow-sm" disabled={!propertyId}>
-              <Plus className="w-4 h-4 mr-2" /> Add Outlet
+              <Plus className="w-4 h-4 mr-2" /> Add outlet
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-7xl sm:max-w-7xl max-h-[85vh] overflow-y-auto">
+          <DialogContent size="xl" className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{isEditMode ? "Edit Outlet" : "Add Outlet"}</DialogTitle>
+              <DialogTitle>{isEditMode ? "Edit outlet" : "Add outlet"}</DialogTitle>
               <DialogDescription>
                 A revenue-generating point of sale — Spa, Restaurant, Bar, etc. Its own details
                 appear on walk-in bills raised on its behalf; the financial side curates which
@@ -183,7 +188,7 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:divide-x md:divide-border">
                 {/* Left — Outlet Information */}
                 <div className="space-y-4 md:pr-6">
-                  <h3 className="text-sm font-semibold text-foreground">Outlet Information</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Outlet information</h3>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Name *</Label>
@@ -227,7 +232,7 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Tax No</Label>
+                    <Label>Tax no</Label>
                     <Input placeholder="Tax registration number" value={form.taxNo} onChange={(e) => setForm((p) => ({ ...p, taxNo: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
@@ -238,9 +243,9 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
 
                 {/* Right — Financial Information */}
                 <div className="space-y-4 md:pl-6">
-                  <h3 className="text-sm font-semibold text-foreground">Financial Information</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Financial information</h3>
                   <div className="space-y-2">
-                    <Label>Tax Rule</Label>
+                    <Label>Tax rule</Label>
                     <p className="text-xs text-muted-foreground">
                       Choose <span className="font-medium">Default</span> to let each charge code keep its own
                       tax, or <span className="font-medium">Custom</span> to force one handling for everything
@@ -251,13 +256,13 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                         <SelectValue>
                           {form.taxOverrideMode === "NONE" ? "Default — each charge code's own tax"
                             : form.taxOverrideMode === "DEFAULT_ENGINE" ? "Custom — force default Maldives Tax engine"
-                            : "Custom — force a specific Tax profile"}
+                            : "Custom — force a specific tax profile"}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NONE">Default — each charge code&apos;s own tax</SelectItem>
                         <SelectItem value="DEFAULT_ENGINE">Custom — force default Maldives Tax engine</SelectItem>
-                        <SelectItem value="CUSTOM">Custom — force a specific Tax profile</SelectItem>
+                        <SelectItem value="CUSTOM">Custom — force a specific tax profile</SelectItem>
                       </SelectContent>
                     </Select>
                     {form.taxOverrideMode === "CUSTOM" && (
@@ -266,13 +271,13 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                         options={taxProfiles.map((tp) => ({ label: tp.name, value: tp.id }))}
                         value={form.taxProfileId}
                         onChange={(v) => setForm((p) => ({ ...p, taxProfileId: v }))}
-                        placeholder="Select Custom Tax profile..."
+                        placeholder="Select custom tax profile..."
                       />
                     )}
                   </div>
 
                   <div className="space-y-2 border-t pt-4">
-                    <Label>Charge Codes</Label>
+                    <Label>Charge codes</Label>
                     <OutletChargeCodePicker
                       allChargeCodes={chargeCodes}
                       selectedIds={form.chargeCodeIds}
@@ -297,29 +302,12 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
 
               <div className="flex justify-end space-x-2 border-t pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>Save</Button>
+                <SubmitButton pending={submitting}>{isEditMode ? "Save" : "Create"}</SubmitButton>
               </div>
             </form>
           </DialogContent>
         </Dialog>
       </div>
-
-      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => { setIsDeleteDialogOpen(open); if (!open) setDeleteError(null) }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Delete Outlet</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this outlet? This is only possible if it has no
-              posted revenue — otherwise, deactivate it instead.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
-          <DialogFooter className="mt-6">
-            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" onClick={handleDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {loading ? (
         <Skeleton className="h-48 rounded-xl" />
@@ -337,9 +325,7 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                   ? <span className="font-mono">{o.code}</span>
                   : <span className="text-warning">Set a code</span>}
                 badge={
-                  <Badge variant={o.isActive ? "outline" : "secondary"} className={o.isActive ? "bg-success-muted text-success border-success/30" : ""}>
-                    {o.isActive ? "Active" : "Inactive"}
-                  </Badge>
+  <StatusBadge status={o.isActive ? "ACTIVE" : "INACTIVE"} label={o.isActive ? "Active" : "Inactive"} />
                 }
                 meta={[
                   { label: "Type", value: OUTLET_TYPE_LABELS[o.outletType] || o.outletType },
@@ -356,7 +342,7 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                       variant="outline" size="icon"
                       className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
                       aria-label="Delete outlet"
-                      onClick={() => { setDeletingId(o.id); setIsDeleteDialogOpen(true) }}
+                      onClick={() => handleDelete(o.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -373,8 +359,8 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                 <SortableTableHead columnKey="name" sort={sort}>Name</SortableTableHead>
                 <TableHead>Code</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Tax Rule</TableHead>
-                <TableHead>Charge Codes</TableHead>
+                <TableHead>Tax rule</TableHead>
+                <TableHead>Charge codes</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -394,16 +380,14 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{(o.chargeCodes || []).length}</TableCell>
                   <TableCell>
-                    <Badge variant={o.isActive ? "outline" : "secondary"} className={o.isActive ? "bg-success-muted text-success border-success/30" : ""}>
-                      {o.isActive ? "Active" : "Inactive"}
-                    </Badge>
+<StatusBadge status={o.isActive ? "ACTIVE" : "INACTIVE"} label={o.isActive ? "Active" : "Inactive"} />
                   </TableCell>
                   <TableCell className="text-right px-6">
                     <div className="flex gap-2 justify-end">
                       <Button variant="ghost" size="sm" className="text-primary hover:bg-muted" onClick={() => openEdit(o)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted" onClick={() => { setDeletingId(o.id); setIsDeleteDialogOpen(true) }}>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted" onClick={() => handleDelete(o.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

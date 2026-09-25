@@ -14,7 +14,7 @@ export default function Stationery() {
       <p>
         The logo, name, address, tax ID, contact details, colour and font come from{" "}
         <a href="/docs/configuration/property/general">General</a>. This page adds the wording. Each tab shows a live preview as you
-        type. Choose <strong>Save Stationery Settings</strong> at the bottom when done; <strong>Reset</strong> discards unsaved changes.
+        type. Choose <strong>Save</strong> at the bottom when done; <strong>Reset</strong> discards unsaved changes.
       </p>
       <Shot name="prop-stationery" alt="The Stationery page: tabs for invoices, receipts, letter, registration card and statement, with the invoice settings and a live preview." />
 
@@ -22,10 +22,10 @@ export default function Stationery() {
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Header Text", "A line at the top of the invoice, e.g. 'Thank you for staying with us.'"],
-          ["Default Folio Style", "How lines are shown: Detailed, Detailed with taxes merged, Summary by charge code, Summary by date, or Summary by check. Staff can pick another when printing."],
-          ["Payment Information", "Account Name, Account Number, IBAN, Bank Info. Printed so companies know where to pay. Until one is filled in, the Hub Overview warns."],
-          ["Terms & Conditions / Footer Text", "Payment terms and a closing line."],
+          ["Header text", "A line at the top of the invoice, e.g. 'Thank you for staying with us.'"],
+          ["Default folio style", "How lines are shown: Detailed, Detailed with taxes merged, Summary by charge code, Summary by date, or Summary by check. Staff can pick another when printing."],
+          ["Payment information", "Account name, Account number, IBAN, Bank info. Printed so companies know where to pay. Until one is filled in, the Hub Overview warns."],
+          ["Terms & conditions / footer text", "Payment terms and a closing line."],
         ]}
       />
       <p>Use the <strong>Proforma / Tax</strong> switch on the preview to see both invoice types.</p>
@@ -37,16 +37,16 @@ export default function Stationery() {
         <li><strong>Statement</strong>: footer and terms on company and debtor statements.</li>
       </ul>
 
-      <H2>Registration Card and eRegistration</H2>
+      <H2>Registration card and eRegistration</H2>
       <Table
         head={["Field", "Notes"]}
         rows={[
-          ["Registration Card step", "On: check-in includes the registration card. Off: it is skipped."],
-          ["Welcome / Intro Message", "Shown at the top of the card."],
-          ["Terms & Conditions", "What the guest signs to."],
+          ["Registration card step", "On: check-in includes the registration card. Off: it is skipped."],
+          ["Welcome / intro message", "Shown at the top of the card."],
+          ["Terms & conditions", "What the guest signs to."],
           ["Allow eRegistration links", "On: staff can send guests a link to fill in their registration before arrival. The desk still checks it at check-in."],
-          ["Link Validity (hours)", "1–720, default 72."],
-          ["Guest Email Message", "The text of the email that carries the link."],
+          ["Link validity (hours)", "1–720, default 72."],
+          ["Guest email message", "The text of the email that carries the link."],
         ]}
       />
       <Callout>

@@ -13,16 +13,16 @@ export default async function HubPropertySpaPage({ params }: { params: Promise<{
     <div className="space-y-6">
       <HubPageHeader title={item.title} icon={item.icon} scope="property" />
       <HubSetupNotice title={item.title} />
-      <ControlsCard title="Treatment Catalog" description="Categories, treatments and pricing this property sells from the Spa scheduler.">
+      <ControlsCard title="Treatment catalog" description="Categories, treatments and pricing this property sells from the Spa scheduler.">
         <SpaCatalogManager propertyId={property.id} />
       </ControlsCard>
       <ControlsCard title="Therapists" description="This property's schedulable therapists — treatment qualifications, weekly working hours, and day-off/leave exceptions. A PMS login is optional.">
         <SpaTherapistsManager propertyId={property.id} />
       </ControlsCard>
-      <ControlsCard title="Treatment Rooms" description="This property's rooms available for spa treatments, including couple-capable rooms and maintenance/cleaning closures.">
+      <ControlsCard title="Treatment rooms" description="This property's rooms available for spa treatments, including couple-capable rooms and maintenance/cleaning closures.">
         <SpaRoomsManager propertyId={property.id} />
       </ControlsCard>
-      <ControlsCard title="Spa Settings" description="Operating hours, booking defaults, charge timing, and cancellation/no-show policy for this property.">
+      <ControlsCard title="Spa settings" description="Operating hours, booking defaults, charge timing, and cancellation/no-show policy for this property.">
         <SpaSettingsForm propertyId={property.id} />
       </ControlsCard>
     </div>

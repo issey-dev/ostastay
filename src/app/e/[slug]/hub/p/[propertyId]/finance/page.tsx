@@ -28,7 +28,7 @@ export default async function HubPropertyFinancePage({ params }: { params: Promi
           <PropertySwitchSetting
             propertyId={property.id}
             field="pricesIncludeTaxes"
-            label="Prices Include Taxes"
+            label="Prices include taxes"
             initial={pricesIncludeTaxes}
             canEdit={canEdit("update")}
             description="Applies to anything charged at this property. On: Green Tax, GST and Service Charge are backed out of the posted amount. Off: they are added on top."
@@ -39,16 +39,16 @@ export default async function HubPropertyFinancePage({ params }: { params: Promi
       <PaymentMethodsManager
         propertyId={property.id}
         copyAction={canCopy && <CopyFromPropertyButton propertyId={property.id} section="payment-methods" title="payment methods" />}
-        title="Payment Methods"
+        title="Payment methods"
         description="The payment methods this property accepts — Cash, Credit Cards, Bank Transfers, City Ledger."
       />
-      <ControlsCard title="Settlement Defaults" description="Which of this property's City Ledger payment methods settles a debtor folio at checkout.">
+      <ControlsCard title="Settlement defaults" description="Which of this property's City Ledger payment methods settles a debtor folio at checkout.">
         <SettlementDefaultsManager propertyId={property.id} />
       </ControlsCard>
-      <ControlsCard title="Cashiering Defaults" description="Opening float and the usual currency-exchange pair, pre-filled on this property's Cashiering page.">
+      <ControlsCard title="Cashiering defaults" description="Opening float and the usual currency-exchange pair, pre-filled on this property's Cashiering page.">
         <GeneralSettingsManager propertyId={property.id} />
       </ControlsCard>
-      <ControlsCard title="Deposit & Fee Rules" description="This property's Deposit, Cancellation and No-Show fee rules. The amount can be flat, a percentage of the stay, the first night, or the full stay. Cancellation fees are prompted on cancel; no-show fees apply at Night Audit — both collected via the Deposit module, never billing.">
+      <ControlsCard title="Deposit & fee rules" description="This property's Deposit, Cancellation and No-Show fee rules. The amount can be flat, a percentage of the stay, the first night, or the full stay. Cancellation fees are prompted on cancel; no-show fees apply at Night Audit — both collected via the Deposit module, never billing.">
         <FeeRulesManager propertyId={property.id} />
       </ControlsCard>
     </div>

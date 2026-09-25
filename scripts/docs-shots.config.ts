@@ -29,7 +29,7 @@ async function click(page: Page, text: string, role = "button, [role=tab], a") {
   const ok = await page.evaluate(
     (text, role) => {
       const el = Array.from(document.querySelectorAll<HTMLElement>(role)).find(
-        (b) => b.offsetParent !== null && (b.innerText || b.getAttribute("aria-label") || "").trim().startsWith(text)
+        (b) => b.offsetParent !== null && (b.innerText || b.getAttribute("aria-label") || "").trim().toLowerCase().startsWith(text.toLowerCase())
       );
       el?.click();
       return !!el;
@@ -45,7 +45,7 @@ async function click(page: Page, text: string, role = "button, [role=tab], a") {
 async function markCard(page: Page, title: string) {
   const ok = await page.evaluate((title) => {
     const card = Array.from(document.querySelectorAll<HTMLElement>("[data-slot=card]")).find((c) =>
-      (c.querySelector("[data-slot=card-title]")?.textContent ?? "").trim().startsWith(title)
+      (c.querySelector("[data-slot=card-title]")?.textContent ?? "").trim().toLowerCase().startsWith(title.toLowerCase())
     );
     card?.setAttribute("data-docs-shot", "");
     return !!card;
@@ -67,11 +67,11 @@ export const SHOTS: Shot[] = [
 
   // ── Enterprise ─────────────────────────────────────────────────────────────────
   { name: "ent-properties", path: ent("properties") },
-  { name: "ent-property-dialog", path: ent("properties"), dialog: true, before: ({ page }) => click(page, "Add Property") },
-  { name: "ent-people", path: ent("people"), ...card("Staff Accounts") },
-  { name: "ent-person-dialog", path: ent("people"), dialog: true, before: ({ page }) => click(page, "Add Team Member") },
+  { name: "ent-property-dialog", path: ent("properties"), dialog: true, before: ({ page }) => click(page, "Add property") },
+  { name: "ent-people", path: ent("people"), ...card("Staff accounts") },
+  { name: "ent-person-dialog", path: ent("people"), dialog: true, before: ({ page }) => click(page, "Add team member") },
   { name: "ent-roles", path: ent("people"), ...card("Roles") },
-  { name: "ent-role-dialog", path: ent("people"), dialog: true, maxHeight: 1100, before: ({ page }) => click(page, "New Role") },
+  { name: "ent-role-dialog", path: ent("people"), dialog: true, maxHeight: 1100, before: ({ page }) => click(page, "Add role") },
   { name: "ent-sessions", path: ent("sessions") },
   { name: "ent-email", path: ent("email") },
   { name: "ent-guest-lists", path: ent("lists"), maxHeight: 1000 },
@@ -87,10 +87,10 @@ export const SHOTS: Shot[] = [
   { name: "prop-payment-methods", path: resort("finance"), ...card("Payment Methods") },
   { name: "prop-fee-rules", path: resort("finance"), maxHeight: 900, ...card("Deposit") },
   { name: "prop-charge-codes-new", path: lodge("charge-codes"), maxHeight: 1000, ...card("Charge Codes") },
-  { name: "prop-charge-code-dialog", path: resort("charge-codes"), dialog: true, before: ({ page }) => click(page, "Add Charge Code") },
+  { name: "prop-charge-code-dialog", path: resort("charge-codes"), dialog: true, before: ({ page }) => click(page, "Add charge code") },
   { name: "prop-posting-defaults", path: resort("charge-codes"), ...card("Posting Defaults") },
   { name: "prop-outlets", path: resort("outlets"), ...card("Outlets") },
-  { name: "prop-outlet-dialog", path: resort("outlets"), dialog: true, maxHeight: 1000, before: ({ page }) => click(page, "Add Outlet") },
+  { name: "prop-outlet-dialog", path: resort("outlets"), dialog: true, maxHeight: 1000, before: ({ page }) => click(page, "Add outlet") },
   { name: "prop-room-types", path: resort("inventory"), ...card("Property Architecture") },
   { name: "prop-room-type-dialog", path: resort("inventory"), dialog: true, maxHeight: 1000, before: ({ page }) => click(page, "Add Room Type") },
   { name: "prop-rooms", path: resort("inventory"), ...card("Property Architecture", (page) => click(page, "Rooms", "[role=tab]")) },

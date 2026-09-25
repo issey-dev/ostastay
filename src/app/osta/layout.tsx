@@ -43,12 +43,13 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <div>
             {/* The plain wordmark, not the Stay lockup: this console administers every
-                module and every tenant, so it is not branded to one sub-brand. */}
-            <h1 className="flex items-center gap-2.5 text-foreground leading-none">
+                module and every tenant, so it is not branded to one sub-brand. Not a
+                heading: the page title is the page's only <h1>. */}
+            <div className="flex items-center gap-2.5 text-foreground leading-none">
             <UppsolutWordmark className="h-[15px] w-auto" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Platform Admin</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Platform admin</span>
             <InfoHint label="Uppsolut Platform Admin">The Osta platform console — manages customer enterprises, licensing, and channel-manager connections across every property on Uppsolut.</InfoHint>
-          </h1>
+          </div>
           </div>
           <div className="ml-auto">
             <ThemeToggle />

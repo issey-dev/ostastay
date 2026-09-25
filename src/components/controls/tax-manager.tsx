@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Percent, ShieldAlert, Save, Pencil, Trash2, X } from "@/components/icons"
+import { Plus, Percent, ShieldAlert, Pencil, Trash2, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Switch } from "@/components/ui/switch"
@@ -13,10 +13,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ControlsSectionBody } from "@/components/controls/controls-section-header"
-import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { SectionSaveFooter, type SaveStatus } from "@/components/controls/save-status"
 import { MIN_SERVICE_CHARGE_RATE } from "@/lib/tax-calc"
 
 type TaxLineForm = { name: string; ratePercent: string; calculateOn: "BASE" | "COMPOUND" }
@@ -36,11 +40,13 @@ const BLANK_TAX_LINE = (): TaxLineForm => ({ name: "", ratePercent: "", calculat
 // (src/lib/posting/run-generates.ts GREEN_TAX reads these amounts straight onto the folio),
 // so the rates are labelled — and must be entered — in that currency, not a fixed "USD".
 export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { propertyId: string; nightAuditHref?: string; currency?: string }) {
+  const confirm = useConfirm()
   const [taxProfiles, setTaxProfiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // Maldives Tax State
   const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsStatus, setSettingsStatus] = useState<SaveStatus>("idle")
   const [postedNightly, setPostedNightly] = useState({ greenTax: true, tgst: true, serviceCharge: true })
   const [settingsForm, setSettingsForm] = useState({
     greenTaxAdultAmount: 12.00,
@@ -58,10 +64,6 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
   // Edit / Delete states for Taxes
   const [isTaxEditMode, setIsTaxEditMode] = useState(false)
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null)
-  const [isTaxDeleteDialogOpen, setIsTaxDeleteDialogOpen] = useState(false)
-  const [deletingTaxId, setDeletingTaxId] = useState<string | null>(null)
-  // Shown inside the delete dialog — e.g. the 409 "used by 3 charge codes" refusal.
-  const [deleteTaxError, setDeleteTaxError] = useState<string | null>(null)
 
   const [taxForm, setTaxForm] = useState({ name: "", description: "", rates: [BLANK_TAX_LINE()] })
 
@@ -92,6 +94,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
           tgstRate: data.tgstRate !== undefined ? data.tgstRate : 17.00,
           serviceChargeRate: data.serviceChargeRate !== undefined ? data.serviceChargeRate : 10.00,
         })
+        setSettingsStatus("idle")
       }
     } catch (error) {
       console.error("Failed to fetch tax data", error)
@@ -111,20 +114,26 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
         body: JSON.stringify(settingsForm)
       })
       if (res.ok) {
-        toast.success("Maldives Tax settings saved successfully!")
+        setSettingsStatus("saved")
+        toast.success("Maldives Tax saved")
       } else {
-        const data = await res.json().catch(() => ({}))
-        toast.error(data?.error || "Failed to save settings.")
+        toast.error(await apiError(res, "Couldn't save Maldives Tax. Try again."))
       }
     } catch (e) {
       console.error(e)
-      toast.error("Failed to save settings.")
+      toast.error("Couldn't save Maldives Tax. Try again.")
     } finally {
       setSavingSettings(false)
     }
   }
 
   const serviceChargeTooLow = !(settingsForm.serviceChargeRate >= MIN_SERVICE_CHARGE_RATE)
+
+  // Every edit to the Maldives Tax form goes through here so the section footer knows it's dirty.
+  const editSettings = (fn: (p: typeof settingsForm) => typeof settingsForm) => {
+    setSettingsForm(fn)
+    setSettingsStatus("dirty")
+  }
 
   const resetTaxForm = () => {
     setTaxForm({ name: "", description: "", rates: [BLANK_TAX_LINE()] })
@@ -169,10 +178,10 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
       if (res.ok) {
         setIsTaxModalOpen(false)
         resetTaxForm()
+        toast.success("Custom tax saved")
         fetchData()
       } else {
-        const error = await res.json()
-        toast.error(error.error || "Failed to save tax profile")
+        toast.error(await apiError(res, "Couldn't save the custom tax. Try again."))
       }
     } catch (error) {
       console.error(error)
@@ -181,22 +190,26 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
     }
   }
 
-  const handleDeleteTax = async () => {
-    if (!deletingTaxId) return
-    setDeleteTaxError(null)
+  const handleDeleteTax = async (deletingTaxId: string) => {
+    const ok = await confirm({
+      title: "Delete custom tax?",
+      description: "Are you sure you want to delete this tax profile? This action will permanently remove it and its historical rates.",
+      confirmLabel: "Delete permanently",
+      destructive: true,
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/taxes/${deletingTaxId}`, { method: "DELETE" })
       if (res.ok) {
-        setIsTaxDeleteDialogOpen(false)
-        setDeletingTaxId(null)
+        toast.success("Custom tax deleted")
         fetchData()
       } else {
-        const error = await res.json().catch(() => ({}))
-        setDeleteTaxError(error.error || "Failed to delete Custom Tax profile")
+        // e.g. the 409 "used by 3 charge codes" refusal.
+        toast.error(await apiError(res, "Couldn't delete the custom tax. Try again."))
       }
     } catch (e) {
       console.error(e)
-      setDeleteTaxError("Failed to delete Custom Tax profile")
+      toast.error("Couldn't delete the custom tax. Try again.")
     }
   }
 
@@ -218,7 +231,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <TabsList className="bg-muted">
             <TabsTrigger value="maldives-tax"><ShieldAlert className="w-4 h-4 mr-2"/> Maldives Tax</TabsTrigger>
-            <TabsTrigger value="custom-tax"><Percent className="w-4 h-4 mr-2"/> Custom Tax</TabsTrigger>
+            <TabsTrigger value="custom-tax"><Percent className="w-4 h-4 mr-2"/> Custom tax</TabsTrigger>
           </TabsList>
 
           <Dialog open={isTaxModalOpen} onOpenChange={(open) => {
@@ -227,12 +240,12 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
           }}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline" className="text-primary border-border hover:bg-muted">
-                <Plus className="w-4 h-4 mr-2" /> Add Custom Tax
+                <Plus className="w-4 h-4 mr-2" /> Add custom tax
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent size="md">
               <DialogHeader>
-                <DialogTitle>{isTaxEditMode ? "Edit Custom Tax" : "Add Custom Tax"}</DialogTitle>
+                <DialogTitle>{isTaxEditMode ? "Edit custom tax" : "Add custom tax"}</DialogTitle>
                 <DialogDescription>
                   A profile can hold one or more tax lines, applied together on any charge code
                   that uses it instead of the default Maldives Tax. Each line is either a flat
@@ -243,7 +256,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
               </DialogHeader>
               <form onSubmit={handleCreateOrUpdateTaxProfile} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label>Profile Name *</Label>
+                  <Label>Profile name *</Label>
                   <Input required placeholder="e.g. State VAT" value={taxForm.name} onChange={e => setTaxForm(p => ({ ...p, name: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
@@ -253,9 +266,9 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
 
                 <div className="space-y-2 border-t pt-4">
                   <div className="flex items-center justify-between">
-                    <Label>Tax Lines * <span className="text-muted-foreground font-normal">(applied in this order)</span></Label>
+                    <Label>Tax lines * <span className="text-muted-foreground font-normal">(applied in this order)</span></Label>
                     <Button type="button" variant="ghost" size="sm" onClick={addTaxLine}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Line
+                      <Plus className="w-4 h-4 mr-1" /> Add line
                     </Button>
                   </div>
                   <div className="space-y-3">
@@ -281,11 +294,11 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                           </div>
                           <Select value={line.calculateOn} onValueChange={v => updateTaxLine(index, { calculateOn: (v ?? "BASE") as "BASE" | "COMPOUND" })}>
                             <SelectTrigger className="w-full sm:w-56">
-                              <SelectValue>{line.calculateOn === "COMPOUND" ? "On Subtotal + Prior Lines" : "On Subtotal"}</SelectValue>
+                              <SelectValue>{line.calculateOn === "COMPOUND" ? "On subtotal + prior lines" : "On subtotal"}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="BASE">On Subtotal</SelectItem>
-                              <SelectItem value="COMPOUND">On Subtotal + Prior Lines</SelectItem>
+                              <SelectItem value="BASE">On subtotal</SelectItem>
+                              <SelectItem value="COMPOUND">On subtotal + prior lines</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -299,35 +312,14 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                   </div>
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-4">
+                <DialogFooter className="pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsTaxModalOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={submitting}>Save</Button>
-                </div>
+                  <SubmitButton pending={submitting}>{isTaxEditMode ? "Save" : "Create"}</SubmitButton>
+                </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
-
-        {/* Delete Custom Tax Modal */}
-        <Dialog open={isTaxDeleteDialogOpen} onOpenChange={(open) => { setIsTaxDeleteDialogOpen(open); if (!open) setDeleteTaxError(null) }}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Delete Custom Tax</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this tax profile? This action will permanently remove it and its historical rates.
-              </DialogDescription>
-            </DialogHeader>
-            {deleteTaxError && (
-              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
-                {deleteTaxError}
-              </p>
-            )}
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => { setIsTaxDeleteDialogOpen(false); setDeleteTaxError(null) }}>Cancel</Button>
-              <Button type="button" variant="destructive" onClick={handleDeleteTax} disabled={!!deleteTaxError}>Delete Permanently</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <TabsContent value="maldives-tax" className="m-0">
           <form onSubmit={handleSaveSettings} className="space-y-8">
@@ -349,7 +341,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
 
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
-                      <Label>Adult Rate (per adult/night) in {currency}</Label>
+                      <Label>Adult rate (per adult/night) in {currency}</Label>
                       <div className="relative">
                         <span className="absolute left-3 top-2 text-xs leading-5 text-muted-foreground">{currency}</span>
                         <Input
@@ -359,13 +351,13 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                           className="pl-12"
                           required
                           value={settingsForm.greenTaxAdultAmount}
-                          onChange={e => setSettingsForm(p => ({ ...p, greenTaxAdultAmount: parseFloat(e.target.value) || 0 }))}
+                          onChange={e => editSettings(p => ({ ...p, greenTaxAdultAmount: parseFloat(e.target.value) || 0 }))}
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Child Rate (per child/night) in {currency}</Label>
+                      <Label>Child rate (per child/night) in {currency}</Label>
                       <div className="relative">
                         <span className="absolute left-3 top-2 text-xs leading-5 text-muted-foreground">{currency}</span>
                         <Input
@@ -375,19 +367,19 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                           className="pl-12"
                           required
                           value={settingsForm.greenTaxChildAmount}
-                          onChange={e => setSettingsForm(p => ({ ...p, greenTaxChildAmount: parseFloat(e.target.value) || 0 }))}
+                          onChange={e => editSettings(p => ({ ...p, greenTaxChildAmount: parseFloat(e.target.value) || 0 }))}
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Age Exemption Threshold (in years)</Label>
+                      <Label>Age exemption threshold (in years)</Label>
                       <Input
                         type="number"
                         min="0"
                         required
                         value={settingsForm.greenTaxExemptAge}
-                        onChange={e => setSettingsForm(p => ({ ...p, greenTaxExemptAge: parseInt(e.target.value) || 0 }))}
+                        onChange={e => editSettings(p => ({ ...p, greenTaxExemptAge: parseInt(e.target.value) || 0 }))}
                       />
                       <p className="text-[11px] text-muted-foreground">
                         Guests below this age are completely exempt. (MIRA regulations exempt infants under <strong>2</strong> years of age).
@@ -404,7 +396,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                         <Switch
                           id="greenTaxStayBasis"
                           checked={settingsForm.greenTaxStayBasis === "STANDARD"}
-                          onCheckedChange={(on) => setSettingsForm(p => ({ ...p, greenTaxStayBasis: on ? "STANDARD" : "ACTUAL" }))}
+                          onCheckedChange={(on) => editSettings(p => ({ ...p, greenTaxStayBasis: on ? "STANDARD" : "ACTUAL" }))}
                         />
                         <div>
                           <Label htmlFor="greenTaxStayBasis" className="cursor-pointer">Measure the 12-hour stay on standard check-in/check-out times</Label>
@@ -432,7 +424,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
 
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>GST Rate (%)</Label>
+                      <Label>GST rate (%)</Label>
                       <div className="relative">
                         <Input
                           type="number"
@@ -440,7 +432,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                           min="0"
                           required
                           value={settingsForm.tgstRate}
-                          onChange={e => setSettingsForm(p => ({ ...p, tgstRate: parseFloat(e.target.value) || 0 }))}
+                          onChange={e => editSettings(p => ({ ...p, tgstRate: parseFloat(e.target.value) || 0 }))}
                         />
                         <span className="absolute right-3 top-2 text-muted-foreground">%</span>
                       </div>
@@ -450,7 +442,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Service Charge Rate (%)</Label>
+                      <Label>Service Charge rate (%)</Label>
                       <div className="relative">
                         <Input
                           type="number"
@@ -460,7 +452,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                           required
                           aria-invalid={serviceChargeTooLow || undefined}
                           value={settingsForm.serviceChargeRate}
-                          onChange={e => setSettingsForm(p => ({ ...p, serviceChargeRate: parseFloat(e.target.value) || 0 }))}
+                          onChange={e => editSettings(p => ({ ...p, serviceChargeRate: parseFloat(e.target.value) || 0 }))}
                         />
                         <span className="absolute right-3 top-2 text-muted-foreground">%</span>
                       </div>
@@ -478,12 +470,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t">
-              <Button type="submit" disabled={savingSettings || serviceChargeTooLow}>
-                <Save className="w-4 h-4 mr-2" />
-                {savingSettings ? "Saving..." : "Save Configuration"}
-              </Button>
-            </div>
+            <SectionSaveFooter status={settingsStatus} saving={savingSettings} disabled={serviceChargeTooLow} />
           </form>
         </TabsContent>
 
@@ -509,7 +496,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                         variant="outline" size="icon"
                         className="h-9 w-9 shrink-0 text-destructive border-destructive/40 hover:bg-destructive-muted"
                         aria-label="Delete"
-                        onClick={() => { setDeletingTaxId(tp.id); setDeleteTaxError(null); setIsTaxDeleteDialogOpen(true) }}
+                        onClick={() => handleDeleteTax(tp.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -519,9 +506,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                   {lines.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {lines.map((r: any) => (
-                        <Badge key={r.id} variant="outline" className="bg-success-muted text-success border-success/30 font-normal">
-                          {r.name} {r.ratePercent.toFixed(2)}%{r.calculateOn === "COMPOUND" ? " (compound)" : ""}
-                        </Badge>
+                        <StatusBadge key={r.id} tone="success" className="font-normal" label={`${r.name} ${r.ratePercent.toFixed(2)}%${r.calculateOn === "COMPOUND" ? " (compound)" : ""}`} />
                       ))}
                     </div>
                   ) : (
@@ -536,9 +521,9 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
           <Table>
             <TableHeader className="bg-muted/80">
               <TableRow>
-                <SortableTableHead columnKey="name" sort={sort}>Profile Name</SortableTableHead>
+                <SortableTableHead columnKey="name" sort={sort}>Profile name</SortableTableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Tax Lines</TableHead>
+                <TableHead>Tax lines</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -553,9 +538,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                       {lines.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {lines.map((r: any) => (
-                            <Badge key={r.id} variant="outline" className="bg-success-muted text-success border-success/30 font-normal">
-                              {r.name} {r.ratePercent.toFixed(2)}%{r.calculateOn === "COMPOUND" ? " (compound)" : ""}
-                            </Badge>
+                            <StatusBadge key={r.id} tone="success" className="font-normal" label={`${r.name} ${r.ratePercent.toFixed(2)}%${r.calculateOn === "COMPOUND" ? " (compound)" : ""}`} />
                           ))}
                         </div>
                       ) : (
@@ -567,10 +550,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
                         <Button variant="ghost" size="sm" className="text-primary hover:bg-muted" onClick={() => openTaxEdit(tp)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted" onClick={() => {
-                          setDeletingTaxId(tp.id)
-                          setIsTaxDeleteDialogOpen(true)
-                        }}>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive-muted" onClick={() => handleDeleteTax(tp.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -599,7 +579,7 @@ export function TaxManager({ propertyId, nightAuditHref, currency = "USD" }: { p
 function PostedNightly({ on, levy, href }: { on: boolean; levy: string; href?: string }) {
   return (
     <p className="flex flex-wrap items-center gap-2 text-sm">
-      <Badge variant={on ? "default" : "secondary"}>{on ? "Posted nightly" : "Not posted"}</Badge>
+      <StatusBadge tone={on ? "success" : "neutral"} label={on ? "Posted nightly" : "Not posted"} />
       <span className="text-muted-foreground">
         {levy} is {on ? "posted" : "not posted"} at Night Audit —{" "}
         {href ? <a href={href} className="text-primary hover:underline">change under Night Audit</a> : "changed under Night Audit"}.

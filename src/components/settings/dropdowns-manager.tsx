@@ -9,6 +9,8 @@ import { ControlsSectionHeader, ControlsSectionBody } from "@/components/control
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "@/lib/toast"
+import { apiError } from "@/lib/api-error"
+import { useConfirm } from "@/components/providers/confirm-provider"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -20,17 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { invalidateSystemCodeCache, systemCodesUrl } from "@/components/ui/system-code-select"
 
 type SystemCode = {
@@ -54,24 +45,24 @@ export type DropdownCategory = { code: string; label: string }
 export const PROFILE_LOV_CATEGORIES: DropdownCategory[] = [
   { code: "GENDER",      label: "Gender" },
   { code: "TITLE",       label: "Title (Mr, Mrs)" },
-  { code: "ID_TYPE",     label: "ID / Document Type" },
-  { code: "CLASSIFICATION", label: "Profile Classification" },
-  { code: "VIP_LEVEL",   label: "VIP Level" },
-  { code: "DIETARY_REQ", label: "Dietary Requirements" },
+  { code: "ID_TYPE",     label: "ID / document type" },
+  { code: "CLASSIFICATION", label: "Profile classification" },
+  { code: "VIP_LEVEL",   label: "VIP level" },
+  { code: "DIETARY_REQ", label: "Dietary requirements" },
   { code: "PREFERENCE",  label: "Preferences" },
 ]
 
 // Property lists.
 export const RESERVATION_LOV_CATEGORIES: DropdownCategory[] = [
-  { code: "SPECIAL_REQUEST", label: "Special Requests" },
-  { code: "TRANSPORT_TYPE", label: "Transport Type (Pickup / Dropoff)" },
-  { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping Requests" },
+  { code: "SPECIAL_REQUEST", label: "Special requests" },
+  { code: "TRANSPORT_TYPE", label: "Transport type (pickup / dropoff)" },
+  { code: "HOUSEKEEPING_REQUEST", label: "Housekeeping requests" },
 ]
 
 // Room-specific feature lists, assigned per Room Type (all multi-select) via the Room
 // Types form's Room Features picker.
 export const ROOM_FEATURE_LOV_CATEGORIES: DropdownCategory[] = [
-  { code: "BED_TYPE",     label: "Bed Type" },
+  { code: "BED_TYPE",     label: "Bed type" },
   { code: "ROOM_VIEW",    label: "View" },
   { code: "ROOM_AMENITY", label: "Amenities" },
 ]
@@ -84,6 +75,7 @@ export function DropdownsManager({
   /** Set for a property's own lists; omitted for the enterprise lists. */
   propertyId?: string
 }) {
+  const confirm = useConfirm()
   const [codes, setCodes] = useState<SystemCode[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -91,7 +83,7 @@ export function DropdownsManager({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [form, setForm] = useState({ code: "", value: "" })
-  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   // Deleting an option only switches it off (records already using it keep resolving).
   // The manager always loads the switched-off rows too, and this toggle lists them with a
   // Restore action — before, a deleted option vanished for good and its code could never
@@ -134,20 +126,13 @@ export function DropdownsManager({
         invalidateSystemCodeCache(category)
         fetchCodes()
         // Re-adding a deleted code brings that option back rather than failing.
-        setFeedback({
-          message: saved?.restored ? `Restored deleted option ${saved.code}` : "Code added successfully",
-          type: "success",
-        })
-        setTimeout(() => setFeedback(null), 4000)
+        toast.success(saved?.restored ? `Restored deleted option ${saved.code}` : "Option added")
       } else {
-        const error = await res.json()
-        setFeedback({ message: error.error || "Failed to add code", type: "error" })
-        setTimeout(() => setFeedback(null), 4000)
+        toast.error(await apiError(res, "Couldn't add the option. Try again."))
       }
     } catch (e) {
       console.error(e)
-      setFeedback({ message: "An unexpected error occurred.", type: "error" })
-      setTimeout(() => setFeedback(null), 4000)
+      toast.error("Couldn't add the option. Try again.")
     } finally {
       setSaving(false)
     }
@@ -165,20 +150,28 @@ export function DropdownsManager({
         fetchCodes()
         if (isActive) toast.success("Option restored")
       } else {
-        const body = await res.json().catch(() => null)
-        toast.error(body?.error || (isActive ? "Could not restore the option" : "Could not delete the option"))
+        toast.error(await apiError(res, isActive ? "Couldn't restore the option. Try again." : "Couldn't delete the option. Try again."))
       }
     } catch {
-      toast.error("Could not reach the server — please try again.")
+      toast.error("Couldn't reach the server. Try again.")
     }
   }
-  const handleDelete = (id: string) => setActive(id, false)
+  const handleDelete = async (c: SystemCode) => {
+    const ok = await confirm({
+      title: `Delete "${c.value}"?`,
+      description: `This will remove "${c.value}" (${c.code}) from the ${currentCategoryLabel} dropdown. Existing records using this code will not be affected.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })
+    if (ok) await setActive(c.id, false)
+  }
   // A restored option goes to the end of the live list.
   const handleRestore = (id: string) =>
     setActive(id, true, { sortOrder: activeCodes.reduce((m, c) => Math.max(m, c.sortOrder), 0) + 1 })
 
   const handleInlineEdit = async (id: string) => {
-    if (!editValue.trim()) return
+    if (!editValue.trim() || savingEdit) return
+    setSavingEdit(true)
     try {
       const res = await fetch("/api/settings/system-codes", {
         method: "PUT",
@@ -190,11 +183,12 @@ export function DropdownsManager({
         invalidateSystemCodeCache(category)
         fetchCodes()
       } else {
-        const body = await res.json().catch(() => null)
-        toast.error(body?.error || "Could not save the option")
+        toast.error(await apiError(res, "Couldn't save the option. Try again."))
       }
     } catch {
-      toast.error("Could not reach the server — please try again.")
+      toast.error("Couldn't reach the server. Try again.")
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -216,7 +210,7 @@ export function DropdownsManager({
       body: JSON.stringify(newCodes.map(c => ({ id: c.id, sortOrder: c.sortOrder, isActive: c.isActive, value: c.value })))
     }).catch(() => null)
     if (!res?.ok) {
-      toast.error("Could not save the new order")
+      toast.error("Couldn't save the new order. Try again.")
       fetchCodes()
     }
     invalidateSystemCodeCache(category)
@@ -246,27 +240,21 @@ export function DropdownsManager({
         <Label className="text-sm font-medium">{currentCategoryLabel}</Label>
       )}
 
-      {/* Add New Item */}
-      {feedback && (
-        <div className={`p-3 rounded-lg text-sm font-medium ${feedback.type === 'success' ? 'bg-success-muted text-success' : 'bg-destructive-muted text-destructive'}`}>
-          {feedback.message}
-        </div>
-      )}
       <div>
         <ControlsSectionHeader
-          title={`Add New ${currentCategoryLabel} Option`}
+          title={`Add ${currentCategoryLabel} option`}
           description="Enter a unique code and its display label."
         />
         <form onSubmit={handleAdd} className="flex flex-col gap-4 md:flex-row md:items-end">
           <div className="grid gap-2 md:flex-1">
-            <Label className="text-xs text-muted-foreground">Code (Internal)</Label>
+            <Label className="text-xs text-muted-foreground">Code (internal)</Label>
             <Input
               value={form.code}
               onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
             />
           </div>
           <div className="grid gap-2 md:flex-1">
-            <Label className="text-xs text-muted-foreground">Display Value</Label>
+            <Label className="text-xs text-muted-foreground">Display value</Label>
             <Input
               value={form.value}
               onChange={e => setForm(p => ({ ...p, value: e.target.value }))}
@@ -281,7 +269,7 @@ export function DropdownsManager({
       {/* Item List — a simple table, not a reorderable card stack */}
       <div>
         <ControlsSectionHeader
-          title={`Current ${currentCategoryLabel} Options`}
+          title={`Current ${currentCategoryLabel} options`}
           description="Use the arrows to reorder — that order is the dropdown order throughout the system."
           action={
             <div className="flex items-center gap-2">
@@ -322,7 +310,7 @@ export function DropdownsManager({
                               if (e.key === "Escape") setEditingId(null)
                             }}
                           />
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-success" aria-label="Save" onClick={() => handleInlineEdit(c.id)}>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-success" aria-label="Save" disabled={savingEdit} onClick={() => handleInlineEdit(c.id)}>
                             <Check className="w-3.5 h-3.5" />
                           </Button>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground" aria-label="Cancel" onClick={() => setEditingId(null)}>
@@ -345,28 +333,9 @@ export function DropdownsManager({
                     }
                     subtitle={c.code}
                     badge={
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0 text-destructive hover:text-destructive hover:bg-destructive-muted" aria-label={`Delete ${c.value}`}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete &quot;{c.value}&quot;?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will remove &quot;{c.value}&quot; ({c.code}) from the {currentCategoryLabel} dropdown.
-                              Existing records using this code will not be affected.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-destructive hover:bg-destructive/90">
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0 text-destructive hover:text-destructive hover:bg-destructive-muted" aria-label={`Delete ${c.value}`} onClick={() => handleDelete(c)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     }
                     actions={
                       <>
@@ -388,7 +357,7 @@ export function DropdownsManager({
               <TableRow>
                 <TableHead className="w-16"></TableHead>
                 <TableHead>Code</TableHead>
-                <TableHead>Display Value</TableHead>
+                <TableHead>Display value</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -444,7 +413,7 @@ export function DropdownsManager({
                               if (e.key === "Escape") setEditingId(null)
                             }}
                           />
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success" onClick={() => handleInlineEdit(c.id)}>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success" aria-label="Save" disabled={savingEdit} onClick={() => handleInlineEdit(c.id)}>
                             <Check className="w-3.5 h-3.5" />
                           </Button>
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
@@ -465,28 +434,9 @@ export function DropdownsManager({
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive-muted">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete &quot;{c.value}&quot;?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will remove &quot;{c.value}&quot; ({c.code}) from the {currentCategoryLabel} dropdown.
-                              Existing records using this code will not be affected.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(c.id)} className="bg-destructive hover:bg-destructive/90">
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive-muted" aria-label={`Delete ${c.value}`} onClick={() => handleDelete(c)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -500,7 +450,7 @@ export function DropdownsManager({
       {showDeleted && (
         <div>
           <ControlsSectionHeader
-            title={`Deleted ${currentCategoryLabel} Options`}
+            title={`Deleted ${currentCategoryLabel} options`}
             description="Hidden from every dropdown. Restore one to put it back at the end of the list (adding its code again above does the same)."
           />
           <ControlsSectionBody>

@@ -29,7 +29,7 @@ export default function GettingStarted() {
 
       <H2>First sign-in</H2>
       <ol className="docs-steps">
-        <li>Open the sign-in address. Enter the <strong>Enterprise Code</strong>, your <strong>Email</strong> and the temporary <strong>Password</strong>, then choose <strong>Sign In</strong>.</li>
+        <li>Open the sign-in address. Enter the <strong>Enterprise code</strong>, your <strong>Email</strong> and the temporary <strong>Password</strong>, then choose <strong>Sign in</strong>.</li>
         <li>
           The <strong>Set your password</strong> screen opens. Enter a <strong>New password</strong> of at least 12 characters (not
           the temporary one), confirm it, and choose <strong>Set password and continue</strong>.
@@ -46,9 +46,10 @@ export default function GettingStarted() {
 
       <H2>Opening the Hub</H2>
       <p>
-        All configuration is in the Hub. From the dashboard, open the account menu at the bottom of the sidebar (your name) and choose{" "}
-        <strong>Hub</strong>. The menu shows this only to people who have setup permissions. To go back, open the account menu in the
-        Hub&apos;s sidebar and choose <strong>Open property dashboard</strong>.
+        All configuration is in the Hub. From the dashboard, choose <strong>Setup</strong> at the top right of the header, or open
+        the account menu at the bottom of the sidebar (your name) and choose <strong>Hub</strong>. Both are shown only to people who
+        have setup permissions. To go back, choose <strong>Operations</strong> at the top right of the Hub, or open the account menu
+        in the Hub&apos;s sidebar and choose <strong>Open property dashboard</strong>.
       </p>
 
       <H3>The Hub sidebar</H3>
@@ -59,10 +60,13 @@ export default function GettingStarted() {
           ["Enterprise", "Properties, People, Sessions, Email & SFTP, Booking API Keys, Support Access, Guest Lists."],
           [
             "Property",
-            "Controls (the property's setup pages) and Channel Manager. A band at the top of every property page reads Configuring · property name, with a switcher to change property.",
+            "Controls (the property's setup pages) and Channel Manager. Controls opens into a list of the property's setup sections, so you can move from one section to the next without going back to the Controls page. A band at the top of every property page reads Configuring · property name, with a switcher to change property.",
           ],
         ]}
       />
+      <p>
+        Longer setup pages, with three or more sections, show links under the page title that jump straight to each section.
+      </p>
       <p>
         You only see the menu items your roles allow. Staff who work at a single property never see the Enterprise group. They can
         still reach their own property&apos;s setup if their role includes Property Setup.

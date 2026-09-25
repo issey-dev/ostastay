@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/lib/toast"
+import { SubmitButton } from "@/components/ui/submit-button"
 
 // Skip the business date over a period the property was CLOSED, without running an
 // End-of-Day for each day (app-owner request, 2026-08-03).
@@ -108,7 +109,7 @@ export function RollForwardDialog({
           }
         }}
       >
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Roll the business date forward</DialogTitle>
             <DialogDescription>
@@ -158,9 +159,9 @@ export function RollForwardDialog({
             <Button variant="outline" onClick={() => setOpen(false)} disabled={rolling}>
               Cancel
             </Button>
-            <Button onClick={() => void roll()} disabled={!preview?.canRoll || rolling || checking}>
-              {rolling ? "Rolling…" : "Roll forward"}
-            </Button>
+            <SubmitButton type="button" onClick={() => void roll()} pending={rolling} pendingLabel="Rolling…" disabled={!preview?.canRoll || checking}>
+              Roll forward
+            </SubmitButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

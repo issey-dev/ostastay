@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Save } from "@/components/icons"
+import { InlineLoading } from "@/components/ui/inline-loading"
+import { EmptyState } from "@/components/ui/empty-state"
+import { SectionSaveFooter } from "@/components/controls/save-status"
 import { useRouter } from "next/navigation"
 import { PropertyLogoUploader } from "@/components/controls/property-logo-uploader"
 import {
@@ -125,13 +126,15 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
         placed = true
       }
     }
-    if (!placed) setServerError(data?.error ?? "Could not save the property.")
+    if (!placed) setServerError(data?.error ?? "Couldn't save the property. Try again.")
   }
 
-  if (loading) return <div className="py-8 text-center text-muted-foreground">Loading property...</div>
-  if (!detail) return <div className="py-8 text-center text-muted-foreground">No property found. Create one under Inventory first.</div>
+  if (loading) return <InlineLoading className="py-8" label="Loading property" />
+  if (!detail) return <EmptyState size="inline" className="py-8" title="No property found. Create one under Inventory first." />
 
   const saving = form.formState.isSubmitting
+  // One Save for the section, disabled until something changed; "Saved" after a save.
+  const status = form.formState.isDirty ? "dirty" : savedMsg ? "saved" : "idle"
 
   const text = (name: keyof PropertyProfileFormValues, label: string, opts: { placeholder?: string; type?: string; description?: string; className?: string; upper?: boolean; inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"] } = {}) => (
     <FormField
@@ -158,7 +161,7 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Saved on its own the moment it's uploaded — not by "Save Property". Kept outside
+      {/* Saved on its own the moment it's uploaded — not by the section's Save. Kept outside
           the <form> so its buttons can never submit the profile. */}
       <PropertyLogoUploader
         propertyId={detail.id}
@@ -172,15 +175,15 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {text("name", "Property Name")}
-            {text("legalName", "Legal Name")}
-            {text("code", "Short Code", { placeholder: "e.g. SGH", upper: true, description: "Letters, digits or dashes (up to 12). Must be unique." })}
-            {text("starRating", "Star Rating", { placeholder: "0–5 (optional)", inputMode: "numeric" })}
-            {text("checkInTime", "Check-in Time", { placeholder: "14:00", description: "24-hour HH:MM" })}
-            {text("checkOutTime", "Check-out Time", { placeholder: "11:00", description: "24-hour HH:MM" })}
+            {text("name", "Property name")}
+            {text("legalName", "Legal name")}
+            {text("code", "Short code", { placeholder: "e.g. SGH", upper: true, description: "Letters, digits or dashes (up to 12). Must be unique." })}
+            {text("starRating", "Star rating", { placeholder: "0–5 (optional)", inputMode: "numeric" })}
+            {text("checkInTime", "Check-in time", { placeholder: "14:00", description: "24-hour HH:MM" })}
+            {text("checkOutTime", "Check-out time", { placeholder: "11:00", description: "24-hour HH:MM" })}
             {text("taxId", "Tax ID")}
-            {text("contactPhone", "Contact Phone", { type: "tel", placeholder: "Optional" })}
-            {text("contactEmail", "Contact Email", { type: "email", placeholder: "Optional" })}
+            {text("contactPhone", "Contact phone", { type: "tel", placeholder: "Optional" })}
+            {text("contactEmail", "Contact email", { type: "email", placeholder: "Optional" })}
             {text("address", "Address", {
               className: "md:col-span-2",
               placeholder: "e.g. North Male Atoll, Maldives",
@@ -189,13 +192,8 @@ export function PropertyProfileManager({ propertyId }: { propertyId: string }) {
           </div>
           <p className="text-xs text-muted-foreground">The enterprise this property belongs to cannot be changed here.</p>
 
-          <div className="flex items-center gap-3 justify-end pt-4 border-t">
-            {serverError && <span className="text-sm text-destructive" role="alert">{serverError}</span>}
-            {savedMsg && <span className="text-sm text-success">Saved</span>}
-            <Button type="submit" disabled={saving}>
-              <Save className="w-4 h-4 mr-2" /> {saving ? "Saving..." : "Save Property"}
-            </Button>
-          </div>
+          {serverError && <p className="text-sm text-destructive" role="alert">{serverError}</p>}
+          <SectionSaveFooter status={status} saving={saving} />
         </form>
       </Form>
     </div>

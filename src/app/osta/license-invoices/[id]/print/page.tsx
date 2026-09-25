@@ -102,7 +102,7 @@ export default function LicenseInvoicePrintPage({ params }: { params: Promise<{ 
       extraActions={
         invoice.status === "PAID" ? (
           <Button variant="outline" onClick={() => setMode(mode === "invoice" ? "receipt" : "invoice")}>
-            {mode === "invoice" ? "Show Payment Receipt" : "Show Invoice"}
+            {mode === "invoice" ? "Show payment receipt" : "Show invoice"}
           </Button>
         ) : undefined
       }

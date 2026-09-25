@@ -2,6 +2,7 @@ import { Building2, ClipboardCheck, ShieldCheck, DollarSign, CalendarClock, Rece
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { InfoHint } from "@/components/ui/info-hint"
+import { PageHeader } from "@/components/ui/page-header"
 import { EmptyState } from "@/components/ui/empty-state"
 import { prisma } from "@/lib/db"
 import { computeLicenseState } from "@/lib/license"
@@ -63,24 +64,19 @@ export default async function OstaOverviewPage() {
 
   const cards = [
     { title: "Enterprises", value: enterpriseCount, icon: Building2, href: "/osta/enterprises" },
-    { title: "Pending Property Approvals", value: pendingPropertyCount, icon: ClipboardCheck, href: "/osta/properties" },
-    { title: "Active Support Grants", value: activeGrantCount, icon: ShieldCheck, href: "/osta/support-access" },
+    { title: "Pending property approvals", value: pendingPropertyCount, icon: ClipboardCheck, href: "/osta/properties" },
+    { title: "Active support grants", value: activeGrantCount, icon: ShieldCheck, href: "/osta/support-access" },
   ]
 
   const licenseCards = [
-    { title: "Monthly Recurring Revenue", value: formatMoney(mrrByCurrency), icon: DollarSign, href: "/osta/licensing" },
-    { title: `Expiring Within ${EXPIRING_SOON_DAYS}d`, value: expiringSoon.length, icon: CalendarClock, href: "/osta/licensing" },
-    { title: "Unpaid Invoices", value: `${unpaidInvoices.length} · ${formatMoney(unpaidByCurrency)}`, icon: ReceiptText, href: "/osta/licensing" },
+    { title: "Monthly recurring revenue", value: formatMoney(mrrByCurrency), icon: DollarSign, href: "/osta/licensing" },
+    { title: `Expiring within ${EXPIRING_SOON_DAYS}d`, value: expiringSoon.length, icon: CalendarClock, href: "/osta/licensing" },
+    { title: "Unpaid invoices", value: `${unpaidInvoices.length} · ${formatMoney(unpaidByCurrency)}`, icon: ReceiptText, href: "/osta/licensing" },
   ]
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">
-            Overview
-            <InfoHint label="Overview">Every enterprise, property, and support grant on the platform, in one place.</InfoHint>
-          </h2>
-      </div>
+      <PageHeader title="Overview" tabTitle="Overview · Osta" hint="Every enterprise, property, and support grant on the platform, in one place." />
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         {cards.map((c) => (
           <a key={c.title} href={c.href}>
@@ -121,7 +117,7 @@ export default async function OstaOverviewPage() {
 
       <Card className="shadow-elevation-1">
         <CardHeader>
-          <CardTitle className="text-base">Needs Attention</CardTitle>
+          <CardTitle className="text-base">Needs attention</CardTitle>
         </CardHeader>
         <CardContent>
           {needingAttention.length === 0 ? (
@@ -136,7 +132,7 @@ export default async function OstaOverviewPage() {
                 >
                   <span className="text-sm font-medium">{e.name}</span>
                   <StatusBadge
-                    label={e.state === "GRACE" ? "Grace Period" : "Expired"}
+                    label={e.state === "GRACE" ? "Grace period" : "Expired"}
                     status={e.state}
                     dot
                   />

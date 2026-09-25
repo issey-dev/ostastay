@@ -37,7 +37,7 @@ export default function OnlineBooking() {
           ["Headline, Description, Photo URLs, Policies", "What the website shows about the property. Policies are shown to guests, so write what you actually apply."],
         ]}
       />
-      <p>Choose <strong>Save settings</strong>. Only active, real room types (not pseudo) are offered, and a website can never overbook.</p>
+      <p>Choose <strong>Save</strong>. Only active, real room types (not pseudo) are offered, and a website can never overbook.</p>
 
       <H2>Excursions &amp; Spa</H2>
       <p>One row per module. Its badge says <strong>Selling online</strong> when ready, or what is missing. Choose <strong>Settings</strong>:</p>

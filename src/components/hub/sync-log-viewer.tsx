@@ -296,7 +296,7 @@ export function SyncLogViewer({ propertyId }: { propertyId: string }) {
           {nextCursor && (
             <div className="flex justify-center">
               <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
-                {loadingMore ? "Loading..." : "Load more"}
+                {loadingMore ? "Loading…" : "Load more"}
               </Button>
             </div>
           )}

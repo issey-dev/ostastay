@@ -1,5 +1,6 @@
 "use client"
 
+import { InlineLoading } from "@/components/ui/inline-loading"
 import { useEffect, useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ROOM_FEATURE_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
@@ -73,7 +74,7 @@ export function RoomFeaturePicker({
   const selectedGrouped = groupFeaturesByCategory(selectedOptions)
 
   if (loading) {
-    return <p className="text-xs text-muted-foreground">Loading feature options...</p>
+    return <InlineLoading lines={2} label="Loading feature options" />
   }
 
   if (allOptions.length === 0) {

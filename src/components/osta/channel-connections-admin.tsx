@@ -20,7 +20,7 @@ import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
 import {
   type Connection,
-  StatusBadge,
+  ConnectionBadge,
   RateLimitPanel,
   formatDateTime,
 } from "@/components/hub/connection-shared"
@@ -372,7 +372,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
                   <div className="min-w-0">
                     <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                       {c.name}
-                      <StatusBadge status={c.status} />
+                      <ConnectionBadge status={c.status} />
                       {c.hasWebhook ? (
                         <Badge variant="secondary">Webhook set</Badge>
                       ) : (

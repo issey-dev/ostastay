@@ -156,7 +156,7 @@ export function PropertyOnboardingGate({
               <CardTitle className="text-lg flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-muted-foreground" />
                 No property available
-              <InfoHint>Your account is not attached to an active property yet. Your administrator needs to add one — or have it approved — before you can use the system. Please contact them.</InfoHint>
+              <InfoHint>Your account is not attached to an active property yet. Your administrator needs to add one — or have it approved — before you can use the system.</InfoHint>
             </CardTitle>
             </CardHeader>
           </Card>
