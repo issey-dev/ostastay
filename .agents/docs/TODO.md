@@ -1912,6 +1912,9 @@ App-owner brief for the Reservations screen, phone-first.
   the exclusion only applies when no status preference was expressed. CANCELLED is NOT
   hidden (the owner named only the two). The dropdown's default label is therefore
   "Active bookings", not "All statuses", which would now be a lie.
+  **Superseded on the page (2026-09-25, DECISIONS):** the default list is RESERVED only
+  ("On the books"). A search with no status now covers EVERY status, checked-out and
+  no-show included, served by pg_trgm indexes.
 - **Mobile**: Auto-Assign and Tape Chart hidden below `sm` (a room grid and a bulk sweep
   are not phone work, and they squeezed the title onto two lines); filters moved into a
   bottom-sheet drawer with an active-filter count badge. New Booking stays.
