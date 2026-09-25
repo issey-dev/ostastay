@@ -105,8 +105,9 @@ export function DashboardSettings({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Header and footer stay put while the lists scroll between them — on a phone the
           widget list is long, and "Done" must not scroll away with it. dvh, not vh: the
-          mobile browser's toolbar would otherwise cover the footer. */}
-      <DialogContent className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-[680px]">
+          mobile browser's toolbar would otherwise cover the footer. This dialog lays out
+          its own pinned header/footer on every size, so it opts out of the shared sheet. */}
+      <DialogContent mobile="none" className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-[680px]">
         <DialogHeader className="border-b border-border p-4 pr-10">
           <DialogTitle>Customise dashboard</DialogTitle>
           <DialogDescription>
