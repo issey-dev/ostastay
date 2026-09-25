@@ -41,7 +41,9 @@ export function IdleSessionWatch({ loginPath }: { loginPath: string }) {
 
   const [expired, setExpired] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const lastActivityRef = useRef(Date.now())
+  // Stamped when the idle clock starts (below), not during render — reading the clock in
+  // render is impure (React may render more than once, or ahead of time).
+  const lastActivityRef = useRef(0)
   const checkingRef = useRef(false)
   const expiredRef = useRef(false)
   useEffect(() => {
@@ -54,6 +56,7 @@ export function IdleSessionWatch({ loginPath }: { loginPath: string }) {
 
   useEffect(() => {
     if (idleMinutes <= 0) return
+    lastActivityRef.current = Date.now()
     ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, noteActivity, { passive: true }))
     return () => {
       ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, noteActivity))

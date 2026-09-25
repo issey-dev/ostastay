@@ -57,3 +57,6 @@ next-env.d.ts
 /storage/logos/
 
 __pycache__/
+
+# Local captures: mobile:audit output, e2e failure screenshots (.tmp/e2e/)
+/.tmp/
