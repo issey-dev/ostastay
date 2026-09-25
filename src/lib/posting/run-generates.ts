@@ -67,6 +67,12 @@ export type PostingContext = {
   adults: number;
   children: number;
   nights: number;
+  /** Green Tax's own basis when it differs from the head count: the adults/children
+   *  who PAY it, after exempt named guests (Maldivian, permit holder, infant, ticked)
+   *  are taken off — see src/lib/green-tax-exemption.ts. Absent → adults/children.
+   *  Per-person charges that are not Green Tax keep the full head count. */
+  greenTaxAdults?: number;
+  greenTaxChildren?: number;
 };
 
 export type GenerateRow = {
@@ -163,8 +169,10 @@ function computeOne(
       if (!env.settings?.greenTaxEnabled) return 0;
       const ctx = env.context;
       if (!ctx) return 0;
+      const adults = ctx.greenTaxAdults ?? ctx.adults;
+      const children = ctx.greenTaxChildren ?? ctx.children;
       const perNight = round2(
-        ctx.adults * (env.settings.greenTaxAdultAmount ?? 0) + ctx.children * (env.settings.greenTaxChildAmount ?? 0)
+        adults * (env.settings.greenTaxAdultAmount ?? 0) + children * (env.settings.greenTaxChildAmount ?? 0)
       );
       return round2(perNight * Math.max(0, ctx.nights));
     }

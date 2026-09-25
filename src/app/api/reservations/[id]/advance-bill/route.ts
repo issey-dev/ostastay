@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
+import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
 import { postCharge, chargeCodeInclude, type PostableChargeCode } from "@/lib/posting/post-charge";
 import { resolveChargeCode, MissingChargeCodeError } from "@/lib/posting/resolve-charge-code";
 import type { GenerateRow } from "@/lib/posting/run-generates";
@@ -99,8 +100,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     const gtxCode = await resolveChargeCode({ propertyId: reservation.propertyId }, "GREEN_TAX", { settings });
 
+    // Green Tax per person — exempt named guests off the head count, as Night Audit does.
+    const greenTaxBasis = await reservationGreenTaxBasis(reservation.id);
     const quote = await computeReservationQuote({
       propertyId: reservation.propertyId,
+      ...greenTaxBasis,
       assignments: truncated.map(({ a, start, end }) => ({
         roomTypeId: a.roomTypeId,
         chargeRoomTypeId: a.chargeRoomTypeId,
@@ -226,7 +230,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             baseAmount: seg.roomBase, taxAmount: seg.roomTax, serviceChargeAmount: seg.roomServiceCharge,
             // The levy covers every billed night in this run, not just this segment's.
             ...(levyThisSegment
-              ? { postingContext: { adults: reservation.adults, children: reservation.children, nights }, extraGenerates: impliedGreenTax }
+              ? { postingContext: { adults: reservation.adults, children: reservation.children, nights, ...greenTaxBasis }, extraGenerates: impliedGreenTax }
               : {}),
           });
         }

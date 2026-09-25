@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
+import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
 import { resolveChargeTax } from "@/lib/tax-calc";
 import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 
@@ -135,6 +136,8 @@ export async function GET(
       try {
         const quote = await computeReservationQuote({
           propertyId: folio.propertyId,
+          // Green Tax per person, as Night Audit will post it.
+          ...(await reservationGreenTaxBasis(reservation.id)),
           assignments: reservation.assignments.map((a) => ({
             roomTypeId: a.roomTypeId,
             ratePlanId: a.ratePlanId,

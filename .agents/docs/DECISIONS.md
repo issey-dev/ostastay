@@ -3258,3 +3258,40 @@ further questions, so the plan's recommended defaults apply (change any of them 
 eRegistration page — yes; risky actions behind "More" — yes. Also asked to fix every item the
 plan left open (MOBILE_PLAN §7 "Left open").
 
+
+## 2026-09-25 — Green Tax per guest; every guest gets a Registration No (owner)
+
+- **Registration numbers:** every guest on the booking gets one: the primary and every
+  accompanying/sharing guest, **including Green Tax-exempt guests** (infants,
+  Maldivians, permit holders). The arrival details on the sheet are the same for all of
+  them. Numbering already worked this way at arrival. **New:** a guest added to an in-house
+  stay after its arrival night (on the reservation or through eRegistration) was never
+  numbered. The next EOD now numbers them (`src/lib/guest-registration.ts`).
+- **Exemption (owner):** a guest pays no Green Tax when they are **under the exemption age
+  (default 2) at check-in**, **Maldivian**, or hold a **work permit**. The profile's "Green
+  Tax Exempt" box ticks itself for these, locked, with the reason. The manual tick still
+  exists for any other case.
+  - The automatic reasons are **worked out every time, never stored**
+    (`src/lib/green-tax-exemption.ts`). An infant who turns 2, or a corrected nationality,
+    is charged correctly without anyone re-ticking. The stored `Profile.greenTaxExempt`
+    is the manual tick only.
+  - Work permit = any identification document flagged "Work permit", the same test the
+    MIRA sheet already used for category 3. The owner said "as primary"; this was left
+    as any flagged document, pending confirmation.
+  - Maldivian nationality is read in any stored form (MV / MDV / Maldives / Maldivian),
+    shared with the sheet's category 2 (`isMaldivianNationality` in `countries.ts`).
+- **Posting is per person:** before this, the profile tick was stored but **never used**.
+  Green Tax was adults × rate + children × rate from the booking's head counts. It is now
+  the head counts **less the exempt named guests** (`greenTaxPax`). Rules:
+  - An exempt minor (under 18 by birth date) comes off children, anyone else off adults.
+    Either falls back to the other when its count is used up. Never below zero. The same
+    person named twice counts once.
+  - A named infant comes off only if the booking did not already count them in `infants`
+    (that bucket is untaxed already).
+  - Unnamed people on the booking pay.
+  - Other per-person charges (PER_PERSON_PER_NIGHT, allocations) keep the full head count.
+    Only Green Tax uses the reduced one (`PostingContext.greenTaxAdults/greenTaxChildren`).
+- The same basis feeds Night Audit, Advance Bill, the proforma, the daily breakdown, the fee
+  rules and the booking form's quote, so estimates match what posts. **Not** the website
+  Booking API's quote: no profile exists before the booking, so its quoted Green Tax
+  assumes everyone pays. Night Audit then posts per person.

@@ -357,6 +357,7 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     fallbackRoomCode,
     baseRatePlan,
     impliedGreenTaxGenerate,
+    greenTaxExemptAge: settings?.greenTaxExemptAge ?? 2,
     routeTo,
   }
 

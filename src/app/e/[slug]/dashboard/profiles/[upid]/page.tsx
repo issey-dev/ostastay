@@ -18,6 +18,7 @@ import { CountryFlag, CountryLabel } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { ContactLink } from "@/components/ui/contact-link"
 import { cn } from "@/lib/utils"
+import { greenTaxExemptReason, EXEMPT_REASON_LABELS } from "@/lib/green-tax-exemption"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel Agent", STAFF: "Staff",
@@ -554,7 +555,14 @@ export default function ProfileDetailPage({ params }: { params: Promise<{ upid: 
                   )}
                   <div className="flex flex-col gap-3 pt-2 border-t border-border max-md:grid max-md:grid-cols-2">
                     <Field label="Mail List (Marketing)" value={profile.marketingOptIn ? "Yes" : "No"} />
-                    <Field label="Green Tax Exempt" value={profile.greenTaxExempt ? "Yes" : "No"} />
+                    <Field
+                    label="Green Tax Exempt"
+                    value={(() => {
+                      // Same rule as posting: under 2, Maldivian, work permit, or ticked.
+                      const reason = greenTaxExemptReason(profile, new Date(), 2)
+                      return reason ? `Yes — ${EXEMPT_REASON_LABELS[reason].toLowerCase()}` : "No"
+                    })()}
+                  />
                     <Field label="Incognito Mode" value={profile.isIncognito ? "Yes" : "No"} />
                   </div>
                 </CardContent>
