@@ -3401,3 +3401,12 @@ it — **not yet confirmed by the owner**:
   By check) stay; "By check" uses the new check number. Owner: make sure every option works.
 - Folio "Post charge": the charge code is picked by typing the code or its description
   (searchable), full width.
+
+## 2026-09-26 — Hotfix releases after 8.4.0 (owner)
+
+- Patch releases **8.4.1, 8.4.2, 8.4.3**, one per follow-up, **no release notes** for these
+  hotfixes (owner). 8.4.1 production readiness (code parts only), 8.4.2 copy Spa / Excursion
+  catalogues and Allocations between properties (Hub Phase 5b), 8.4.3 automated click-through
+  tests + the lint error. Owner asked for code changes only — server/ops steps stay manual.
+- Marketing site move (`/info` → uppsolut.com): **skipped for now** (owner) — hosting of
+  uppsolut.com is still unknown.

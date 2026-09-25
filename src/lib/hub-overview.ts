@@ -20,6 +20,10 @@ import { hasPlatformEmailAddon } from "@/lib/mail-sender"
 
 export type OverviewSeverity = "critical" | "warning"
 
+// The host cron calls the jobs every 15 minutes (DEPLOY.md §7). Two missed calls plus
+// slack before the Hub says the scheduler has stopped.
+const SCHEDULER_STALE_MINUTES = 45
+
 export type OverviewBanner = {
   id: string
   severity: OverviewSeverity
@@ -200,6 +204,36 @@ export async function loadHubOverview(ctx: AuthContext, slug: string): Promise<H
           href: `/e/${slug}/hub/enterprise/email`,
           actionLabel: "Set up email",
         })
+      }
+    }
+
+    // The scheduler itself stopped: every cron call writes a JobRun for each job, so no run
+    // for a while means the host cron isn't firing (or runs hourly instead of every 15
+    // minutes — DEPLOY.md §7). Only raised when a property actually relies on it for a
+    // scheduled Night Audit; otherwise a missing cron has nothing to delay.
+    if (hasPermission(ctx, "NIGHT_AUDIT", "view") || hasPermission(ctx, "INTEGRATIONS", "view")) {
+      const scheduled = await prisma.propertySettings.count({
+        where: { autoAuditEnabled: true, property: { enterpriseId: ctx.enterpriseId, status: "ACTIVE" } },
+      })
+      if (scheduled > 0) {
+        const lastRun = await prisma.jobRun.findFirst({
+          where: { enterpriseId: ctx.enterpriseId },
+          orderBy: { startedAt: "desc" },
+          select: { startedAt: true },
+        })
+        const minutesAgo = lastRun ? Math.floor((Date.now() - lastRun.startedAt.getTime()) / 60000) : null
+        if (minutesAgo === null || minutesAgo > SCHEDULER_STALE_MINUTES) {
+          enterpriseBanner({
+            id: "enterprise:scheduler",
+            severity: "critical",
+            title: "Scheduled jobs are not running",
+            detail:
+              (minutesAgo === null
+                ? "No background job has run yet."
+                : `The last background run was ${minutesAgo >= 120 ? `${Math.floor(minutesAgo / 60)} hours` : `${minutesAgo} minutes`} ago.`) +
+              ` ${scheduled === 1 ? "A property's" : `${scheduled} properties'`} scheduled Night Audit will not start on time. Contact Uppsolut support.`,
+          })
+        }
       }
     }
 

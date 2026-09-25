@@ -19,6 +19,7 @@
   "include": [
     "scripts/bootstrap-admin.ts",
     "scripts/ensure-platform.ts",
+    "scripts/checkno-verify.ts",
     "prisma/rbac-seed-data.ts",
     "src/lib/modules.ts"
   ]

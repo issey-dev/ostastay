@@ -2,6 +2,7 @@ import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import type { ReportResult, ReportBranding, ReportColumn } from "@/lib/reports/types";
 import { formatCell, isNumericColumn } from "@/lib/reports/format";
 import { CRIMSON_OS, OBSIDIAN_BLACK, STEEL_SLATE, COOL_PLATINUM } from "@/lib/brand";
+import { logoFileFromUrl, readLogo } from "@/lib/property-logo";
 
 // Hex -> pdf-lib's [0,1] rgb() triple. Used both for the branding fallback below and to
 // convert the brand.ts literals (which are hex strings, like everywhere else in the app)
@@ -12,6 +13,8 @@ function hexToTriple(hex: string): [number, number, number] {
 }
 
 const A4 = { w: 595.28, h: 841.89 };
+// Logo height on the title page (the logo is 3:2, so ~42pt wide).
+const LOGO_H = 28;
 const MARGIN = 36;
 const ROW_H = 16;
 const HEADER_H = 18;
@@ -57,6 +60,21 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
   const brand = hexToRgb(branding.brandColor, hexToTriple(CRIMSON_OS));
   const muted = rgb(...hexToTriple(STEEL_SLATE));
 
+  // The property's logo, top-right of the title block — the Chrome renderer shows it, so the
+  // fallback must too. Read from our own storage (never fetched over HTTP); a missing or
+  // unreadable file just leaves the logo out rather than failing the report.
+  let logo: { image: Awaited<ReturnType<PDFDocument["embedPng"]>>; w: number; h: number } | null = null;
+  const logoName = logoFileFromUrl(branding.logoUrl);
+  if (logoName) {
+    try {
+      const image = await doc.embedPng(await readLogo(logoName));
+      const h = LOGO_H;
+      logo = { image, w: (image.width / image.height) * h, h };
+    } catch {
+      logo = null;
+    }
+  }
+
   // Column x offsets from relative widths.
   const totalWeight = result.columns.reduce((s, c) => s + (c.width ?? 1), 0);
   const colW = result.columns.map((c) => ((c.width ?? 1) / totalWeight) * usableW);
@@ -86,9 +104,11 @@ export async function renderPdf(result: ReportResult, branding: ReportBranding):
     page = doc.addPage([pageW, pageH]);
     y = pageH - MARGIN;
     if (withTitle) {
-      page.drawText(fit(result.title, usableW, bold, 16), { x: MARGIN, y: y - 14, size: 16, font: bold, color: rgb(...hexToTriple(OBSIDIAN_BLACK)) });
+      if (logo) page.drawImage(logo.image, { x: pageW - MARGIN - logo.w, y: y - logo.h + 2, width: logo.w, height: logo.h });
+      const titleW = logo ? usableW - logo.w - 12 : usableW;
+      page.drawText(fit(result.title, titleW, bold, 16), { x: MARGIN, y: y - 14, size: 16, font: bold, color: rgb(...hexToTriple(OBSIDIAN_BLACK)) });
       y -= 22;
-      page.drawText(fit(`${branding.propertyName} · ${branding.enterpriseName}  ·  Currency: ${branding.currency}`, usableW, font, 9), { x: MARGIN, y: y - 10, size: 9, font, color: muted });
+      page.drawText(fit(`${branding.propertyName} · ${branding.enterpriseName}  ·  Currency: ${branding.currency}`, titleW, font, 9), { x: MARGIN, y: y - 10, size: 9, font, color: muted });
       y -= 14;
       if (result.subtitle) { page.drawText(fit(result.subtitle, usableW, font, 9), { x: MARGIN, y: y - 10, size: 9, font, color: muted }); y -= 14; }
       if (result.note) { page.drawText(fit(result.note, usableW, font, 8), { x: MARGIN, y: y - 9, size: 8, font, color: muted }); y -= 13; }

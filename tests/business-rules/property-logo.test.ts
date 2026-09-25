@@ -18,7 +18,9 @@ vi.mock("next/headers", () => ({
 const { prisma } = await import("@/lib/db");
 const { createSession, destroySession } = await import("@/lib/auth");
 const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-data");
-const { validateLogo, pngSize, absoluteLogoUrl, LogoValidationError } = await import("@/lib/property-logo");
+const { validateLogo, pngSize, absoluteLogoUrl, LogoValidationError, saveLogo, deleteLogoFile } = await import("@/lib/property-logo");
+const { renderPdf } = await import("@/lib/reports/render/pdf");
+const { PDFDocument, PDFName, PDFDict } = await import("pdf-lib");
 const { loadEmailBranding } = await import("@/lib/document-settings");
 const logoRoute = await import("@/app/api/properties/[id]/logo/route");
 const serveRoute = await import("@/app/api/logos/[file]/route");
@@ -159,6 +161,27 @@ describe("uploading a property logo", () => {
     expect((await upload(adminId, propertyId, png(1200, 1200))).status).toBe(400);
     expect((await upload(adminId, propertyId, Buffer.from("<svg/>"))).status).toBe(400);
     expect((await upload(otherAdminId, propertyId, png(900, 600))).status).toBe(403);
+  });
+
+  it("prints the logo on the fallback (pdf-lib) report too, and skips a missing file", async () => {
+    const imagesOnFirstPage = async (bytes: Uint8Array) => {
+      const doc = await PDFDocument.load(bytes);
+      const resources = doc.getPages()[0].node.Resources();
+      const xobjects = resources?.lookupMaybe(PDFName.of("XObject"), PDFDict);
+      return xobjects ? xobjects.keys().length : 0;
+    };
+    const result = { title: "Trial balance", columns: [{ key: "a", label: "A" }], rows: [{ a: "x" }] };
+    const branding = { propertyName: "P", enterpriseName: "E", currency: "USD", generatedBy: "T", generatedAt: new Date() };
+
+    const url = await saveLogo(`logo-test-${uniq()}`, png(900, 600));
+    try {
+      expect(await imagesOnFirstPage(await renderPdf(result as never, { ...branding, logoUrl: url }))).toBe(1);
+      expect(await imagesOnFirstPage(await renderPdf(result as never, branding))).toBe(0);
+    } finally {
+      await deleteLogoFile(url);
+    }
+    // The file is gone now: the report still renders, without a logo.
+    expect(await imagesOnFirstPage(await renderPdf(result as never, { ...branding, logoUrl: url }))).toBe(0);
   });
 
   it("never serves a path outside the logo store", async () => {
