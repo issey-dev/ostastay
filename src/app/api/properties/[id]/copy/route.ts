@@ -19,7 +19,12 @@ const SECTION_LABEL: Record<(typeof COPY_SECTIONS)[number], string> = {
   "meal-plans": "meal plans",
   "room-types": "room types",
   outlets: "outlets",
+  allocations: "allocations",
+  spa: "Spa catalogue items",
+  excursions: "excursions",
 }
+// The Spa and Excursions sections belong to add-ons: previewCopy/runCopy refuse them (403)
+// for an enterprise without that add-on — SECTION_ADDON in src/lib/property-copy.ts.
 
 /**
  * GET ?section=&from=  — what the source has in that section, each item marked `exists`

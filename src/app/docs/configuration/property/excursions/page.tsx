@@ -69,6 +69,12 @@ export default function Excursions() {
       <p>
         To sell excursions on your own website, see <a href="/docs/configuration/property/online-booking">Online booking</a>.
       </p>
+      <H3>Another property?</H3>
+      <p>
+        <strong>Copy from…</strong> copies excursions from another property, with their prices, charge code and schedules. Anything
+        this property already has is skipped, never overwritten. Departures and bookings are never copied: generate this
+        property&apos;s own departures afterwards. Copied excursions start unpublished online.
+      </p>
       <Pager href="/docs/configuration/property/excursions" />
     </>
   )

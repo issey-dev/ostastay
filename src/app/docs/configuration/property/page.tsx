@@ -87,9 +87,9 @@ export default function PropertySetup() {
       <Callout title="Setting up a second property?">
         <p>
           Most property pages have a <strong>Copy from…</strong> button. It copies from another active property of your enterprise:
-          room types and room-feature lists, reservation lists, meal plans, tax profiles, payment methods, charge codes, outlets and
-          stationery. Items the property already has are skipped, never overwritten. Rooms, prices and numbering are never copied:
-          they are physical or specific to each property.
+          room types and room-feature lists, reservation lists, meal plans, allocations, tax profiles, payment methods, charge codes,
+          outlets, stationery, and the Spa and Excursion catalogues. Items the property already has are skipped, never overwritten.
+          Rooms, rate plans, therapists, departures and numbering are never copied: they are physical or specific to each property.
         </p>
       </Callout>
       <Pager href="/docs/configuration/property" />

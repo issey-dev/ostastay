@@ -25,7 +25,15 @@ export default async function HubPropertyRevenuePage({ params }: { params: Promi
       </ControlsCard>
       <MealPlansManager
         propertyId={property.id}
-        copyAction={canEdit("create") && <CopyFromPropertyButton propertyId={property.id} section="meal-plans" title="meal plans" />}
+        copyAction={
+          canEdit("create") && (
+            <>
+              {/* Allocations are managed on the dashboard's Revenue page — this is the Hub's way to copy them. */}
+              <CopyFromPropertyButton propertyId={property.id} section="allocations" title="allocations" label="Copy allocations from…" />
+              <CopyFromPropertyButton propertyId={property.id} section="meal-plans" title="meal plans" label="Copy meal plans from…" />
+            </>
+          )
+        }
         permissions={mealPlanPermissions}
         title="Meal plans"
         description="Meal plan codes offered on this property's reservations (Bed & Breakfast, Half Board, etc.). A meal plan is priced per person through the Allocations it includes (Revenue > Allocations, e.g. BB → BF), which post at Night Audit when Allocation Calculation is set to Meal Plan level. A code can't be changed or deleted once reservations use it — deactivate it instead."
