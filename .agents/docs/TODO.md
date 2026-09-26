@@ -62,10 +62,10 @@ Bugs found during the audit (fix in Desktop Phase 1 unless the owner says otherw
       Proforma Invoice, Interim Bill, report names like Guest Ledger), status names in prose,
       print/stationery pages. Configuration guide text updated to the new labels;
       `docs-shots`/`mobile-audit` match case-insensitively so needed no change.
-- [ ] After the sentence-case pass: re-shoot the docs screenshots (`npm run docs:demo` then
+- [x] (done: all 41 re-shot after the pass) After the sentence-case pass: re-shoot the docs screenshots (`npm run docs:demo` then
       `npm run docs:shots`) and rebuild the PDFs (`npm run docs:pdf`) — labels in the current
       shots/PDFs are still Title Case.
-- [ ] Night audit auto no-shows un-arrived bookings showing only a count (no names, no pause).
+- [x] (done in 8.3.0: Night Audit lists them by name and pauses) Night audit auto no-shows un-arrived bookings showing only a count (no names, no pause).
 
 ## Mobile polish (2026-09-25) — ALL PHASES DONE
 
@@ -129,8 +129,7 @@ Open:
 ## Property logo upload (2026-09-24) — DONE
 
 See DECISIONS.md (2026-09-24, "Property logo is uploaded"). Open:
-- [ ] The pdf-lib report FALLBACK (used only when headless Chrome fails) draws no logo —
-  it would need the PNG bytes embedded (`ReportBranding.logoDataUrl` exists, unused).
+- [x] (8.4.1) The pdf-lib report fallback embeds the property logo (read from storage).
 - [ ] Osta's own licence invoices still use `EnterpriseSettings.invoiceLogoUrl` (a URL
   field) — move to the same upload if the owner wants it there too.
 - [ ] Backups: `storage/logos` lives on the `osta-uploads` volume with the eRegistration
@@ -225,7 +224,8 @@ becomes setup/health banners.
 - [x] Phase 6 — Overview banners (missing setup, Green Tax issues, channel status, failed
   jobs only); link cards and job card removed; single-property users see their own
 
-- [ ] **Deployment:** run the jobs cron (`POST /api/jobs/run`) every 15 minutes, not hourly —
+- [ ] **Deployment:** (8.4.1: the Hub Overview now warns "Scheduled jobs are not running"
+  when no job has run for 45 min and a property has a scheduled Night Audit) run the jobs cron (`POST /api/jobs/run`) every 15 minutes, not hourly —
   a property's scheduled Night Audit starts at the first run after its set time. DEPLOY.md
   §7 now says so; the VPS crontab itself still has to be changed by hand.
 

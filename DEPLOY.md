@@ -298,6 +298,20 @@ docker compose up -d --build
 Migrations apply automatically on boot. Take a backup first if the release includes
 schema changes.
 
+**Checking the folio check numbers (8.4.0 and later).** The 8.4.0 migration numbered every
+existing folio line. To confirm it did so correctly on this server's data — read-only,
+changes nothing:
+
+```bash
+docker compose exec app node dist-scripts/scripts/checkno-verify.js
+```
+
+Each property prints `OK` or `LOOK` with what to review; the exit code is 1 when anything
+needs a look.
+
+**Scheduled jobs.** If the cron in §7 stops (or still runs hourly), the Hub Overview shows
+"Scheduled jobs are not running" to admins of any enterprise with a scheduled Night Audit.
+
 ---
 
 ## Scaling

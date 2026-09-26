@@ -109,6 +109,27 @@ describe("Hub Overview", () => {
     expect(job?.href).toBeUndefined();
   });
 
+  it("warns that scheduled jobs stopped only when a property relies on a scheduled Night Audit", async () => {
+    const stalled = async () => (await overviewFor(adminId)).banners.find((b) => b.id === "enterprise:scheduler");
+    // Old runs, but no property schedules its audit: nothing to warn about.
+    await prisma.jobRun.updateMany({ where: { enterpriseId }, data: { startedAt: new Date(Date.now() - 2 * 3600_000) } });
+    expect(await stalled()).toBeUndefined();
+
+    await prisma.propertySettings.upsert({
+      where: { propertyId: beachId },
+      update: { autoAuditEnabled: true },
+      create: { propertyId: beachId, autoAuditEnabled: true },
+    });
+    const banner = await stalled();
+    expect(banner?.severity).toBe("critical");
+    expect(banner?.detail).toContain("2 hours ago");
+
+    // A fresh run clears it.
+    await prisma.jobRun.create({ data: { enterpriseId, jobName: "channel-keepalive", status: "SUCCEEDED", finishedAt: new Date() } });
+    expect(await stalled()).toBeUndefined();
+    await prisma.propertySettings.update({ where: { propertyId: beachId }, data: { autoAuditEnabled: false } });
+  });
+
   it("shows a single-property admin their own property only, and nothing enterprise-level", async () => {
     const { banners, channels } = await overviewFor(lagoonAdminId);
     expect(banners.length).toBeGreaterThan(0);
