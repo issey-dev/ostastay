@@ -2,6 +2,22 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Browser click-through tests (2026-09-26, 8.4.3) — DONE, follow-ups open
+
+`npm run test:e2e` (README "Browser click-through tests"): puppeteer specs in `tests/e2e/`
+(`*.e2e.ts`, own config `vitest.e2e.config.ts`) against the running app, inside the
+isolated `e2e` enterprise that `tests/e2e/fixtures.ts` creates. Covers booking → check-in →
+folio charge (roll-up) + payment → check-out, balance guard (Open folio), Ctrl+K, End of Day.
+- [ ] Not in CI: the pipeline would have to build + start the app against `ostastay_test`
+  and seed the system roles first. Until then run it locally before a release.
+- [x] (8.4.3) Folio "Post payment": the Payment method trigger shows its "Select method"
+  placeholder again (SelectValue children fall back to it).
+- [x] (8.4.3) Look-to-book "Sold out {date}" a day early on a server east of UTC — the
+  cause was the LOCAL-midnight `dayStartMs` in `src/app/api/reservations/rate-availability/
+  route.ts` (its inputs are all UTC midnight); now UTC days, test asserts the exact nights.
+  `src/lib/availability.ts` deliberately keeps LOCAL days: the channel manager and Website
+  API feed it local-midnight dates (their tests pin that) — do not "fix" it the same way.
+
 ## Folio check numbers and roll-up (2026-09-26, 8.4.0) — DONE
 
 Owner rule: DECISIONS.md "Folio check numbers and roll-up". Done: `FolioLineItem.checkNo`

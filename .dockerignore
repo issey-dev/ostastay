@@ -27,6 +27,7 @@ coverage
 tests
 vitest.config.ts
 vitest.global-setup.ts
+vitest.e2e.config.ts
 
 # Team documentation and vendored tooling — large, and not needed to run the app.
 .agents

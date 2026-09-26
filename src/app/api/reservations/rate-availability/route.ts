@@ -9,7 +9,9 @@ const DAY_MS = 86_400_000;
 // below the Price Calendar's 10-year write ceiling.
 const MAX_QUERY_NIGHTS = 365;
 
-const dayStartMs = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+// UTC day: stay dates and the form's yyyy-MM-dd params are UTC midnight. A LOCAL midnight
+// made a server east of UTC label a 25 Sep night "Sold out 24 Sep" (toISOString below).
+const dayStartMs = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 
 // One round-trip powering the booking dialog's Look-to-Book grid: for the requested
 // stay window it returns, per room type, the minimum sellable-room count across every

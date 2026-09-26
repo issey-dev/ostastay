@@ -954,13 +954,12 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                           <Label>Payment method <span className="text-destructive">*</span></Label>
                           <Select required value={paymentForm.paymentMethodId} onValueChange={v => setPaymentForm(p => ({...p, paymentMethodId: v ?? ""}))}>
                             <SelectTrigger>
+                              {/* Children replace the placeholder, so they must fall back to it
+                                  themselves — returning "" left an empty, icon-only box. */}
                               <SelectValue placeholder="Select method">
-                                {paymentForm.paymentMethodId ? (
-                                  (() => {
-                                    const m = paymentMethods.find(m => m.id === paymentForm.paymentMethodId);
-                                    return m ? m.name : "";
-                                  })()
-                                ) : ""}
+                                {paymentMethods.find(m => m.id === paymentForm.paymentMethodId)?.name ?? (
+                                  <span className="text-muted-foreground">Select method</span>
+                                )}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>

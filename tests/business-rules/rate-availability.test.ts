@@ -166,7 +166,9 @@ describe("Booking grid rate & availability (/api/reservations/rate-availability)
     expect(std.minAvailable).toBe(2);
     // The competing reservation holds the only STE room → sold out.
     expect(ste.minAvailable).toBe(0);
-    expect(ste.soldOutNights.length).toBeGreaterThan(0);
+    // Exactly the two booked nights, named by their own date — whatever the server's time
+    // zone (a local-midnight day made a UTC+5 machine report "2026-07-31").
+    expect(ste.soldOutNights).toEqual(["2026-08-01", "2026-08-02"]);
 
     // Excluding that reservation (the edit-mode quote) frees the room again.
     const res2 = await asUser(ctx.adminId, () =>

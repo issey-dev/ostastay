@@ -107,6 +107,28 @@ npm test
 npm run lint
 ```
 
+### Browser click-through tests (`npm run test:e2e`)
+
+`npm test` checks the business rules below the UI. `npm run test:e2e` clicks through the
+real app in a headless browser (puppeteer): new booking from the look-to-book grid with a
+quick-created guest, check-in wizard, posting a charge with the searchable charge-code
+picker (rolled-up row), payment and check-out from the folio, the balance guard on
+check-out (Open folio), the Ctrl+K palette, and a full End of Day (autopilot, then
+Roll & close).
+
+- **Needs the app running** — `npm run dev` (and the seed: `npm run seed`, for the system
+  roles). It drives `E2E_BASE_URL` (default `http://localhost:3000`) and refuses anything
+  that isn't localhost, and refuses `NODE_ENV=production`.
+- It works in the app's own database (`DATABASE_URL` from `.env`), but only inside its own
+  enterprise — code **`e2e`**, property `E2E`, created on first run by
+  `tests/e2e/fixtures.ts`. The Veyo and Coral Bay demos are never touched. Night Audit
+  really closes the e2e property's day, so its business date moves on by one per run.
+- Signs in by minting a session for the e2e admin (no password), like `docs:shots`.
+- A failing test saves a full-page screenshot to `.tmp/e2e/` (gitignored).
+- Specs are `tests/e2e/*.e2e.ts` with their own config (`vitest.e2e.config.ts`), so `npm
+  test` and the deploy pipeline never run them. **CI does not run them yet** (it would need
+  the app built and started against the test database first). About a minute locally.
+
 Seed scripts live in `scripts/seed/`. They're for internal development and demoing —
 they and the credentials above are expected to be removed before a real release, so
 don't build any workflow that assumes they exist in production.

@@ -1,6 +1,6 @@
 {
   "name": "guest-house-pms",
-  "version": "8.4.2",
+  "version": "8.4.3",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "seed": "vite-node -c vitest.config.ts scripts/seed/seed-osta.ts && vite-node -c vitest.config.ts scripts/seed/seed-veyo.ts",
     "db:reset": "prisma migrate reset --force --skip-seed && npm run seed",
     "docs:check": "vite-node -c vitest.config.ts scripts/docs-check.ts",
