@@ -7,7 +7,13 @@
 See [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md). Built on `claude/transportation-module-pms-93kxk5`:
 Hub configuration, board / airport rep / dispatch views, bookings + manifests, Night Audit
 billing, reservation card, report export, Booking API `TRANSPORT` scope, docs + release notes.
-- [ ] Owner: confirm drop-off posting timing (last-night audit, dated the departure day — T-6).
+Follow-up (same day): Osta add-on + property switch (T-1); the reservation's Transport section
+simplified to flight no. / transport no. / flight time, read-only from the module when active (T-11).
+- [x] Owner confirmed drop-off posting timing (last-night audit, dated the departure day — T-6).
+- [ ] Legacy charge fields on `ReservationTransport` (chargeToGuest/chargeCodeId/chargeAmount,
+      transportType, transportTime, remarks) can no longer be entered; existing unposted charges
+      still post via Night Audit / Advance Bill. Drop the columns and those code paths once no
+      unposted legacy charge remains (needs a data check per environment first).
 - [ ] Owner: confirm version 8.5.0, then bump `package.json`.
 - [ ] Per-departure printable passenger list.
 - [ ] Hub Overview banner: Transportation on but no routes/rates.

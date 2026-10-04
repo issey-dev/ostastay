@@ -22,6 +22,10 @@ import {
   uniqueName,
   waitForText,
   click,
+  clickButton,
+  fieldAfterLabel,
+  MODAL,
+  waitForToast,
   withShot,
   type E2EBrowser,
   type E2EFixture,
@@ -43,7 +47,13 @@ describe("Transportation", () => {
     const bd = await businessDate(fx.propertyId);
     day = isoDay(bd);
 
-    // Hub set-up: switch on, defaults, a route with a rate, a 4-seat boat.
+    // The add-on (Osta sells it per enterprise), then Hub set-up: switch on, defaults, a
+    // route with a rate, a 4-seat boat.
+    await prisma.enterpriseAddonAccess.upsert({
+      where: { enterpriseId_module: { enterpriseId: fx.enterpriseId, module: "TRANSPORTATION" } },
+      update: { enabled: true },
+      create: { enterpriseId: fx.enterpriseId, module: "TRANSPORTATION", enabled: true },
+    });
     await api(b.session, `/api/transport/settings${q()}`, { method: "PATCH", body: { enabled: true, attentionToleranceMinutes: 60 } });
     await api(b.session, `/api/transport/defaults${q()}`, { body: {} });
     const config = await api(b.session, `/api/transport/config${q()}`);
@@ -107,6 +117,39 @@ describe("Transportation", () => {
       await goto(page, `${fx.dash}/transportation?date=${day}`);
       await click(page, "tbody tr", new RegExp(guests[1]));
       await waitForText(page, /Departs 30 min after landing/);
+    }));
+
+  it("the reservation's Transport section is read-only from the module, and editable with it off", () =>
+    withShot(b.page, "transportation-reservation", async () => {
+      const { page } = b;
+      await goto(page, `${fx.dash}/reservations/${resIds[0]}`);
+      await waitForText(page, "Managed in Transportation");
+      await waitForText(page, "EK652");
+      await waitForText(page, "E2E Dhoni");
+      // The server refuses edits too.
+      const refused = await fetch(`${BASE_URL}/api/reservations/${resIds[0]}/transport`, {
+        method: "PUT",
+        headers: { Cookie: `auth_token=${b.session.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ pickup: { flightNo: "XX1", transportNo: "", time: "" }, dropoff: { flightNo: "", transportNo: "", time: "" } }),
+      });
+      expect(refused.status).toBe(409);
+
+      await api(b.session, `/api/transport/settings${q()}`, { method: "PATCH", body: { enabled: false } });
+      try {
+        await goto(page, `${fx.dash}/reservations/${resIds[1]}`);
+        await clickButton(page, /^Add transport$/);
+        await (await fieldAfterLabel(page, "Flight no.", { within: MODAL })).type("QR999");
+        await (await fieldAfterLabel(page, "Transport no.", { within: MODAL })).type("SB-7");
+        await (await fieldAfterLabel(page, "Flight lands", { within: MODAL })).type("0945A");
+        await clickButton(page, /^Save transport$/, { within: MODAL });
+        await waitForToast(page, "Transport saved");
+        await waitForText(page, "QR999");
+        const leg = await prisma.reservationTransport.findUniqueOrThrow({ where: { reservationId_direction: { reservationId: resIds[1], direction: "PICKUP" } } });
+        expect(leg).toMatchObject({ carrierCode: "QR999", transportNo: "SB-7", chargeToGuest: false });
+        await prisma.reservationTransport.delete({ where: { id: leg.id } });
+      } finally {
+        await api(b.session, `/api/transport/settings${q()}`, { method: "PATCH", body: { enabled: true } });
+      }
     }));
 
   it("Night Audit posts each pickup once, to its own guest's folio, and the report exports", async () => {

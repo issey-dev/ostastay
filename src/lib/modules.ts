@@ -32,8 +32,9 @@ export const MODULES = [
   // appointment booking/check-in/completion.
   "SPA",
   // Guest transfers — bookings, manifests (shared departures), the daily board and their
-  // billing (see .agents/docs/TRANSPORTATION_PLAN.md). Switched on per PROPERTY in the Hub
-  // (TransportSettings.enabled), not sold as an enterprise add-on. Configuration (types,
+  // billing (see .agents/docs/TRANSPORTATION_PLAN.md). A PAID ADD-ON like Excursions and Spa
+  // (EnterpriseAddonAccess, toggled by Osta — owner 2026-10-04), AND switched on per
+  // property in the Hub (TransportSettings.enabled): both must hold. Configuration (types,
   // routes, rates...) is a Hub section gated by CONTROLS like every other catalogue; this
   // module is the day-to-day operation, and its four actions mean:
   //   view   — the board, airport rep and dispatch views, reports

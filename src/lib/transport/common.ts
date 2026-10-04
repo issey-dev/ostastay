@@ -57,8 +57,38 @@ export async function getTransportSettings(propertyId: string): Promise<Transpor
   return values
 }
 
-/** Operations refuse a property that has not switched the module on. */
+/**
+ * Transportation is a paid add-on (owner, 2026-10-04): Osta enables it for the enterprise
+ * (EnterpriseAddonAccess, like Excursions and Spa), and each property then switches it on in
+ * its Hub (TransportSettings.enabled). Both must hold for operations; configuration needs
+ * only the add-on, so a property can set up before going live.
+ */
+export async function transportAddonEnabled(propertyId: string, db: Pick<typeof prisma, "property" | "enterpriseAddonAccess"> = prisma): Promise<boolean> {
+  const p = await db.property.findUnique({ where: { id: propertyId }, select: { enterpriseId: true } })
+  if (!p) return false
+  const row = await db.enterpriseAddonAccess.findUnique({
+    where: { enterpriseId_module: { enterpriseId: p.enterpriseId, module: "TRANSPORTATION" } },
+    select: { enabled: true },
+  })
+  return !!row?.enabled
+}
+
+export async function assertTransportAddon(propertyId: string): Promise<void> {
+  if (!(await transportAddonEnabled(propertyId))) {
+    throw new BookingError(403, "TRANSPORT_ADDON_NOT_ENABLED", "Transportation is not enabled for this enterprise. It is an add-on — ask Uppsolut to enable it.")
+  }
+}
+
+/** Add-on held AND switched on at the property — what the menu, the reservation page and
+ *  Night Audit go by. */
+export async function isTransportActive(propertyId: string): Promise<boolean> {
+  const [addon, settings] = await Promise.all([transportAddonEnabled(propertyId), getTransportSettings(propertyId)])
+  return addon && settings.enabled
+}
+
+/** Operations refuse a property without the add-on or with the module switched off. */
 export async function assertTransportEnabled(propertyId: string): Promise<TransportSettingsValues> {
+  await assertTransportAddon(propertyId)
   const settings = await getTransportSettings(propertyId)
   if (!settings.enabled) {
     throw new BookingError(403, "TRANSPORT_NOT_ENABLED", "Transportation is not switched on for this property. Turn it on in the Hub (Transportation).")

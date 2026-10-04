@@ -15,6 +15,12 @@ export async function seedTransport(prisma: PrismaClient, opts: { propertyId: st
   const { propertyId } = opts;
   const property = await prisma.property.findUniqueOrThrow({ where: { id: propertyId } });
   const tz = property.timeZone || "Indian/Maldives";
+  // The Transportation add-on is sold per enterprise (Osta console), like Excursions/Spa.
+  await prisma.enterpriseAddonAccess.upsert({
+    where: { enterpriseId_module: { enterpriseId: property.enterpriseId, module: "TRANSPORTATION" } },
+    update: { enabled: true },
+    create: { enterpriseId: property.enterpriseId, module: "TRANSPORTATION", enabled: true },
+  });
   const chargeCodeId = (await ensureTransportChargeCode(propertyId)).id;
   await prisma.transportSettings.upsert({
     where: { propertyId },

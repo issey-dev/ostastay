@@ -19,7 +19,7 @@ type AddonRow = { module: string; enabled: boolean }
 // PLATFORM_EMAIL, the Uppsolut Mail Service). They share this table and this UI because
 // the question is identical: has this enterprise purchased it?
 const ADD_ON_MODULES: readonly string[] = [
-  ...MODULES.filter((m) => m === "EXCURSIONS" || m === "SPA"),
+  ...MODULES.filter((m) => m === "EXCURSIONS" || m === "SPA" || m === "TRANSPORTATION"),
   ...SERVICE_ADDONS,
 ]
 

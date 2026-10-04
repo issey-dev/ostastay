@@ -37,7 +37,7 @@ export async function AppSidebar() {
   // in the enterprise sees it. Grows one entry at a time as new add-ons ship — see
   // src/components/osta/enterprise-addon-access-manager.tsx's own ADD_ON_MODULES list,
   // which must stay in sync with this one.
-  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA"]);
+  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA", "TRANSPORTATION"]);
   const enabledAddOns = new Set(
     (
       await prisma.enterpriseAddonAccess.findMany({

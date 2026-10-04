@@ -12,6 +12,13 @@ export default function TransportationOperations() {
       />
       <Where path="Dashboard › Transportation, and the Transportation card on a reservation" who="Anyone with Transportation" />
 
+      <Callout>
+        <p>
+          Transportation is an add-on, switched on per property. Without it, a reservation&apos;s <strong>Transport</strong> section holds just
+          the flight number, the transport number and the flight time for the pickup and the drop-off — see the end of this page.
+        </p>
+      </Callout>
+
       <H2>The words we use</H2>
       <Table
         head={["Word", "Means"]}
@@ -126,6 +133,25 @@ export default function TransportationOperations() {
         and direction, in departure order, with each one&apos;s departure, flight, airport rep, provider and boat, status and billing, and the
         passenger total per group. It is also in <strong>Daily Reports</strong> under Transportation.
       </p>
+      <H2>The reservation&apos;s Transport section</H2>
+      <p>
+        Every reservation has a simple <strong>Transport</strong> section: for the pickup and for the drop-off, the <strong>flight no.</strong>,
+        the <strong>transport no.</strong> (boat, vehicle or ticket) and the <strong>flight time</strong> — when the flight lands for the pickup,
+        when it leaves for the drop-off, on the arrival and departure days. It never charges anything.
+      </p>
+      <ul>
+        <li>
+          <strong>Without Transportation</strong>, fill it in with <strong>Add</strong> or <strong>Edit</strong>. Clear all three fields of a
+          side to remove it.
+        </li>
+        <li>
+          <strong>With Transportation on</strong>, it is read-only and shows what is booked here: the flight, the boat and the flight time.
+          Add or change transfers on the <strong>Transportation</strong> card below it, or on the board.
+        </li>
+        <li>
+          A charge entered on a reservation before the section was simplified still shows there, and still posts at Night Audit as before.
+        </li>
+      </ul>
       <Pager href="/docs/operations/transportation" />
     </>
   )

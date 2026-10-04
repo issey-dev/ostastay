@@ -32,17 +32,21 @@ every table carries `propertyId`, every lookup is `{ id, propertyId }`.
 | Session routes | `src/app/api/transport/**` (gates in `src/lib/transport/http.ts`) |
 | Booking API | `src/app/api/website/v1/properties/[propertyId]/transport/**`, gate `src/lib/website-api/transport.ts` |
 | Hub UI | `src/app/e/[slug]/hub/p/[propertyId]/transportation`, `src/components/hub/transport/*` |
-| Ops UI | `src/app/e/[slug]/dashboard/transportation`, `src/components/transport/*`; reservation card `reservation-transportation.tsx` |
+| Ops UI | `src/app/e/[slug]/dashboard/transportation`, `src/components/transport/*`; reservation card `reservation-transportation.tsx`; simple section `src/components/front-office/reservation-transport.tsx` (T-11) |
 | Seed | `scripts/seed/seed-transport.ts` (Veyo Lagoon; docs demo Coral Bay Resort) |
-| Tests | `tests/business-rules/transport.test.ts` (20), `transport-rules.test.ts` (15), `booking-api-transport.test.ts` (6), `tests/tenant-isolation/transport.test.ts` (2), `tests/e2e/transportation.e2e.ts` |
+| Tests | `tests/business-rules/transport.test.ts` (22), `transport-rules.test.ts` (15), `booking-api-transport.test.ts` (7), `tests/tenant-isolation/transport.test.ts` (2), `tests/e2e/transportation.e2e.ts` |
 | Docs | `/docs/api/transport`, `/docs/configuration/property/transportation`, `/docs/operations/transportation`, OpenAPI (Transportation tag), release notes 8.5.0 |
 
 ## Decisions (T-n)
 
-**T-1 — On/off per property, not an add-on.** `TransportSettings.enabled` (Hub › property ›
-Transportation, CONTROLS). Off hides the menu entry and the reservation card, Night Audit
-posts nothing, ops routes answer `403 TRANSPORT_NOT_ENABLED` (API: `409 MODULE_NOT_ENABLED`).
-Configuration stays editable while off, so a property can set up before going live.
+**T-1 — An Osta add-on AND a per-property switch** (owner, 2026-10-04; first built as a
+per-property switch only). `EnterpriseAddonAccess` module `TRANSPORTATION` (toggled in the Osta
+console, like Excursions/Spa) + `TransportSettings.enabled` (Hub › property › Transportation,
+CONTROLS). `isTransportActive` = both. No add-on: no Hub page or menu entry, every session route
+`403 TRANSPORT_ADDON_NOT_ENABLED` (configuration included), API `409 MODULE_NOT_ENABLED`
+(`details.reason ADDON_NOT_ENABLED`), the `TRANSPORT` key scope can't be granted, Night Audit
+posts nothing. Add-on but switched off: configuration stays editable (set up before going
+live), ops `403 TRANSPORT_NOT_ENABLED` (API reason `NOT_ENABLED`).
 
 **T-2 — Permissions use the existing RBAC actions.** New module `TRANSPORTATION`:
 view = board/views/report; create = manage bookings; update = manage manifests;
@@ -68,8 +72,8 @@ pass only takes NOT_BILLED/PENDING with no line):
   (a guest who never arrived is not charged a pickup).
 - DROP_OFF (reservation in house): the audit of the **last night** (service date − 1),
   **stamped with the departure date**, so the charge is on the folio before check-out
-  settlement. *Interpretation of "drop-offs on the departure date" — the departure date's own
-  audit runs after the guest has checked out and their folio is closed. Owner to confirm.*
+  settlement. *Owner confirmed 2026-10-04 ("guest's last night") — the departure date's own
+  audit runs after the guest has checked out and their folio is closed.*
 - Standalone traveller: the service date's audit, on their walk-in folio (created on demand).
 - Missed days catch up (stamped with the audit date, never back-dated). No open folio → PENDING
   (listed in the audit response, shown on the board).
@@ -92,11 +96,18 @@ them (still booked). Over-capacity is a warning. Direction must match.
 **T-10 — Standalone travellers** reuse the walk-in folio (Excursions/Fast Post precedent);
 payment through the existing walk-in bill flow. No new account type.
 
-**T-11 — The older `ReservationTransport` card** (one leg per direction, posted by Night
-Audit) is superseded where the module is on: booking the same reservation+direction converts
-the leg (flight data copied, an already-posted line is adopted as the booking's POSTED line,
-the leg row deleted). Where the module is off, the old card is unchanged. The reservation page
-shows the old card only for reservations that still have legs.
+**T-11 — The reservation's simple Transport section** (owner, 2026-10-04). `ReservationTransport`
+is now ONLY flight no. (`carrierCode`), transport no. (`transportNo`) and flight time
+(`carrierTime`: landing for the pickup, take-off for the drop-off, entered as `HH:MM` on the
+arrival / departure day in the property's time zone) per leg — no type, remarks, transport time
+or charge. Service: `src/lib/transport/simple.ts` (+ client-safe `simple-schema.ts`); route
+`GET|PUT /api/reservations/[id]/transport`. Where the module is active the section is
+READ-ONLY, filled from the module's bookings (flight, vessel name/registration, flight time),
+and PUT answers `409 MANAGED_BY_TRANSPORTATION`; the module's own card sits under it to add
+transfers. Charges entered on the older card stay: unposted ones still post via Night Audit /
+Advance Bill, the section shows them read-only, and clearing the three fields keeps such a row.
+Booking the same reservation+direction in the module still CONVERTS the leg (flight data
+copied, an already-posted line adopted as the booking's POSTED line, the leg deleted).
 
 **T-12 — Booking API scope `TRANSPORT`**: ops/integration use, not guest booking. Server-only
 (keys with browser origins can't be given it — enforced at key create/update and per request),
@@ -113,7 +124,7 @@ TRANSPORTATION view, ≤ 62 days, `export` rate-limit bucket 10/min per user, pd
 
 ## Open items / follow-ups
 
-- [ ] Owner to confirm T-6 drop-off timing (last-night audit, dated the departure day).
+- [x] Owner confirmed T-6 drop-off timing (last-night audit, dated the departure day) — 2026-10-04.
 - [ ] Version bump to 8.5.0 in `package.json` after the owner's test pass.
 - [ ] Booking API idempotency keys for transport writes (not required in v1; creates are not
       idempotent — retry with care).

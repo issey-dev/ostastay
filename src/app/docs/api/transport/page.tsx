@@ -22,8 +22,9 @@ export default function Transport() {
 
       <H2>Before you start</H2>
       <ul>
+        <li>Transportation is an add-on: it must be enabled for the enterprise first. Without it the Transportation scope can&apos;t be given to a key, and every endpoint here answers <code>409 MODULE_NOT_ENABLED</code> with <code>details.reason</code> <code>ADDON_NOT_ENABLED</code>.</li>
         <li>The property ticks <strong>Transportation</strong> on your key in the Hub (Booking API keys). No browser origins on that key.</li>
-        <li>The property switches Transportation on (Hub → the property → Transportation). Until then the configuration endpoints work, the rest answer <code>409 MODULE_NOT_ENABLED</code>.</li>
+        <li>The property switches Transportation on (Hub → the property → Transportation). Until then the configuration endpoints work, the rest answer <code>409 MODULE_NOT_ENABLED</code> with <code>details.reason</code> <code>NOT_ENABLED</code>.</li>
         <li>Everything lives under <code>/properties/&#123;propertyId&#125;/transport</code>. A property your key doesn&apos;t cover is <code>404 PROPERTY_NOT_FOUND</code>.</li>
       </ul>
 
@@ -186,7 +187,7 @@ export default function Transport() {
           ["404", c("NOT_FOUND"), "No such booking, departure or row at this property."],
           ["409", c("IN_USE"), "Delete refused — deactivate instead."],
           ["409", c("DUPLICATE"), "That code is already used at this property."],
-          ["409", c("MODULE_NOT_ENABLED"), "Transportation is off at this property."],
+          ["409", c("MODULE_NOT_ENABLED"), "The enterprise has no Transportation add-on (details.reason ADDON_NOT_ENABLED), or the property has it switched off (NOT_ENABLED)."],
           ["409", c("NO_OPEN_FOLIO"), "The reservation has no open bill to post to."],
         ]}
       />

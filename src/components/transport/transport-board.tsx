@@ -154,7 +154,7 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
       const res = await fetch(`/api/transport/board?propertyId=${propertyId}&date=${day}${filterQs ? `&${filterQs}` : ""}`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError({ message: body.error ?? "Couldn't load the board.", disabled: body.code === "TRANSPORT_NOT_ENABLED" })
+        setError({ message: body.error ?? "Couldn't load the board.", disabled: body.code === "TRANSPORT_NOT_ENABLED" || body.code === "TRANSPORT_ADDON_NOT_ENABLED" })
         return
       }
       setBoard(await res.json())

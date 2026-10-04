@@ -21,7 +21,7 @@ export default function Errors() {
           ["403", c("SERVER_KEY_REQUIRED"), "Excursion and spa writes, and anything in Transportation, need a server-only key (no browser origins)."],
           ["404", c("PROPERTY_NOT_FOUND"), "Unknown property, or one your key doesn't cover."],
           ["409", c("MODULE_NOT_ENABLED"), "The property isn't selling this module online right now (details.reason)."],
-          ["409", c("MODULE_NOT_ENABLED") , "Transportation — the property has not switched it on."],
+          ["409", c("MODULE_NOT_ENABLED") , "Transportation — the enterprise has no Transportation add-on (details.reason ADDON_NOT_ENABLED) or the property has not switched it on (NOT_ENABLED)."],
           ["429", c("RATE_LIMITED"), "Too many requests. Wait Retry-After seconds."],
           ["429", c("TOO_MANY_HOLDS"), "Your key has too many live holds. Book or let some expire."],
         ]}

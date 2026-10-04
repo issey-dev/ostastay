@@ -58,6 +58,7 @@ describe("Tenant isolation: Transportation", () => {
         data: { enterpriseId: e.id, name: `Iso ${label}`, code: `ISOT-${uniq()}`, legalName: "x", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "12:00" },
       });
       await prisma.transportSettings.create({ data: { propertyId: p.id, enabled: true } });
+      await prisma.enterpriseAddonAccess.create({ data: { enterpriseId: e.id, module: "TRANSPORTATION", enabled: true } });
       const u = await prisma.user.create({
         data: { enterpriseId: e.id, email: `iso-t-${label}-${uniq()}@test.local`, passwordHash, firstName: "A", lastName: label, roles: { create: { roleId: roles["Admin"] } }, scope: "ENTERPRISE" },
       });

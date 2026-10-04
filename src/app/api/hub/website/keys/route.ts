@@ -27,7 +27,8 @@ export async function GET() {
       enabledActivityModules(ctx.enterpriseId),
     ]);
     // Which scopes the form may offer: Rooms always, an add-on only while it is enabled.
-    const availableScopes = API_SCOPES.filter((s) => s === "ROOMS" || s === "TRANSPORT" || addons.has(s as "EXCURSIONS" | "SPA"));
+    const transportAddon = await prisma.enterpriseAddonAccess.findUnique({ where: { enterpriseId_module: { enterpriseId: ctx.enterpriseId, module: "TRANSPORTATION" } } });
+    const availableScopes = API_SCOPES.filter((s) => s === "ROOMS" || (s === "TRANSPORT" ? !!transportAddon?.enabled : addons.has(s as "EXCURSIONS" | "SPA")));
     return NextResponse.json({ keys, properties, availableScopes });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

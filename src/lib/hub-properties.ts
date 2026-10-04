@@ -51,10 +51,11 @@ export async function resolveHubPropertyId(ctx: AuthContext, allowed?: HubProper
   return properties[0].id
 }
 
-// The sellable add-ons this enterprise holds that have setup pages (Spa, Excursions).
+// The sellable add-ons this enterprise holds that have setup pages (Spa, Excursions,
+// Transportation).
 export async function loadHubAddons(enterpriseId: string): Promise<Set<HubAddon>> {
   const rows = await prisma.enterpriseAddonAccess.findMany({
-    where: { enterpriseId, enabled: true, module: { in: ["SPA", "EXCURSIONS"] } },
+    where: { enterpriseId, enabled: true, module: { in: ["SPA", "EXCURSIONS", "TRANSPORTATION"] } },
     select: { module: true },
   })
   return new Set(rows.map((r) => r.module as HubAddon))

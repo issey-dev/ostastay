@@ -45,6 +45,7 @@ const boardRoute = await import("@/app/api/transport/board/route");
 const reportRoute = await import("@/app/api/transport/report/route");
 const nightAuditRoute = await import("@/app/api/night-audit/run/route");
 const folioVoidRoute = await import("@/app/api/folios/[id]/line-items/[itemId]/void/route");
+const simpleRoute = await import("@/app/api/reservations/[id]/transport/route");
 const { postDueTransportCharges } = await import("@/lib/transport/billing");
 const { getPropertySettings } = await import("@/lib/property-settings");
 
@@ -168,9 +169,54 @@ describe("Transportation module", () => {
     resC = await newReservation({ status: "RESERVED", checkIn: BUSINESS_DATE, checkOut: "2027-03-12" });
   });
 
+  // ── The reservation's simple Transport section (module off) ─────────────────────────
+
+  it("without the module, the reservation's Transport section holds flight no., transport no. and flight time only", async () => {
+    const url = `/api/reservations/${resC.id}/transport`;
+    const saved = await call(deskId, simpleRoute.PUT, url, {
+      pickup: { flightNo: "EK652", transportNo: "SB-12", time: "09:30" },
+      dropoff: { flightNo: "", transportNo: "", time: "" },
+    }, { id: resC.id });
+    expect(saved.status).toBe(200);
+    expect(saved.json.managedByModule).toBe(false);
+    expect(saved.json.legs.PICKUP).toMatchObject({ flightNo: "EK652", transportNo: "SB-12", flightDate: BUSINESS_DATE, flightTime: "09:30", legacyCharge: null });
+    expect(saved.json.legs.DROPOFF).toBeNull();
+    // Stored as the property-local time on the arrival day (Maldives is UTC+5); no charge fields.
+    const row = await prisma.reservationTransport.findUniqueOrThrow({ where: { reservationId_direction: { reservationId: resC.id, direction: "PICKUP" } } });
+    expect(row.carrierTime?.toISOString()).toBe(`${BUSINESS_DATE}T04:30:00.000Z`);
+    expect(row.chargeToGuest).toBe(false);
+    expect(row.chargeAmount).toBeNull();
+
+    const bad = await call(deskId, simpleRoute.PUT, url, { pickup: { flightNo: "", transportNo: "", time: "25:00" }, dropoff: { flightNo: "", transportNo: "", time: "" } }, { id: resC.id });
+    expect(bad.status).toBe(400);
+    expect(bad.json.details["pickup.time"]).toBeTruthy();
+
+    // A charge entered on the older card survives an edit and a clear (Night Audit still owns it).
+    await prisma.reservationTransport.create({ data: { reservationId: resC.id, direction: "DROPOFF", transportType: "SPB", remarks: "old", chargeToGuest: true, chargeAmount: 40 } });
+    const cleared = await call(deskId, simpleRoute.PUT, url, {
+      pickup: { flightNo: "", transportNo: "", time: "" },
+      dropoff: { flightNo: "", transportNo: "", time: "" },
+    }, { id: resC.id });
+    expect(cleared.status).toBe(200);
+    expect(cleared.json.legs.PICKUP).toBeNull();
+    expect(cleared.json.legs.DROPOFF.legacyCharge).toEqual({ amount: 40, posted: false });
+    const kept = await prisma.reservationTransport.findUniqueOrThrow({ where: { reservationId_direction: { reservationId: resC.id, direction: "DROPOFF" } } });
+    expect(kept).toMatchObject({ chargeToGuest: true, chargeAmount: 40, remarks: "old" });
+    await prisma.reservationTransport.delete({ where: { id: kept.id } });
+
+    // Another property's user can't read or write it.
+    const foreign = await call(otherPropertyUserId, simpleRoute.GET, url, undefined, { id: resC.id });
+    expect(foreign.status).toBe(403);
+  });
+
   // ── Phase 1: configuration ──────────────────────────────────────────────────────────
 
-  it("refuses operations until the module is switched on, then configures the property", async () => {
+  it("refuses operations until the add-on is held and the module is switched on, then configures the property", async () => {
+    // No add-on: not even the setup is reachable (like Excursions and Spa).
+    const noAddon = await call(adminId, configRoute.GET, `/api/transport/config${q()}`);
+    expect(noAddon.status).toBe(403);
+    expect(noAddon.json.code).toBe("TRANSPORT_ADDON_NOT_ENABLED");
+    await prisma.enterpriseAddonAccess.create({ data: { enterpriseId, module: "TRANSPORTATION", enabled: true } });
     const off = await call(adminId, bookingsRoute.GET, `/api/transport/bookings${q()}`);
     expect(off.status).toBe(403);
     expect(off.json.code).toBe("TRANSPORT_NOT_ENABLED");
@@ -491,6 +537,27 @@ describe("Transportation module", () => {
     expect(b.json.billing.status).toBe("POSTED");
     expect(b.json.billing.folioLineItemId).toBe(line.id);
     expect(await prisma.reservationTransport.count({ where: { reservationId: r.id } })).toBe(0);
+  });
+
+  it("with the module on, the reservation's Transport section is read-only and filled from its bookings", async () => {
+    const r = await newReservation({ status: "RESERVED", checkIn: "2027-03-15", checkOut: "2027-03-18" });
+    const url = `/api/reservations/${r.id}/transport`;
+    const refused = await call(adminId, simpleRoute.PUT, url, {
+      pickup: { flightNo: "QR672", transportNo: "", time: "" },
+      dropoff: { flightNo: "", transportNo: "", time: "" },
+    }, { id: r.id });
+    expect(refused.status).toBe(409);
+    expect(refused.json.code).toBe("MANAGED_BY_TRANSPORTATION");
+
+    const b = await call(deskId, bookingsRoute.POST, `/api/transport/bookings${q()}`, {
+      reservationId: r.id, direction: "PICKUP", routeId, flightNo: "QR672", flightTime: "08:15", vesselId, providerId,
+    });
+    expect(b.status).toBe(201);
+    const view = await call(deskId, simpleRoute.GET, url, undefined, { id: r.id });
+    expect(view.status).toBe(200);
+    expect(view.json.managedByModule).toBe(true);
+    expect(view.json.legs.PICKUP).toMatchObject({ flightNo: "QR672", transportNo: "Blue Marlin", flightDate: "2027-03-15", flightTime: "08:15" });
+    expect(view.json.legs.DROPOFF).toBeNull();
   });
 
   // ── Isolation and export ────────────────────────────────────────────────────────────

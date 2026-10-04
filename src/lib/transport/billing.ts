@@ -8,7 +8,7 @@ import { voidPostedCharge, actorDisplayName } from "@/lib/posting/void-charge"
 import { getPropertySettings } from "@/lib/property-settings"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { bookingReference, getBooking } from "@/lib/transport/bookings"
-import { assertTransportEnabled, forbidden, fromZod, invalid, notFound, type TransportActor } from "@/lib/transport/common"
+import { assertTransportEnabled, transportAddonEnabled, forbidden, fromZod, invalid, notFound, type TransportActor } from "@/lib/transport/common"
 import { ensureTransportChargeCode } from "@/lib/transport/config"
 import { POSTABLE_BOOKING_STATUSES } from "@/lib/transport/constants"
 import { taxOverrideFor } from "@/lib/transport/pricing"
@@ -162,7 +162,7 @@ export async function postDueTransportCharges(
 ): Promise<TransportAuditResult> {
   const result: TransportAuditResult = { posted: 0, taxPosted: 0, postings: 0, pending: [] }
   const enabled = await tx.transportSettings.findUnique({ where: { propertyId: input.propertyId }, select: { enabled: true } })
-  if (!enabled?.enabled) return result
+  if (!enabled?.enabled || !(await transportAddonEnabled(input.propertyId, tx))) return result
 
   const day = 86_400_000
   const audit = input.auditDate.getTime()

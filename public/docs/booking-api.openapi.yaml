@@ -958,7 +958,8 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           examples:
-            disabled: { value: { error: "Transportation is not switched on for this property.", code: "MODULE_NOT_ENABLED" } }
+            disabled: { value: { error: "Transportation is not switched on for this property.", code: "MODULE_NOT_ENABLED", details: { reason: "NOT_ENABLED" } } }
+            noAddon: { value: { error: "Transportation is not available for this property.", code: "MODULE_NOT_ENABLED", details: { reason: "ADDON_NOT_ENABLED" } } }
             inUse: { value: { error: "This route is in use and cannot be deleted — deactivate it instead.", code: "IN_USE" } }
             duplicate: { value: { error: "A route with this code already exists at this property", code: "DUPLICATE" } }
     BadRequest:

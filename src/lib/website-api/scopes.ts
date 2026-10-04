@@ -17,7 +17,8 @@ import type { ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 // TRANSPORT (2026-10-04, TRANSPORTATION_PLAN.md): the property's transfer operations — its
 // transport configuration, bookings, departures (manifests), board and report data, and
 // billing actions — for an integration partner's or the property's own system. Not a
-// guest-facing scope and not an add-on: granted to any enterprise, server-to-server only
+// guest-facing scope. Granted only while the enterprise holds the Transportation add-on;
+// server-to-server only
 // (a key with browser origins is refused it), and answered only while the property has
 // Transportation switched on.
 export const API_SCOPES = ["ROOMS", "EXCURSIONS", "SPA", "TRANSPORT"] as const;
@@ -68,6 +69,10 @@ export async function normalizeScopes(enterpriseId: string, input: string[]): Pr
     if ((s === "EXCURSIONS" || s === "SPA") && !addons.has(s)) {
       throw new ForbiddenError(`${SCOPE_LABELS[s]} is not enabled for this enterprise`);
     }
+  }
+  if (unique.includes("TRANSPORT")) {
+    const t = await prisma.enterpriseAddonAccess.findUnique({ where: { enterpriseId_module: { enterpriseId, module: "TRANSPORTATION" } } });
+    if (!t?.enabled) throw new ForbiddenError("Transportation is not enabled for this enterprise");
   }
   return API_SCOPES.filter((s) => unique.includes(s));
 }

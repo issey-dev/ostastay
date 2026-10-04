@@ -1,7 +1,7 @@
 import { BookingError } from "@/lib/booking-error";
 import { keyCanAccessProperty, type ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 import { requireScope } from "@/lib/website-api/scopes";
-import { apiActor, getTransportSettings, type TransportActor } from "@/lib/transport/common";
+import { apiActor, getTransportSettings, transportAddonEnabled, type TransportActor } from "@/lib/transport/common";
 
 // The Booking API's Transportation endpoints (/api/website/v1/properties/{id}/transport/**):
 // a TRANSPORT-scoped key may read and manage one property's transfer operations the way the
@@ -13,6 +13,8 @@ import { apiActor, getTransportSettings, type TransportActor } from "@/lib/trans
 //  - no TRANSPORT scope → 403 SCOPE_NOT_GRANTED;
 //  - a key with browser origins → 403 SERVER_KEY_REQUIRED (guest data and billing; the Hub
 //    also refuses to give such a key the scope);
+//  - the enterprise without the Transportation add-on → 409 MODULE_NOT_ENABLED (reason
+//    ADDON_NOT_ENABLED), configuration included;
 //  - operations (not configuration) at a property with Transportation off → 409
 //    MODULE_NOT_ENABLED.
 // The key acts as the enterprise's "Online Bookings" system user: it may post and waive
@@ -27,6 +29,9 @@ export async function transportGate(
   requireScope(key, "TRANSPORT");
   if (key.allowedOrigins.length > 0) {
     throw new BookingError(403, "SERVER_KEY_REQUIRED", "Transportation must be called from your server with a server-only key (no browser origins).");
+  }
+  if (!(await transportAddonEnabled(propertyId))) {
+    throw new BookingError(409, "MODULE_NOT_ENABLED", "Transportation is not available for this property.", { details: { reason: "ADDON_NOT_ENABLED" } });
   }
   if (opts.operations) {
     const settings = await getTransportSettings(propertyId);

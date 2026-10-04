@@ -93,8 +93,9 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [isTraceOpen, setIsTraceOpen] = useState(false)
   const [transportSignal, setTransportSignal] = useState(0)
   const [transferSignal, setTransferSignal] = useState(0)
-  // Transportation module (per property): when it is on, its card replaces the older
-  // Transport card — which stays visible only for legs entered before the switch.
+  const [transportRefresh, setTransportRefresh] = useState(0)
+  // Transportation module (add-on + property switch): when it is active the simple Transport
+  // section turns read-only (filled from the module) and the module's card books transfers.
   const transportAccess = useTransportAccess(reservation?.propertyId)
   const [isRoomMoveOpen, setIsRoomMoveOpen] = useState(false)
   const [isCheckInOpen, setIsCheckInOpen] = useState(false)
@@ -544,7 +545,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const transportModuleOn = !!transportAccess?.enabled && !!transportAccess.perms.view
   if (transportModuleOn) {
     if (liveBooking && transportAccess!.perms.manageBookings) addLinks.push({ label: "Add transfer", onClick: () => setTransferSignal((n) => n + 1) })
-  } else if ((reservation.transports?.length ?? 0) === 0 && liveBooking) addLinks.push({ label: "Add transport", onClick: () => setTransportSignal((n) => n + 1) })
+  } else if (transportAccess && !transportAccess.enabled && (reservation.transports?.length ?? 0) === 0 && liveBooking) addLinks.push({ label: "Add transport", onClick: () => setTransportSignal((n) => n + 1) })
   if (depositRows.length === 0 && reservation.status === "RESERVED") addLinks.push({ label: "Add deposit", onClick: () => setIsDepositOpen(true) })
   if ((reservation.traces?.length ?? 0) === 0) addLinks.push({ label: "Add trace", onClick: () => setIsTraceOpen(true) })
 
@@ -906,7 +907,23 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         </Button>
 
         <div className={`max-md:order-2 max-md:space-y-6 md:contents ${showMoreSections ? "" : "max-md:hidden"}`}>
-        {/* 3. Transport — the Transportation module's card where it is on at this property */}
+        {/* 3. Transport — the simple section (read-only, from Transportation, where the module is active),
+            then the module's own card for booking transfers */}
+        {transportAccess !== null && (
+        <ReservationTransport
+          reservationId={id}
+          checkInDate={reservation.checkInDate}
+          checkOutDate={reservation.checkOutDate}
+          refreshKey={transportRefresh}
+          onChanged={() => {
+            fetchReservation()
+            fetchBreakdown()
+          }}
+          openSignal={transportSignal}
+          transportationHref={transportModuleOn ? `/e/${slug}/dashboard/transportation` : undefined}
+          className={!transportAccess.enabled && (reservation.transports?.length ?? 0) === 0 ? "lg:hidden" : undefined}
+        />
+        )}
         {transportModuleOn && (
           <ReservationTransportation
             reservation={{
@@ -925,25 +942,11 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             perms={transportAccess!.perms}
             openSignal={transferSignal}
             onChanged={() => {
+              setTransportRefresh((n) => n + 1)
               fetchReservation()
               fetchBreakdown()
             }}
           />
-        )}
-        {(!transportModuleOn || (reservation.transports?.length ?? 0) > 0) && transportAccess !== null && (
-        <ReservationTransport
-          reservationId={id}
-          propertyId={reservation.propertyId}
-          checkInDate={reservation.checkInDate}
-          checkOutDate={reservation.checkOutDate}
-          transports={reservation.transports ?? []}
-          onChanged={() => {
-            fetchReservation()
-            fetchBreakdown()
-          }}
-          openSignal={transportSignal}
-          className={(reservation.transports?.length ?? 0) === 0 ? "lg:hidden" : undefined}
-        />
         )}
 
         <ERegistrationPanel reservationId={id} />

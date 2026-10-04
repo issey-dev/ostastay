@@ -66,11 +66,20 @@ describe("Booking API — TRANSPORT scope", () => {
     userId = await userFor(enterpriseId);
     const mint = async (scopes: string[], ent = enterpriseId, origins: string[] = [], prop: string | null = propertyId) =>
       (await createWebsiteApiKey({ enterpriseId: ent, userId: ent === enterpriseId ? userId : await userFor(ent), name: `k-${uniq()}`, propertyId: prop, allowedOrigins: origins, scopes, expiresAt: null })).key;
+    await prisma.enterpriseAddonAccess.create({ data: { enterpriseId, module: "TRANSPORTATION", enabled: true } });
     transportKey = await mint(["TRANSPORT"]);
     roomsKey = await mint(["ROOMS"]);
     const other = await prisma.enterprise.create({ data: { name: "Other", slug: `api-transport-o-${uniq()}` } });
+    await prisma.enterpriseAddonAccess.create({ data: { enterpriseId: other.id, module: "TRANSPORTATION", enabled: true } });
     await mk("Other hotel", other.id);
     otherEnterpriseKey = await mint(["TRANSPORT"], other.id, [], null);
+  });
+
+  it("the TRANSPORT scope needs the enterprise's Transportation add-on", async () => {
+    const bare = await prisma.enterprise.create({ data: { name: "No add-on", slug: `api-transport-n-${uniq()}` } });
+    await expect(
+      createWebsiteApiKey({ enterpriseId: bare.id, userId, name: "x", propertyId: null, allowedOrigins: [], scopes: ["TRANSPORT"], expiresAt: null })
+    ).rejects.toThrow(/not enabled/);
   });
 
   it("a browser key can never hold the TRANSPORT scope", async () => {

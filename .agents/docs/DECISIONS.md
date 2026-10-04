@@ -3430,3 +3430,15 @@ Decisions taken without asking (flagged in the final report, revisit if wrong):
 - The older per-reservation Transport card is superseded where Transportation is on; booking
   the same leg converts it without double charging.
 - Proposed version **8.5.0** (new feature, additive migration).
+
+Owner follow-up, same day (answers to the questions after the first build):
+- **Enabling = Osta add-on + property switch.** Transportation is an enterprise add-on toggled
+  in the Osta console like Excursions and Spa, AND each property keeps its Hub on/off switch.
+  Both must hold (TRANSPORTATION_PLAN T-1).
+- **The reservation's Transport section is "very simplistic"**: flight no., transport no. and
+  time — three fields only, for the pickup and the drop-off, no charge code or anything. Time =
+  the **flight time** (landing for the pickup, take-off for the drop-off).
+- **With the module enabled that section is read-only**, managed from Transportation only —
+  shown filled from the module's bookings, with the module's Transportation card (Add transfer)
+  kept under it (T-11).
+- **Drop-off charge on the guest's last night** — confirmed as built.

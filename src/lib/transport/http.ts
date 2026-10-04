@@ -11,7 +11,7 @@ import {
   type Action,
   type AuthContext,
 } from "@/lib/scope"
-import { assertTransportEnabled, sessionActor, type TransportActor } from "@/lib/transport/common"
+import { assertTransportAddon, assertTransportEnabled, sessionActor, type TransportActor } from "@/lib/transport/common"
 
 // Session-route plumbing for /api/transport/** (the desk). Two gates, the Excursions split:
 //   config — the Hub section: requirePropertySetup(…, "CONTROLS", action)
@@ -43,6 +43,7 @@ export async function readBody(request: Request): Promise<unknown> {
 export async function configGate(propertyId: string, action: Action): Promise<{ ctx: AuthContext; actor: TransportActor }> {
   const ctx = await requireSession()
   await requirePropertySetup(ctx, propertyId, "CONTROLS", action)
+  await assertTransportAddon(propertyId)
   return { ctx, actor: sessionActor(ctx) }
 }
 
@@ -69,6 +70,7 @@ export async function catalogueGate(propertyId: string): Promise<{ ctx: AuthCont
   if (!hasPermission(ctx, "CONTROLS", "view") && !hasPermission(ctx, "TRANSPORTATION", "view")) {
     throw new ForbiddenError("Not authorized to view transportation setup")
   }
+  await assertTransportAddon(propertyId)
   return { ctx, actor: sessionActor(ctx) }
 }
 

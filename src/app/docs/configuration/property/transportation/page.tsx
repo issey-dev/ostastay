@@ -22,6 +22,10 @@ export default function TransportationSetup() {
       <H2>Before you start</H2>
       <ul>
         <li>
+          Transportation is an <strong>add-on</strong>. Until it is enabled for your enterprise, Transportation does not appear in the Hub —
+          ask your Uppsolut contact. Each property then switches it on below.
+        </li>
+        <li>
           A revenue <strong>charge code</strong> for transfers, in a group that reports as Transport (<a href="/docs/configuration/property/charge-codes">step 3</a>).
           If the property has none, <strong>Load defaults</strong> below creates one called Transportation.
         </li>
@@ -33,7 +37,7 @@ export default function TransportationSetup() {
       <Table
         head={["Setting", "What it does"]}
         rows={[
-          ["Transportation is on", "Shows Transportation in the dashboard menu, the Transportation card on reservations, and lets Night Audit post transfer charges. Off: none of these, and nothing is posted."],
+          ["Transportation is on", "Shows Transportation in the dashboard menu and the Transportation card on reservations, and lets Night Audit post transfer charges. The reservation's simple Transport section (flight no., transport no., flight time) becomes read-only and shows what is booked here. Off: none of these, nothing is posted, and staff fill the simple section by hand."],
           ["Time to allow around a flight", "Default 60 minutes. A boat leaving sooner than this after a flight lands, or reaching the airport later than this before take-off, is marked Needs attention. It only warns — nothing is ever refused."],
           ["Default charge code / Default tax", "What a new rate starts with. Each rate can still choose its own."],
           ["A provider must be assigned…", "When on, a transfer can't be marked Assigned, and a departure can't be Confirmed, until a provider is chosen."],
