@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -63,6 +63,7 @@ type Reservation = {
   remarks: string | null
   mealPlan: string
   hasScheduledRoomMove: boolean
+  transportBookings?: { direction: string; status: string; serviceDate: string }[]
   primaryGuestId: string
   primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string, vipLevel: string | null }
   travelAgentId: string | null
@@ -138,6 +139,12 @@ const getReservationFlags = (res: Reservation): Flag[] => {
   const acc = res.accompanyingGuests?.length ?? 0
   if (acc > 0) {
     flags.push({ key: "acc", text: `+${acc}`, icon: Users, title: `${acc} accompanying guest${acc > 1 ? "s" : ""}`, tone: "muted" })
+  }
+  const transfers = res.transportBookings ?? []
+  if (transfers.length > 0) {
+    const drafts = transfers.filter((t) => t.status === "DRAFT").length
+    const what = transfers.map((t) => `${t.direction === "PICKUP" ? "pickup" : "drop-off"} ${t.serviceDate.slice(5, 10)}${t.status === "DRAFT" ? " (draft)" : ""}`).join(", ")
+    flags.push({ key: "transfer", text: String(transfers.length), icon: Ship, title: `Transfers: ${what}`, tone: drafts ? "warning" : "info" })
   }
   if (res.travelAgent) {
     flags.push({ key: "ta", icon: Building2, title: `Travel agent: ${res.travelAgent.companyName || res.travelAgent.firstName}`, tone: "muted" })

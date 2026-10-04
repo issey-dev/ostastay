@@ -34,7 +34,7 @@ export async function transportReportResult(propertyId: string, from: string, to
       reservation: b.reservation ? `${b.reservation.confirmationNo}${b.reservation.roomNumber ? ` / ${b.reservation.roomNumber}` : ""}` : "Standalone",
       pax: b.pax,
       flight: [b.flightNo, b.flightLocal?.time].filter(Boolean).join(" ") || "—",
-      route: b.route ? `${b.route.origin.code} > ${b.route.destination.code}` : "—",
+      route: b.route ? `${b.route.from.code} > ${b.route.to.code}` : "—",
       rep: b.airportRep?.name ?? "—",
       provider: [b.provider?.name, b.vessel?.name].filter(Boolean).join(" / ") || "—",
       status: `${label(BOOKING_STATUS_LABELS, b.status)}${b.attention.length ? " (!)" : ""}`,

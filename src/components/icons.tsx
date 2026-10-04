@@ -9,6 +9,7 @@ import {
   ActivityOutline,
   AirplaneOutline,
   ShipOutline,
+  FilterOutline,
   AddOutline,
   MinusOutline,
   ArrowCircleRightOutline,
@@ -252,6 +253,7 @@ export const Wallet = outline(Wallet2Outline)
 // Transportation (board, manifests, airport rep view).
 export const Ship = outline(ShipOutline)
 export const Plane = outline(AirplaneOutline)
+export const Filter = outline(FilterOutline)
 export const Wand2 = outline(MagicStarOutline)
 export const X = outline(CloseSquareOutline)
 export const XCircle = outline(CloseCircleOutline)

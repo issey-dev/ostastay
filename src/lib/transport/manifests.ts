@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { logActivity } from "@/lib/activity-log"
 import { capacityState } from "@/lib/transport/attention"
-import { BOOKING_INCLUDE, applyBookingStatus, bookingReference, serializeBooking, type BookingView } from "@/lib/transport/bookings"
+import { BOOKING_INCLUDE, legEnds, applyBookingStatus, bookingReference, serializeBooking, type BookingView } from "@/lib/transport/bookings"
 import { assertTransportEnabled, fromZod, invalid, notFound, propertyTz, type TransportActor } from "@/lib/transport/common"
 import { LIVE_BOOKING_STATUSES } from "@/lib/transport/constants"
 import { fromSlotsSchema, manifestBookingsSchema, manifestCreateSchema, manifestUpdateSchema } from "@/lib/transport/schemas"
@@ -60,6 +60,7 @@ export function serializeManifest(m: ManifestRow, opts: { timeZone: string; tole
       durationMinutes: m.route.durationMinutes,
       origin: m.route.origin,
       destination: m.route.destination,
+      ...legEnds(m.route, m.direction),
     },
     transportType: m.transportType,
     provider: m.provider,

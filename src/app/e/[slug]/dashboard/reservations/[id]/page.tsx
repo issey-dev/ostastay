@@ -28,6 +28,7 @@ import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
+import { ReservationTransportation, useTransportAccess } from "@/components/transport/reservation-transportation"
 import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 import { CountryLabel } from "@/components/ui/country-flag"
 import { useNationalities } from "@/components/ui/nationality-select"
@@ -91,6 +92,10 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [isFolioOpen, setIsFolioOpen] = useState(false)
   const [isTraceOpen, setIsTraceOpen] = useState(false)
   const [transportSignal, setTransportSignal] = useState(0)
+  const [transferSignal, setTransferSignal] = useState(0)
+  // Transportation module (per property): when it is on, its card replaces the older
+  // Transport card — which stays visible only for legs entered before the switch.
+  const transportAccess = useTransportAccess(reservation?.propertyId)
   const [isRoomMoveOpen, setIsRoomMoveOpen] = useState(false)
   const [isCheckInOpen, setIsCheckInOpen] = useState(false)
   const [isDepositOpen, setIsDepositOpen] = useState(false)
@@ -536,7 +541,10 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     railNext = { label: reversing ? "Reinstating…" : "Reinstate", icon: RotateCcw, onClick: handleReinstate, disabled: reversing, variant: "outline" }
   }
   const addLinks: { label: string; onClick: () => void }[] = []
-  if ((reservation.transports?.length ?? 0) === 0 && liveBooking) addLinks.push({ label: "Add transport", onClick: () => setTransportSignal((n) => n + 1) })
+  const transportModuleOn = !!transportAccess?.enabled && !!transportAccess.perms.view
+  if (transportModuleOn) {
+    if (liveBooking && transportAccess!.perms.manageBookings) addLinks.push({ label: "Add transfer", onClick: () => setTransferSignal((n) => n + 1) })
+  } else if ((reservation.transports?.length ?? 0) === 0 && liveBooking) addLinks.push({ label: "Add transport", onClick: () => setTransportSignal((n) => n + 1) })
   if (depositRows.length === 0 && reservation.status === "RESERVED") addLinks.push({ label: "Add deposit", onClick: () => setIsDepositOpen(true) })
   if ((reservation.traces?.length ?? 0) === 0) addLinks.push({ label: "Add trace", onClick: () => setIsTraceOpen(true) })
 
@@ -898,7 +906,31 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         </Button>
 
         <div className={`max-md:order-2 max-md:space-y-6 md:contents ${showMoreSections ? "" : "max-md:hidden"}`}>
-        {/* 3. Transport */}
+        {/* 3. Transport — the Transportation module's card where it is on at this property */}
+        {transportModuleOn && (
+          <ReservationTransportation
+            reservation={{
+              id,
+              propertyId: reservation.propertyId,
+              confirmationNo: reservation.confirmationNo,
+              status: reservation.status,
+              checkInDate: reservation.checkInDate,
+              checkOutDate: reservation.checkOutDate,
+              adults: reservation.adults,
+              children: reservation.children,
+              infants: reservation.infants ?? 0,
+              guestName,
+              groupBlock: reservation.groupBlock ?? null,
+            }}
+            perms={transportAccess!.perms}
+            openSignal={transferSignal}
+            onChanged={() => {
+              fetchReservation()
+              fetchBreakdown()
+            }}
+          />
+        )}
+        {(!transportModuleOn || (reservation.transports?.length ?? 0) > 0) && transportAccess !== null && (
         <ReservationTransport
           reservationId={id}
           propertyId={reservation.propertyId}
@@ -912,6 +944,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           openSignal={transportSignal}
           className={(reservation.transports?.length ?? 0) === 0 ? "lg:hidden" : undefined}
         />
+        )}
 
         <ERegistrationPanel reservationId={id} />
         </div>

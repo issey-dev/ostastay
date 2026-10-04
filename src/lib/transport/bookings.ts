@@ -86,6 +86,14 @@ export function effectiveBillingStatus(b: Pick<BookingRow, "billingStatus" | "fo
 
 export type BookingView = ReturnType<typeof serializeBooking>
 
+type Place = { id: string; code: string; name: string; type: string }
+/** The leg's real start and end: a BOTH route is stored arrival-wise, so a drop-off reverses it. */
+export function legEnds(route: { direction: string; origin: Place; destination: Place }, direction: string): { from: Place; to: Place } {
+  return direction === "DROP_OFF" && route.direction === "BOTH"
+    ? { from: route.destination, to: route.origin }
+    : { from: route.origin, to: route.destination }
+}
+
 export function serializeBooking(b: BookingRow, opts: { timeZone: string; toleranceMinutes: number }) {
   const tz = opts.timeZone
   const local = (d: Date | null | undefined) => (d ? utcToLocal(d, tz) : null)
@@ -161,6 +169,9 @@ export function serializeBooking(b: BookingRow, opts: { timeZone: string; tolera
           instructions: b.route.instructions,
           origin: b.route.origin,
           destination: b.route.destination,
+          // Where this leg actually goes: a route for both directions is entered the arrival
+          // way round (airport → property), so a drop-off travels it in reverse.
+          ...legEnds(b.route, b.direction),
         }
       : null,
     transportType: b.transportType,

@@ -115,6 +115,12 @@ export async function GET(request: Request) {
           },
         },
         specialRequests: true,
+        // The list's transfer flag (Transportation module) — just enough to describe it.
+        transportBookings: {
+          where: { status: { not: "CANCELLED" } },
+          select: { direction: true, status: true, serviceDate: true },
+          orderBy: { serviceDate: "asc" },
+        },
       },
       // A search reaches back through history, so newest stays come first; the plain list
       // is what's coming up, soonest first. (Both served by the propertyId+checkInDate index.)
