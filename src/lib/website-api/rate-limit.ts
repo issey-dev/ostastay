@@ -17,12 +17,16 @@ import { prisma } from "@/lib/db";
 // times its limit. One upsert per request is cheap at this API's scale. Fixed windows can
 // admit up to 2x the limit across a minute boundary; that is an accepted simplification.
 
-export type RateBucket = "read" | "write" | "authFailure";
+//  - export       per user/key    — report downloads (Transportation report). A CSV or PDF of
+//                                   a month of transfers is a heavy query; nobody needs ten
+//                                   a minute.
+export type RateBucket = "read" | "write" | "authFailure" | "export";
 
 export const RATE_LIMITS: Record<RateBucket, number> = {
   read: 120,
   write: 20,
   authFailure: 30,
+  export: 10,
 };
 
 const WINDOW_MS = 60_000;

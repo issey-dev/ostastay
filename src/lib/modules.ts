@@ -31,6 +31,17 @@ export const MODULES = [
   // is a Controls tab gated by CONTROLS, this module only covers day-to-day
   // appointment booking/check-in/completion.
   "SPA",
+  // Guest transfers — bookings, manifests (shared departures), the daily board and their
+  // billing (see .agents/docs/TRANSPORTATION_PLAN.md). Switched on per PROPERTY in the Hub
+  // (TransportSettings.enabled), not sold as an enterprise add-on. Configuration (types,
+  // routes, rates...) is a Hub section gated by CONTROLS like every other catalogue; this
+  // module is the day-to-day operation, and its four actions mean:
+  //   view   — the board, airport rep and dispatch views, reports
+  //   create — create and edit transport bookings
+  //   update — manage manifests: create, attach/detach/move bookings, statuses
+  //   delete — billing: post or waive a charge by hand, custom amounts, price overrides
+  // Voiding a posted charge additionally needs CASHIERING update, as for every folio void.
+  "TRANSPORTATION",
   // The Operations Dashboard (2026-09-06, owner). Until now the dashboard was the one
   // screen no module owned — every role could open it. It has a module for two reasons:
   // `view` decides who lands on it at all, and `update` is where the per-role choice of
@@ -86,6 +97,7 @@ export const MODULE_LABELS: Record<Module, string> = {
   ACTIVITY_LOG: "Activity Log",
   EXCURSIONS: "Excursions",
   SPA: "Spa",
+  TRANSPORTATION: "Transportation",
   DASHBOARD: "Dashboard",
   INTEGRATIONS: "Integrations",
   USERS: "Users & Access",

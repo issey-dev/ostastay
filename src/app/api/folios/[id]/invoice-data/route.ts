@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { projectedTransfers } from "@/lib/transport/projection";
 import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -322,6 +323,15 @@ export async function GET(
               checkNo: `PT${leg.id.slice(0, 8)}`,
             });
           }
+        }
+
+        // Transportation module bookings — the transfer charges Night Audit will post (or has).
+        for (const t of await projectedTransfers(reservation.id, folio.propertyId, settings, folio.property.pricesIncludeTaxes)) {
+          line({
+            description: t.description,
+            code: t.chargeCode, amount: t.baseAmount, tax: t.taxAmount, sc: t.serviceChargeAmount, date: t.date,
+            checkNo: `PT${t.id.slice(0, 8)}`,
+          });
         }
 
         // A proforma projects the FULL charges for the stay, but it keeps the real

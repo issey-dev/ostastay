@@ -17,6 +17,7 @@ import {
   MonitorPlay,
   Receipt,
   Settings2,
+  Ship,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -148,6 +149,14 @@ export const PROPERTY_NAV: HubNavItem[] = [
     modules: ["CONTROLS"],
     addon: "SPA",
     description: "Treatments, therapists, treatment rooms and spa policies.",
+  },
+  {
+    key: "transportation",
+    title: "Transportation",
+    path: "transportation",
+    icon: Ship,
+    modules: ["CONTROLS"],
+    description: "Transfer types, locations, routes, providers, boats and rates.",
   },
   {
     key: "night-audit",

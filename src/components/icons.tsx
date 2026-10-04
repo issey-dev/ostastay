@@ -7,6 +7,8 @@
 import type { ComponentType, SVGProps } from "react"
 import {
   ActivityOutline,
+  AirplaneOutline,
+  ShipOutline,
   AddOutline,
   MinusOutline,
   ArrowCircleRightOutline,
@@ -247,6 +249,9 @@ export const UsersRound = outline(PeopleOutline)
 export const UserX = outline(ProfileRemoveOutline)
 export const Users = outline(PeopleOutline)
 export const Wallet = outline(Wallet2Outline)
+// Transportation (board, manifests, airport rep view).
+export const Ship = outline(ShipOutline)
+export const Plane = outline(AirplaneOutline)
 export const Wand2 = outline(MagicStarOutline)
 export const X = outline(CloseSquareOutline)
 export const XCircle = outline(CloseCircleOutline)

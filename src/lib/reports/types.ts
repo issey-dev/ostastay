@@ -75,7 +75,7 @@ export type ReportRunContext = {
 
 export type ReportDef = {
   key: string;
-  module: "FRONT_DESK" | "RESERVATIONS" | "REVENUE" | "FINANCIAL" | "HOUSEKEEPING";
+  module: "FRONT_DESK" | "RESERVATIONS" | "REVENUE" | "FINANCIAL" | "HOUSEKEEPING" | "TRANSPORTATION";
   name: string;
   description: string;
   params: ReportParam[];

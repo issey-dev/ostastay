@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { projectedTransfers } from "@/lib/transport/projection";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -98,18 +99,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let transportBaseTotal = 0;
     let transportTaxTotal = 0;
 
+    // Both kinds of transfer: the older per-reservation Transport legs, and the
+    // Transportation module's bookings (src/lib/transport/projection.ts).
+    const transfers: { name: string; dateStr: string; t: { baseAmount: number; taxAmount: number; serviceChargeAmount: number; breakdown: { name: string; amount: number }[] } }[] = [];
     for (const leg of chargeableLegs) {
       const code = legCodeMap.get(leg.chargeCodeId!);
       if (!code) continue;
       const t = resolveChargeTax({ chargeCode: code, inputAmount: leg.chargeAmount!, settings, pricesIncludeTaxes });
       const dir = leg.direction === "PICKUP" ? "Pickup" : "Dropoff";
       const realizeDate = leg.transportTime ?? leg.carrierTime ?? (leg.direction === "PICKUP" ? reservation.checkInDate : reservation.checkOutDate);
-      const dateStr = localDateStr(new Date(realizeDate));
+      transfers.push({ name: `Transport – ${dir}${leg.transportType ? ` (${leg.transportType})` : ""}`, dateStr: localDateStr(new Date(realizeDate)), t });
+    }
+    for (const pt of await projectedTransfers(reservation.id, reservation.propertyId, settings, pricesIncludeTaxes)) {
+      // A service date is a calendar day (UTC midnight), not an instant.
+      transfers.push({ name: pt.description, dateStr: pt.date.toISOString().slice(0, 10), t: pt });
+    }
+
+    for (const { name, dateStr, t } of transfers) {
       const taxes = round2(t.taxAmount + t.serviceChargeAmount);
 
       transportBaseTotal = round2(transportBaseTotal + t.baseAmount);
       transportTaxTotal = round2(transportTaxTotal + taxes);
-      otherLines.push({ name: `Transport – ${dir}${leg.transportType ? ` (${leg.transportType})` : ""}`, amount: round2(t.baseAmount) });
+      otherLines.push({ name, amount: round2(t.baseAmount) });
       for (const bl of t.breakdown) taxLineMap.set(bl.name, round2((taxLineMap.get(bl.name) ?? 0) + bl.amount));
 
       const day = dayByDate.get(dateStr);

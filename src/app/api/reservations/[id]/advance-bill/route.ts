@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { postReservationTransportNow } from "@/lib/transport/billing";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -305,6 +306,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           amountPosted += posted.grandTotal; linesPosted += 1 + posted.generated.length;
         }
       }
+
+      // Transportation module bookings still open on this stay (src/lib/transport/billing.ts)
+      // — posted now and marked POSTED, so Night Audit's transport pass skips them.
+      const moduleTransport = await postReservationTransportNow(tx, {
+        reservationId: id,
+        date: businessDate,
+        settings,
+        pricesIncludeTaxes: reservation.property.pricesIncludeTaxes,
+      });
+      amountPosted += moduleTransport.grandTotal; linesPosted += moduleTransport.lines;
 
       // (advanceBilledThrough was already set atomically by the claim above, so Night
       // Audit skips these nights — no second write needed here.)
