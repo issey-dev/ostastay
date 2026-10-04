@@ -32,7 +32,7 @@ export function propertyIdFrom(request: Request, body?: unknown): string {
   const fromQuery = new URL(request.url).searchParams.get("propertyId")
   const fromBody = body && typeof body === "object" ? (body as { propertyId?: unknown }).propertyId : undefined
   const id = fromQuery || (typeof fromBody === "string" ? fromBody : "")
-  if (!id) throw new BookingError(400, "INVALID_INPUT", "propertyId is required")
+  if (!id) throw new BookingError(400, "VALIDATION", "propertyId is required")
   return id
 }
 

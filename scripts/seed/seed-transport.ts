@@ -166,6 +166,31 @@ export async function seedTransport(prisma: PrismaClient, opts: { propertyId: st
     });
     created++;
   }
+  // A property with no arrivals or departures today (the docs demo) still gets a realistic
+  // board: travellers booked without a stay, two of them sharing the 14:00 boat.
+  if (arrivals.length === 0 && departures.length === 0) {
+    const rate = await rateFor(boatRoute.id);
+    const travellers = [
+      { name: "Hana Ibrahim", adults: 2, children: 0, flight: flights[0], onBoat: true },
+      { name: "Lucas Moreau", adults: 2, children: 1, flight: flights[1], onBoat: true },
+      { name: "Priya Nair", adults: 1, children: 0, flight: flights[2], onBoat: false },
+    ];
+    for (const t of travellers) {
+      const amount = rate ? rateAmount(rate, { adults: t.adults, children: t.children, infants: 0 }) : null;
+      const flightAt = at(t.flight.time);
+      await prisma.transportBooking.create({
+        data: {
+          propertyId, guestName: t.name, guestContact: "+960 790 0000", direction: "PICKUP", status: t.onBoat ? "ASSIGNED" : "CONFIRMED",
+          serviceDate: opts.businessDate, adults: t.adults, children: t.children, airline: t.flight.airline, flightNo: t.flight.flightNo,
+          flightAt, flightAtOnManifest: t.onBoat ? flightAt : null, airportRepUserId: opts.userId, meetingNotes: "Arrivals hall, counter 12",
+          routeId: boatRoute.id, transportTypeId: speedboat.id, manifestId: t.onBoat ? pickupBoat.id : null, rateId: rate?.id ?? null,
+          amount, chargeCodeId: rate?.chargeCodeId ?? null, billingStatus: amount ? "NOT_BILLED" : "NON_BILLABLE", createdByUserId: opts.userId,
+        },
+      });
+      created++;
+    }
+  }
+
   // A local traveller with no stay, island-hopping in for lunch tomorrow.
   await prisma.transportBooking.create({
     data: {

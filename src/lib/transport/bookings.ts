@@ -113,6 +113,7 @@ export function serializeBooking(b: BookingRow, opts: { timeZone: string; tolera
     onManifest: !!b.manifestId,
     flightAtOnManifest: b.flightAtOnManifest,
     needsFlight,
+    reservationStatus: b.reservation?.status ?? null,
   })
   const line = b.folioLineItem
   const postedGross = line

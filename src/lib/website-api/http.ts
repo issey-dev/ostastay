@@ -18,7 +18,7 @@ import { publicStatus } from "@/lib/website-api/activity-common";
 
 export const WEBSITE_API_VERSION = "v1";
 
-const ALLOWED_METHODS = "GET, POST, OPTIONS";
+const ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
 const ALLOWED_HEADERS = "Authorization, Content-Type, X-Api-Key, Idempotency-Key";
 // Readable by browser callers on an allowed origin, so they can pace themselves.
 const EXPOSED_HEADERS = "RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After";

@@ -25,7 +25,7 @@ export function H3({ children, id }: { children: string; id?: string }) {
   return <h3 id={id ?? slug(children)}>{children}</h3>
 }
 
-export function Endpoint({ method, path, note }: { method: "GET" | "POST"; path: string; note?: string }) {
+export function Endpoint({ method, path, note }: { method: "GET" | "POST" | "PATCH" | "DELETE"; path: string; note?: string }) {
   return (
     <div className="docs-endpoint">
       <span className={`docs-method docs-method-${method}`}>{method}</span>

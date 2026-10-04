@@ -17,6 +17,7 @@ import { prisma } from "../src/lib/db";
 import { goLiveDate } from "../src/lib/business-date";
 import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "../src/lib/posting/ensure-charge-tree";
 import { expandScheduleDates } from "../src/lib/excursions";
+import { seedTransport } from "./seed/seed-transport";
 
 if (process.env.NODE_ENV === "production") {
   console.error("docs:demo is for local development only.");
@@ -511,6 +512,10 @@ async function main() {
     await findOrCreate(() => prisma.spaRoom.findFirst({ where: { propertyId: P, name: r.name } }), () => prisma.spaRoom.create({ data: { propertyId: P, ...r } }));
   }
   await prisma.spaSettings.upsert({ where: { propertyId: P }, update: {}, create: { propertyId: P, defaultOpeningTime: "09:00", defaultClosingTime: "20:00" } });
+
+  // ── Transportation ──────────────────────────────────────────────────────────────
+  const resortNow = await prisma.property.findUniqueOrThrow({ where: { id: P }, select: { businessDate: true } });
+  await seedTransport(prisma, { propertyId: P, userId: admin.id, businessDate: resortNow.businessDate ?? goLiveDate(undefined) });
 
   console.log(`docs:demo — Coral Bay Hotels ready. Enterprise code "${DEMO.slug}", admin ${admin.email}.`);
   console.log(`  ${DEMO.resort}  Coral Bay Resort  ${resort.id}  (set up)`);

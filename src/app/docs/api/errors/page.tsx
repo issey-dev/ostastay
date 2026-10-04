@@ -18,9 +18,10 @@ export default function Errors() {
           ["401", c("MISSING_API_KEY"), "No key header. Fix the integration."],
           ["401", c("INVALID_API_KEY"), "Unknown, revoked or expired key. Ask the property for a new one."],
           ["403", c("SCOPE_NOT_GRANTED"), "The key isn't enabled for this module. Ask the property to tick it on your key."],
-          ["403", c("SERVER_KEY_REQUIRED"), "Excursion and spa writes need a server-only key (no browser origins)."],
+          ["403", c("SERVER_KEY_REQUIRED"), "Excursion and spa writes, and anything in Transportation, need a server-only key (no browser origins)."],
           ["404", c("PROPERTY_NOT_FOUND"), "Unknown property, or one your key doesn't cover."],
           ["409", c("MODULE_NOT_ENABLED"), "The property isn't selling this module online right now (details.reason)."],
+          ["409", c("MODULE_NOT_ENABLED") , "Transportation — the property has not switched it on."],
           ["429", c("RATE_LIMITED"), "Too many requests. Wait Retry-After seconds."],
           ["429", c("TOO_MANY_HOLDS"), "Your key has too many live holds. Book or let some expire."],
         ]}
@@ -71,6 +72,10 @@ export default function Errors() {
           ["500", c("INTERNAL_ERROR"), "Our side. Safe to retry a GET; retry a booking with the same Idempotency-Key."],
         ]}
       />
+      <p>
+        Transportation has a few codes of its own (<code>INVALID_REFERENCE</code>, <code>IN_USE</code>, <code>DUPLICATE</code>,{" "}
+        <code>DIRECTION_MISMATCH</code>, <code>ALREADY_POSTED</code>…) — see <a href="/docs/api/transport#errors-you-will-meet-here">Transportation</a>.
+      </p>
       <Pager href="/docs/api/errors" />
     </>
   )

@@ -42,6 +42,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/api/rooms", title: "Rooms", summary: "Availability, quotes and room bookings." },
           { href: "/docs/api/excursions", title: "Excursions", summary: "Departures, seats, holds and excursion bookings." },
           { href: "/docs/api/spa", title: "Spa", summary: "Treatments, free times, holds and spa bookings." },
+          { href: "/docs/api/transport", title: "Transportation", summary: "Transfers, departures, the daily board and charges — for the property's own systems." },
           { href: "/docs/api/bookings", title: "Managing bookings", summary: "Look up and cancel excursion and spa bookings." },
           { href: "/docs/api/webhooks", title: "Webhooks", summary: "Be told when the property changes a booking." },
         ],
@@ -96,6 +97,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/configuration/property/stationery", title: "9. Stationery", summary: "Invoices, receipts, letters, registration card and eRegistration." },
           { href: "/docs/configuration/property/excursions", title: "Excursions", summary: "Add-on: the excursion catalogue, prices and departures." },
           { href: "/docs/configuration/property/spa", title: "Spa", summary: "Add-on: treatments, therapists, treatment rooms and spa policies." },
+          { href: "/docs/configuration/property/transportation", title: "Transportation", summary: "Transfer types, locations, routes, boats, providers and rates." },
           { href: "/docs/configuration/property/online-booking", title: "Online booking", summary: "What the property's own website shows and sells." },
           { href: "/docs/configuration/property/channel-manager", title: "Channel manager", summary: "Mapping rooms and rates to online travel agencies." },
           { href: "/docs/configuration/property/green-tax", title: "Green Tax register", summary: "Checking and filing the monthly Green Tax register." },
@@ -121,6 +123,7 @@ export const DOC_AREAS: DocArea[] = [
         links: [
           { href: "/docs/operations", title: "Overview", summary: "Day-to-day guides for property staff." },
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk", summary: "For front office and spa staff: finding and handling online bookings." },
+          { href: "/docs/operations/transportation", title: "Transportation", summary: "For front office, airport reps and dispatch: transfers, departures, charges and the daily report." },
         ],
       },
     ],

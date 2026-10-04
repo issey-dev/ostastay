@@ -23,6 +23,8 @@ export type AttentionInput = {
   flightAtOnManifest: Date | null
   /** Route is an airport transfer, or its transport type requires flight details. */
   needsFlight: boolean
+  /** The linked reservation's status, if any. */
+  reservationStatus?: string | null
 }
 
 export type AttentionReason = { code: string; message: string }
@@ -67,6 +69,15 @@ export function attentionFor(b: AttentionInput): AttentionReason[] {
   }
   if (b.onManifest && b.flightAtOnManifest && !b.flightAt) {
     out.push({ code: "FLIGHT_CHANGED", message: "Flight time removed since the booking was added to the departure" })
+  }
+
+  // The stay was cancelled or never arrived, but the transfer is still live: Night Audit
+  // won't charge it — someone should cancel it or mark it a no-show.
+  if (b.reservationStatus === "CANCELLED" || b.reservationStatus === "NO_SHOW") {
+    out.push({
+      code: "RESERVATION_CLOSED",
+      message: b.reservationStatus === "CANCELLED" ? "The reservation is cancelled" : "The reservation is a no-show",
+    })
   }
 
   if (b.needsFlight && ACTIVE.has(b.status) && (!b.flightAt || !b.flightNo)) {

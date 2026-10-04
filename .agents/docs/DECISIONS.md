@@ -3410,3 +3410,23 @@ it — **not yet confirmed by the owner**:
   tests + the lint error. Owner asked for code changes only — server/ops steps stay manual.
 - Marketing site move (`/info` → uppsolut.com): **skipped for now** (owner) — hosting of
   uppsolut.com is still unknown.
+
+## 2026-10-04 — Transportation module (owner brief)
+
+Full plan and decision list: [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md) (T-1…T-14).
+Owner's brief, in short: per-property transfers linked to reservations (or a traveller with
+no stay), airport leg + onward leg, PICKUP/DROP_OFF, **shared departures (manifests)** as the
+core object; Hub configuration (types, locations, routes with default departure slots,
+providers + vessels, rates with charge code and tax, module settings); a daily board with an
+Airport rep view and a Dispatch view (mobile/tablet usable); "Needs attention" warnings that
+never block; billing **Night Audit driven, one posting per booking**, never auto-posting
+no-shows/cancellations, manual post/fee/waive, voids through the standard folio flow;
+Booking API + docs; version bump prepared, not finalized (owner confirms after testing).
+Decisions taken without asking (flagged in the final report, revisit if wrong):
+- Drop-off charges post at the audit of the guest's **last night**, stamped with the
+  departure date (the departure date's own audit runs after check-out closed the folio).
+- Permissions map onto the existing CRUD bits: view / create = bookings / update = manifests /
+  delete = billing overrides; configuration = Property Setup (CONTROLS); voids need Cashiering.
+- The older per-reservation Transport card is superseded where Transportation is on; booking
+  the same leg converts it without double charging.
+- Proposed version **8.5.0** (new feature, additive migration).

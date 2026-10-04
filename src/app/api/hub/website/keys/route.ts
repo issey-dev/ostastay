@@ -27,7 +27,7 @@ export async function GET() {
       enabledActivityModules(ctx.enterpriseId),
     ]);
     // Which scopes the form may offer: Rooms always, an add-on only while it is enabled.
-    const availableScopes = API_SCOPES.filter((s) => s === "ROOMS" || addons.has(s));
+    const availableScopes = API_SCOPES.filter((s) => s === "ROOMS" || s === "TRANSPORT" || addons.has(s as "EXCURSIONS" | "SPA"));
     return NextResponse.json({ keys, properties, availableScopes });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

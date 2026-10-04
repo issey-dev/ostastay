@@ -70,12 +70,18 @@ export function notFound(what: string): BookingError {
   return new BookingError(404, "NOT_FOUND", `${what} not found`)
 }
 
-export function invalid(message: string, code = "INVALID_INPUT"): BookingError {
+export function invalid(message: string, code = "VALIDATION"): BookingError {
   return new BookingError(400, code, message)
 }
 
 export function fromZod(error: ZodError): BookingError {
-  return new BookingError(400, "INVALID_INPUT", zodMessage(error), { details: error.issues })
+  // The Booking API's error shape: details maps each field to its message.
+  const details: Record<string, string> = {}
+  for (const i of error.issues) {
+    const key = i.path.join(".") || "_"
+    if (!details[key]) details[key] = i.message
+  }
+  return new BookingError(400, "VALIDATION", zodMessage(error), { details })
 }
 
 export function forbidden(message: string): BookingError {

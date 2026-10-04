@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
 import { generateWebsiteApiKey } from "@/lib/website-api/key";
-import { normalizeScopes, type ApiScope } from "@/lib/website-api/scopes";
+import { API_SCOPES, normalizeScopes, type ApiScope } from "@/lib/website-api/scopes";
+
+// Transportation data is staff operations (guest names, flights, contacts) and billing —
+// never something a visitor's browser should hold a key to. B-10's rule, applied whole.
+function assertTransportServerOnly(scopes: readonly string[], origins: readonly string[]) {
+  if (scopes.includes("TRANSPORT") && origins.length > 0) {
+    throw new ForbiddenError("Transportation needs a server-to-server key — remove the browser origins, or use a separate key for it");
+  }
+}
 
 // Hub-side management of Website API keys — list, mint, edit, rotate, revoke. Every
 // function takes the enterpriseId from the caller's session (never from the client) and
@@ -131,6 +139,7 @@ export async function createWebsiteApiKey(params: {
   await assertPropertyInEnterprise(params.enterpriseId, params.propertyId);
   const origins = normalizeOrigins(params.allowedOrigins);
   const scopes = await normalizeScopes(params.enterpriseId, params.scopes ?? ["ROOMS"]);
+  assertTransportServerOnly(scopes, origins);
 
   const generated = generateWebsiteApiKey();
   const created = await prisma.websiteApiKey.create({
@@ -186,8 +195,9 @@ export async function updateWebsiteApiKey(params: {
     const validatedAdded = added.length ? await normalizeScopes(params.enterpriseId, added) : [];
     const all = [...new Set([...kept, ...validatedAdded])];
     if (all.length === 0) throw new ForbiddenError("Choose at least one thing this key may use");
-    data.scopes = (["ROOMS", "EXCURSIONS", "SPA"] as ApiScope[]).filter((s) => all.includes(s));
+    data.scopes = API_SCOPES.filter((s) => all.includes(s));
   }
+  assertTransportServerOnly(data.scopes ?? (existing.scopes as ApiScope[]), data.allowedOrigins ?? existing.allowedOrigins);
   if (params.propertyId !== undefined) {
     await assertPropertyInEnterprise(params.enterpriseId, params.propertyId);
     data.propertyId = params.propertyId;
