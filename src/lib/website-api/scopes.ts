@@ -14,12 +14,19 @@ import type { ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 // Rooms has no add-on; its equivalent of (3) is WebsitePropertySettings (rate plan chosen,
 // booking switched on), reported through the property's existing `booking` block.
 
-export const API_SCOPES = ["ROOMS", "EXCURSIONS", "SPA"] as const;
+// TRANSPORT (2026-10-04, TRANSPORTATION_PLAN.md): the property's transfer operations — its
+// transport configuration, bookings, departures (manifests), board and report data, and
+// billing actions — for an integration partner's or the property's own system. Not a
+// guest-facing scope. Granted only while the enterprise holds the Transportation add-on;
+// server-to-server only
+// (a key with browser origins is refused it), and answered only while the property has
+// Transportation switched on.
+export const API_SCOPES = ["ROOMS", "EXCURSIONS", "SPA", "TRANSPORT"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 export type ActivityModule = "EXCURSIONS" | "SPA";
 export const ACTIVITY_MODULES: readonly ActivityModule[] = ["EXCURSIONS", "SPA"];
 
-export const SCOPE_LABELS: Record<ApiScope, string> = { ROOMS: "Rooms", EXCURSIONS: "Excursions", SPA: "Spa" };
+export const SCOPE_LABELS: Record<ApiScope, string> = { ROOMS: "Rooms", EXCURSIONS: "Excursions", SPA: "Spa", TRANSPORT: "Transportation" };
 
 /** Thrown by a route when the key lacks the scope it needs; websiteRoute answers 403. */
 export class ScopeError extends Error {
@@ -62,6 +69,10 @@ export async function normalizeScopes(enterpriseId: string, input: string[]): Pr
     if ((s === "EXCURSIONS" || s === "SPA") && !addons.has(s)) {
       throw new ForbiddenError(`${SCOPE_LABELS[s]} is not enabled for this enterprise`);
     }
+  }
+  if (unique.includes("TRANSPORT")) {
+    const t = await prisma.enterpriseAddonAccess.findUnique({ where: { enterpriseId_module: { enterpriseId, module: "TRANSPORTATION" } } });
+    if (!t?.enabled) throw new ForbiddenError("Transportation is not enabled for this enterprise");
   }
   return API_SCOPES.filter((s) => unique.includes(s));
 }

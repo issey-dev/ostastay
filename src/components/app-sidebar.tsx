@@ -1,5 +1,5 @@
 import { MobileBottomNav } from "@/components/mobile-bottom-nav"
-import { requireSession, hasHubAccess, type Module } from "@/lib/scope"
+import { requireSession, hasHubAccess, resolveCurrentPropertyId, type Module } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 import { SidebarUserMenu } from "@/components/ui/sidebar-user-menu"
 import { AppSidebarNav } from "@/components/app-sidebar-nav"
@@ -37,7 +37,7 @@ export async function AppSidebar() {
   // in the enterprise sees it. Grows one entry at a time as new add-ons ship — see
   // src/components/osta/enterprise-addon-access-manager.tsx's own ADD_ON_MODULES list,
   // which must stay in sync with this one.
-  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA"]);
+  const ADD_ON_MODULES: ReadonlySet<Module> = new Set(["EXCURSIONS", "SPA", "TRANSPORTATION"]);
   const enabledAddOns = new Set(
     (
       await prisma.enterpriseAddonAccess.findMany({
@@ -47,6 +47,13 @@ export async function AppSidebar() {
     ).map((r) => r.module)
   );
 
+  // Transportation is switched on per PROPERTY (Hub > the property > Transportation), not
+  // per enterprise — the menu offers it only while the current property has it on.
+  const currentPropertyId = await resolveCurrentPropertyId(ctx);
+  const transportOn = currentPropertyId
+    ? !!(await prisma.transportSettings.findUnique({ where: { propertyId: currentPropertyId }, select: { enabled: true } }))?.enabled
+    : false;
+
   // Menu ordering/grouping and the active-route highlight live in AppSidebarNav (a
   // client component — it needs usePathname). This stays the sole authority on
   // *visibility*: only the modules that survive the permission/licensing/add-on
@@ -55,6 +62,7 @@ export async function AppSidebar() {
     const hasPermission = (ctx.permissions.get(module)?.canView ?? false) && ctx.licensedModules.has(module);
     if (!hasPermission) return false;
     if (ADD_ON_MODULES.has(module) && !enabledAddOns.has(module)) return false;
+    if (module === "TRANSPORTATION" && !transportOn) return false;
     return true;
   });
 

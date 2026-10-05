@@ -314,6 +314,7 @@ model User {
   websiteApiKeysCreated    WebsiteApiKey[]       @relation("WebsiteApiKeyCreatedBy")
   // One per property this user has arranged — see UserDashboardLayout.
   dashboardLayouts         UserDashboardLayout[]
+  transportRepBookings     TransportBooking[]    @relation("TransportAirportRep")
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -547,6 +548,16 @@ model Property {
   systemCodes                  SystemCode[]
   channelConnection            ChannelConnection?            @relation("PropertyChannelConnection")
   channelSyncLogs              ChannelSyncLog[]
+  // Transportation (TRANSPORTATION_PLAN.md) — configuration and operations, per property.
+  transportSettings            TransportSettings?
+  transportTypes               TransportType[]
+  transportLocations           TransportLocation[]
+  transportRoutes              TransportRoute[]
+  transportProviders           TransportProvider[]
+  transportVessels             TransportVessel[]
+  transportRates               TransportRate[]
+  transportManifests           TransportManifest[]
+  transportBookings            TransportBooking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -755,9 +766,10 @@ model TaxProfile {
   name         String
   description  String?
 
-  rates       TaxRate[]
-  chargeCodes ChargeCode[]
-  outlets     Outlet[]
+  rates          TaxRate[]
+  chargeCodes    ChargeCode[]
+  outlets        Outlet[]
+  transportRates TransportRate[]
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -896,6 +908,7 @@ model ChargeCode {
   feeRules       PropertyFeeRule[]
   excursionTypes ExcursionType[]
   spaTreatments  SpaTreatment[]
+  transportRates TransportRate[]
 
   @@unique([propertyId, code])
   @@index([chargeSubgroupId])
@@ -1376,6 +1389,7 @@ model Reservation {
   excursionBookings            ExcursionBooking[]
   channelInboundBookings       ChannelInboundBooking[]
   transports                   ReservationTransport[]
+  transportBookings            TransportBooking[]
   // A reservation can be the guest identity behind a Spa appointment participant —
   // see SpaAppointmentParticipant.reservationId (not SpaAppointment directly, since
   // guest identity is per-participant under the multi-resource design).
@@ -1515,6 +1529,8 @@ model Folio {
   excursionBookings  ExcursionBooking[]
   spaAppointments    SpaAppointment[]
   outletChecks       OutletCheck[]
+  // Walk-in folios opened for standalone transport bookings.
+  transportBookings  TransportBooking[]
 
   @@index([propertyId])
   @@index([groupBlockId])
@@ -1591,6 +1607,8 @@ model FolioLineItem {
   excursionBooking ExcursionBooking?
   // Back-reference from SpaAppointment.folioLineItemId (1:1, optional).
   spaAppointment   SpaAppointment?
+  // Back-reference from TransportBooking.folioLineItemId (1:1, optional).
+  transportBooking TransportBooking?
 
   @@index([chargeCodeId])
   @@index([folioId])
@@ -2368,6 +2386,7 @@ model GroupBlock {
   // A group-scoped eRegistration link: sent to the block's organizer (payeeProfile),
   // fanning out to every current pickup's own reservation-level slots.
   eRegistrationLinks ERegistrationLink[]
+  transportBookings  TransportBooking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4177,4 +4196,359 @@ model RoleDashboardWidget {
 
   @@id([roleId, widgetId])
   @@index([roleId])
+}
+
+// ---------------------------------------------------------------------------
+// Transportation (see .agents/docs/TRANSPORTATION_PLAN.md) — per-property guest
+// transfers: airport legs (flights), onward legs (speedboat, seaplane, domestic flight,
+// ferry, land) and local island-to-island transfers. Every row carries propertyId and
+// every read/write is scoped by it; nothing here is shared between properties.
+//
+// Configuration (types, locations, routes, providers, vessels, rates, settings) is edited
+// in the Hub under CONTROLS. Operations (bookings, manifests, billing actions) are the
+// TRANSPORTATION RBAC module. Nothing is hard-deleted once referenced — deactivate.
+// ---------------------------------------------------------------------------
+
+// One row per property. Absent = the module is off (getTransportSettings fills defaults).
+model TransportSettings {
+  id                        String   @id @default(uuid())
+  propertyId                String   @unique
+  property                  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // The per-property switch: off hides the board, the reservation panel and the API.
+  enabled                   Boolean  @default(false)
+  // What a NEW rate starts with: CHARGE_CODE (the charge code's own tax) | DEFAULT (the
+  // property's Service Charge + GST) | CUSTOM (defaultTaxProfileId). Same three modes as
+  // Outlet.taxOverrideMode, resolved through resolveOutletChargeTax.
+  defaultTaxMode            String   @default("CHARGE_CODE")
+  defaultTaxProfileId       String?
+  // Pre-filled on new rates; validated as one of this property's charge codes.
+  defaultChargeCodeId       String?
+  // When on, a booking cannot become ASSIGNED/COMPLETED, nor a manifest CONFIRMED or later,
+  // without a provider (its own or its manifest's).
+  requireProvider           Boolean  @default(false)
+  // "Needs attention" buffer: minutes between a flight and the boat/seaplane that must be
+  // kept (immigration and baggage on arrival, check-in on departure). Warn-only.
+  attentionToleranceMinutes Int      @default(60)
+  updatedAt                 DateTime @updatedAt
+}
+
+model TransportType {
+  id                    String   @id @default(uuid())
+  propertyId            String
+  property              Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code                  String
+  name                  String
+  // SPEEDBOAT | SEAPLANE | DOMESTIC_FLIGHT | FERRY | LAND | OTHER
+  mode                  String   @default("SPEEDBOAT")
+  // Shows the airport leg (airline, flight no., ETA/ETD, airport rep) on a booking.
+  requiresFlightDetails Boolean  @default(false)
+  isActive              Boolean  @default(true)
+
+  routes    TransportRoute[]
+  rates     TransportRate[]
+  vessels   TransportVessel[]
+  bookings  TransportBooking[]
+  manifests TransportManifest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, code])
+}
+
+model TransportLocation {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code       String
+  name       String
+  // AIRPORT | JETTY | SEAPLANE_PLATFORM | ISLAND | RESORT | GUESTHOUSE | OTHER
+  type       String   @default("OTHER")
+  notes      String?
+  isActive   Boolean  @default(true)
+
+  routesFrom TransportRoute[] @relation("RouteOrigin")
+  routesTo   TransportRoute[] @relation("RouteDestination")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, code])
+}
+
+model TransportRoute {
+  id              String            @id @default(uuid())
+  propertyId      String
+  property        Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  originId        String
+  origin          TransportLocation @relation("RouteOrigin", fields: [originId], references: [id])
+  destinationId   String
+  destination     TransportLocation @relation("RouteDestination", fields: [destinationId], references: [id])
+  transportTypeId String
+  transportType   TransportType     @relation(fields: [transportTypeId], references: [id])
+  // AIRPORT_TRANSFER (shows the airport leg) | LOCAL_TRANSFER (island to island)
+  category        String            @default("AIRPORT_TRANSFER")
+  // PICKUP | DROP_OFF | BOTH — which bookings may use this route.
+  direction       String            @default("BOTH")
+  durationMinutes Int?
+  instructions    String?
+  // Suggested departure times, "HH:MM" in the property's time zone. Used to suggest a
+  // time on a booking and to create a day's manifests; never binding.
+  departureSlots  String[]          @default([])
+  isActive        Boolean           @default(true)
+
+  rates     TransportRate[]
+  bookings  TransportBooking[]
+  manifests TransportManifest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, code])
+  @@index([originId])
+  @@index([destinationId])
+  @@index([transportTypeId])
+}
+
+model TransportProvider {
+  id          String   @id @default(uuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String
+  // OWN (the property's own boats/cars) | THIRD_PARTY
+  kind        String   @default("OWN")
+  contactName String?
+  phone       String?
+  email       String?
+  notes       String?
+  isActive    Boolean  @default(true)
+
+  vessels   TransportVessel[]
+  rates     TransportRate[]
+  bookings  TransportBooking[]
+  manifests TransportManifest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, name])
+}
+
+// A boat, seaplane or vehicle. Capacity drives the manifest's soft over-capacity warning.
+model TransportVessel {
+  id              String            @id @default(uuid())
+  propertyId      String
+  property        Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  providerId      String
+  provider        TransportProvider @relation(fields: [providerId], references: [id])
+  name            String
+  transportTypeId String?
+  transportType   TransportType?    @relation(fields: [transportTypeId], references: [id])
+  capacity        Int               @default(10)
+  registration    String?
+  isActive        Boolean           @default(true)
+
+  bookings  TransportBooking[]
+  manifests TransportManifest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([providerId])
+  @@index([transportTypeId])
+}
+
+// A price for a route. The most specific enabled rate wins (provider, then transport type,
+// then exact direction) — see selectRate() in src/lib/transport/pricing.ts. A route with no
+// rate is complimentary.
+model TransportRate {
+  id              String             @id @default(uuid())
+  propertyId      String
+  property        Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  routeId         String
+  route           TransportRoute     @relation(fields: [routeId], references: [id])
+  transportTypeId String?
+  transportType   TransportType?     @relation(fields: [transportTypeId], references: [id])
+  providerId      String?
+  provider        TransportProvider? @relation(fields: [providerId], references: [id])
+  name            String?
+  // PICKUP | DROP_OFF | BOTH
+  direction       String             @default("BOTH")
+  // PER_PERSON (adult/child/infant prices) | PER_VEHICLE (price x vehicles) | PER_TRIP (price per booking)
+  pricingBasis    String             @default("PER_PERSON")
+  price           Float              @default(0)
+  adultPrice      Float              @default(0)
+  childPrice      Float              @default(0)
+  infantPrice     Float              @default(0)
+  // Ages counted as a child (inclusive); below = infant, above = adult. Printed on the
+  // booking form so staff count the party the same way the price was set.
+  childMinAge     Int                @default(2)
+  childMaxAge     Int                @default(11)
+  validFrom       DateTime?
+  validTo         DateTime?
+  chargeCodeId    String
+  chargeCode      ChargeCode         @relation(fields: [chargeCodeId], references: [id])
+  // CHARGE_CODE | DEFAULT | CUSTOM — see TransportSettings.defaultTaxMode.
+  taxMode         String             @default("CHARGE_CODE")
+  taxProfileId    String?
+  taxProfile      TaxProfile?        @relation(fields: [taxProfileId], references: [id])
+  // Off = the price is shown but never posted (included in a package, say).
+  isBillable      Boolean            @default(true)
+  isActive        Boolean            @default(true)
+
+  bookings TransportBooking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([routeId])
+  @@index([transportTypeId])
+  @@index([providerId])
+  @@index([chargeCodeId])
+  @@index([taxProfileId])
+}
+
+// One departure — the shared boat/seaplane several bookings ride on. The core
+// operational object. Pax and capacity are counted live from the attached bookings.
+model TransportManifest {
+  id              String             @id @default(uuid())
+  propertyId      String
+  property        Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // The local (property time zone) day, stored as UTC midnight — the board's index.
+  serviceDate     DateTime
+  // The departure instant, UTC.
+  departureAt     DateTime
+  routeId         String
+  route           TransportRoute     @relation(fields: [routeId], references: [id])
+  // PICKUP | DROP_OFF
+  direction       String
+  transportTypeId String?
+  transportType   TransportType?     @relation(fields: [transportTypeId], references: [id])
+  providerId      String?
+  provider        TransportProvider? @relation(fields: [providerId], references: [id])
+  vesselId        String?
+  vessel          TransportVessel?   @relation(fields: [vesselId], references: [id])
+  driverName      String?
+  driverContact   String?
+  // OPEN | CONFIRMED | DEPARTED | COMPLETED | CANCELLED
+  status          String             @default("OPEN")
+  notes           String?
+  createdByUserId String?
+
+  bookings TransportBooking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, serviceDate, direction, transportTypeId])
+  @@index([routeId])
+  @@index([transportTypeId])
+  @@index([providerId])
+  @@index([vesselId])
+}
+
+// One guest party's transfer in one direction. Linked to a reservation (0..n per
+// reservation) or standalone (a local traveller: name + contact, billed on a walk-in folio).
+model TransportBooking {
+  id            String       @id @default(uuid())
+  propertyId    String
+  property      Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id])
+  // Denormalized from the reservation so the board can filter by group block directly.
+  groupBlockId  String?
+  groupBlock    GroupBlock?  @relation(fields: [groupBlockId], references: [id])
+  // Standalone guests (and a snapshot of the reservation's guest for manifests/reports).
+  guestName     String
+  guestContact  String?
+  // The walk-in folio a standalone booking bills to (opened when the booking is created).
+  folioId       String?
+  folio         Folio?       @relation(fields: [folioId], references: [id])
+
+  // PICKUP (arrival) | DROP_OFF (departure)
+  direction   String
+  // DRAFT | CONFIRMED | ASSIGNED | COMPLETED | NO_SHOW | CANCELLED
+  status      String   @default("CONFIRMED")
+  // The local day of the transfer (UTC midnight). Night Audit posts on this day.
+  serviceDate DateTime
+  adults      Int      @default(1)
+  children    Int      @default(0)
+  infants     Int      @default(0)
+  notes       String?
+
+  // ── Airport leg ──
+  airline            String?
+  flightNo           String?
+  // ETA for a pickup, ETD for a drop-off (UTC).
+  flightAt           DateTime?
+  terminal           String?
+  airportRepUserId   String?
+  airportRep         User?     @relation("TransportAirportRep", fields: [airportRepUserId], references: [id])
+  meetingNotes       String?
+  // flightAt as it was when the booking joined its manifest — a later change flags it.
+  flightAtOnManifest DateTime?
+
+  // ── Onward leg ──
+  routeId         String?
+  route           TransportRoute?    @relation(fields: [routeId], references: [id])
+  transportTypeId String?
+  transportType   TransportType?     @relation(fields: [transportTypeId], references: [id])
+  // The booking's own departure (UTC); the manifest's departure wins once attached.
+  departureAt     DateTime?
+  manifestId      String?
+  manifest        TransportManifest? @relation(fields: [manifestId], references: [id])
+  providerId      String?
+  provider        TransportProvider? @relation(fields: [providerId], references: [id])
+  vesselId        String?
+  vessel          TransportVessel?   @relation(fields: [vesselId], references: [id])
+  driverName      String?
+  driverContact   String?
+  // Informational only — no seat inventory.
+  seatNote        String?
+
+  // ── Pricing (snapshotted when the price is set, so posting is deterministic) ──
+  rateId          String?
+  rate            TransportRate? @relation(fields: [rateId], references: [id])
+  vehicleCount    Int            @default(1)
+  // The price as configured prices are entered (gross or net per the property's
+  // "prices include taxes"); null = complimentary.
+  amount          Float?
+  priceOverridden Boolean        @default(false)
+  overrideReason  String?
+  chargeCodeId    String?
+  taxMode         String         @default("CHARGE_CODE")
+  taxProfileId    String?
+
+  // ── Billing ──
+  // NOT_BILLED | PENDING | POSTED | VOIDED | WAIVED | NON_BILLABLE
+  billingStatus   String         @default("NOT_BILLED")
+  // The posted parent line — one posting per booking, the Night Audit idempotency key.
+  folioLineItemId String?        @unique
+  folioLineItem   FolioLineItem? @relation(fields: [folioLineItemId], references: [id])
+  postedAt        DateTime?
+  billingNote     String?
+
+  createdByUserId    String?
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, serviceDate, direction, transportTypeId])
+  @@index([reservationId])
+  @@index([groupBlockId])
+  @@index([folioId])
+  @@index([airportRepUserId])
+  @@index([routeId])
+  @@index([transportTypeId])
+  @@index([manifestId])
+  @@index([providerId])
+  @@index([vesselId])
+  @@index([rateId])
+  @@index([propertyId, billingStatus])
 }

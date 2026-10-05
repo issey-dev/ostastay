@@ -38,6 +38,7 @@ export default function Overview() {
           ["Rooms", <code key="r">ROOMS</code>, "Availability calendar, stay quotes, room bookings, booking lookup."],
           ["Excursions", <code key="e">EXCURSIONS</code>, "Excursion catalogue, departures with live seats, quotes, holds, bookings."],
           ["Spa", <code key="s">SPA</code>, "Treatment catalogue, free start times, quotes, holds, bookings."],
+          ["Transportation", <code key="t">TRANSPORT</code>, "The property's transfer operations — set-up, transfer bookings, departures, board, report, charges. Server-to-server only; not for a guest booking page."],
         ]}
       />
       <p>

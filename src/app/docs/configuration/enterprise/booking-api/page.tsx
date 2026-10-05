@@ -24,7 +24,7 @@ export default function BookingApiKeys() {
         rows={[
           ["Name", "Usually the website's address, e.g. www.example.com."],
           ["Property", "One property, or All properties for a group website. All properties also covers properties you add later."],
-          ["May use", "Rooms, Excursions, Spa: what this website sells. Add-ons your enterprise doesn't have are greyed out."],
+          ["May use", "Rooms, Excursions, Spa: what this website sells. Add-ons your enterprise doesn't have are greyed out. Transportation is for your own or an operator's system, not a website: it can't be ticked on a key with browser origins."],
           ["Browser origins", "Leave empty (recommended). Only for a static site that calls Uppsolut Stay from the visitor's browser. Such a key can show excursions and spa, but not book them."],
           ["Expires", "Optional. Good practice for a key given to an outside agency."],
         ]}

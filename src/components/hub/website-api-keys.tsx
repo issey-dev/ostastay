@@ -53,18 +53,19 @@ const coverageLabel = (r: Pick<KeyRow, "property">) => r.property?.name ?? "All 
 
 type PropertyOption = { id: string; name: string; code: string }
 
-type Scope = "ROOMS" | "EXCURSIONS" | "SPA"
+type Scope = "ROOMS" | "EXCURSIONS" | "SPA" | "TRANSPORT"
 const SCOPES: { value: Scope; label: string; hint: string }[] = [
   { value: "ROOMS", label: "Rooms", hint: "Availability, prices and room bookings" },
   { value: "EXCURSIONS", label: "Excursions", hint: "Departures, seats and excursion bookings" },
   { value: "SPA", label: "Spa", hint: "Treatments, free times and spa bookings" },
+  { value: "TRANSPORT", label: "Transportation", hint: "Transfers, departures and their billing — for your own systems, server-to-server only" },
 ]
 const scopeLabel = (s: Scope) => SCOPES.find((x) => x.value === s)?.label ?? s
 
 const keySchema = z.object({
   name: z.string().trim().min(1, "Give the key a name — usually the website it belongs to"),
   coverage: z.string().min(1, "Choose the property this key is for, or all properties"),
-  scopes: z.array(z.enum(["ROOMS", "EXCURSIONS", "SPA"])).min(1, "Choose at least one thing this key may use"),
+  scopes: z.array(z.enum(["ROOMS", "EXCURSIONS", "SPA", "TRANSPORT"])).min(1, "Choose at least one thing this key may use"),
   // One origin per line; validated properly server-side (normalizeOrigins).
   allowedOrigins: z.string(),
   expiresAt: z.string(),
@@ -502,7 +503,12 @@ export function WebsiteApiKeys({ canCreate, canManage, canRevoke }: { canCreate:
                       Only needed if the website calls the API directly from the visitor&apos;s browser. Leave empty for the
                       recommended server-to-server setup, where the key never leaves the website&apos;s server.
                     </p>
-                    {field.value.trim() !== "" && form.watch("scopes").some((s) => s !== "ROOMS") && (
+                    {field.value.trim() !== "" && form.watch("scopes").includes("TRANSPORT") && (
+                      <p className="text-xs text-destructive">
+                        Transportation can&apos;t be used from a browser — remove the origins, or make a separate key for it.
+                      </p>
+                    )}
+                    {field.value.trim() !== "" && form.watch("scopes").some((s) => s === "EXCURSIONS" || s === "SPA") && (
                       <p className="text-xs text-warning">
                         With browser origins set, this key can show excursions and spa treatments but cannot book them —
                         those bookings carry payment details, so they must come from the website&apos;s server.

@@ -178,6 +178,8 @@
 .docs-method { padding: 2px 8px; font-size: 12px; font-weight: 700; color: #fff; }
 .docs-method-GET { background: #0e5a8a; }
 .docs-method-POST { background: var(--accent); }
+.docs-method-PATCH { background: #6b4e16; }
+.docs-method-DELETE { background: #8a1c1c; }
 .docs-endpoint-path { word-break: break-all; }
 .docs-endpoint-tag { font-family: var(--font-inter), sans-serif; font-size: 12px; color: var(--ink-muted); }
 

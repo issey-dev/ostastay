@@ -63,6 +63,12 @@ read `.agents/docs/`:
   Fixed, plain language for hotel staff, no file paths, PR numbers or customer names), then
   `npm run docs:pdf -- release-notes`.
 
+- [`.agents/docs/TRANSPORTATION_PLAN.md`](.agents/docs/TRANSPORTATION_PLAN.md) — the
+  per-property Transportation module (transfers, shared departures/manifests, the daily board,
+  Night Audit billing, the Booking API `TRANSPORT` scope): decisions T-1…T-14, file map, open
+  items. Read before touching `src/lib/transport/**`, the Night Audit transport pass or the
+  older `ReservationTransport` card.
+
 - [`.agents/docs/DESKTOP_PLAN.md`](.agents/docs/DESKTOP_PLAN.md) — desktop polish: root causes
   (blocking success modals, no next step after actions, tabs/filters not in the URL, no page-shell
   standard), per-screen audit, shared components to build, phases and owner questions. Read before

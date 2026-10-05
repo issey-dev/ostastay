@@ -105,6 +105,9 @@ export const SHOTS: Shot[] = [
   { name: "prop-stationery", path: resort("stationery"), maxHeight: 1100 },
   { name: "prop-excursions", path: resort("excursions") },
   { name: "prop-spa", path: resort("spa"), maxHeight: 1200 },
+  { name: "prop-transportation", path: resort("transportation"), maxHeight: 1400 },
+  // Operations guide.
+  { name: "ops-transportation-board", path: (ids) => `/e/${ids.slug}/dashboard/transportation`, maxHeight: 1000 },
   { name: "prop-online-booking", path: resort("online-booking") },
   { name: "prop-channel-mapping", path: resort("channel-manager/mapping") },
   { name: "prop-green-tax", path: resort("green-tax") },

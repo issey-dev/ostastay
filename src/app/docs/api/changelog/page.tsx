@@ -9,6 +9,19 @@ export default function Changelog() {
     <>
       <DocTitle title="Changelog" lead="Everything here is additive: nothing is removed or renamed within v1." />
 
+      <H2 id="2026-10-04">October 2026 — Transportation</H2>
+      <ul>
+        <li>
+          <strong>Transportation</strong> (new scope <code>TRANSPORT</code>): the property&apos;s transfer set-up, transfer bookings, shared
+          departures, the daily board and report data, and posting or waiving transfer charges, under{" "}
+          <code>/properties/&#123;id&#125;/transport</code>. Server-to-server keys only. See <a href="/docs/api/transport">Transportation</a>.
+        </li>
+        <li>
+          The API now also answers <code>PATCH</code> and <code>DELETE</code> (Transportation only). Existing endpoints are unchanged.
+        </li>
+        <li>The Transportation booking list is the first cursor-paginated list: <code>limit</code> and <code>cursor</code> in, <code>nextCursor</code> out.</li>
+      </ul>
+
       <H2 id="2026-09-24">September 2026 — documentation: new address, dates for Excursions and Spa</H2>
       <ul>
         <li>

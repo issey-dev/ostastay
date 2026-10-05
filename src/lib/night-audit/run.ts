@@ -11,6 +11,7 @@ import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules"
 import { applyEodHousekeepingShift } from "@/lib/eod-housekeeping"
 import { logActivity } from "@/lib/activity-log"
+import { postDueTransportCharges, type TransportAuditResult } from "@/lib/transport/billing"
 
 // The Night Audit itself — posts the audited business date's room charges, allocations,
 // taxes, transport and no-show charges, marks no-shows, shifts housekeeping statuses and
@@ -310,6 +311,9 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     ).map((c) => [c.id, c])
   )
   let transportChargesPosted = 0
+  // The Transportation module's bookings (src/lib/transport/billing.ts) — posted in the same
+  // transaction; a no-op at a property that has the module switched off.
+  let transportModule: TransportAuditResult = { posted: 0, taxPosted: 0, postings: 0, pending: [] }
 
   // Atomic idempotency claim — the real guard against a concurrent/retried run
   // double-posting. The `alreadyRun` fast-path read above is only a cheap
@@ -425,6 +429,13 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
         transportChargesPosted += 1
       }
 
+      // 2b-ter. Transportation module bookings due tonight (pickups on the arrival day,
+      // drop-offs on the guest's last night) — one posting per booking, keyed on its line.
+      transportModule = await postDueTransportCharges(tx, { propertyId, auditDate, settings, pricesIncludeTaxes })
+      totalTaxPosted += transportModule.taxPosted
+      totalPostings += transportModule.postings
+      transportChargesPosted += transportModule.posted
+
       // 2c. Mark tonight's never-arrived reservations NO_SHOW — same transaction,
       // so a rolled-back audit doesn't leave half-processed no-shows either.
       if (noShowCandidates.length > 0) {
@@ -539,6 +550,10 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     noShowsProcessed: noShowCandidates.length,
     ...((hkShift.occupiedToDirty > 0 || hkShift.vacantShifted > 0) && { housekeepingShift: hkShift }),
     ...(transportChargesPosted > 0 && { transportChargesPosted }),
+    ...(transportModule.pending.length > 0 && {
+      transportPendingWarning: `${transportModule.pending.length} transfer charge${transportModule.pending.length > 1 ? "s" : ""} could not be posted (no open folio) — post ${transportModule.pending.length > 1 ? "them" : "it"} from the Transportation board.`,
+      transportPending: transportModule.pending,
+    }),
     ...(noShowCandidates.length > 0 && {
       noShowConfirmationNos: noShowCandidates.map((r) => r.confirmationNo),
     }),

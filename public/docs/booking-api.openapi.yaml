@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: Uppsolut Stay — Booking API
-  version: "1.1.0"
-  summary: Property information, live availability and prices, and bookings — rooms, excursions and spa — for a property's own brand website.
+  version: "1.2.0"
+  summary: Property information, live availability and prices, and bookings — rooms, excursions and spa — for a property's own brand website; and the property's transfer operations (Transportation) for its own systems.
   description: |
     Key-authenticated API for a property's brand website. Keys are created in the enterprise Hub
     (Booking API → API Keys), grant access to one or more of the enterprise's properties, and are
-    enabled for Rooms, Excursions and/or Spa. The full guide is at /docs/api.
+    enabled for Rooms, Excursions, Spa and/or Transportation (server-to-server keys only). The full
+    guide is at /docs/api.
 
     Conventions: dates are `YYYY-MM-DD` calendar days; check-out is exclusive; money is a number
     in the property's currency; every response is `Cache-Control: no-store`; errors carry a
@@ -35,6 +36,8 @@ tags:
     description: Spa treatments, free times, quotes, holds and bookings. Needs the SPA scope.
   - name: Activity bookings
     description: Look up and cancel excursion and spa bookings by reference and email.
+  - name: Transportation
+    description: The property's transfer set-up, bookings, departures, board, report and charges. Needs the TRANSPORT scope and a server-only key.
 
 paths:
   /properties:
@@ -562,6 +565,360 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # ── Transportation (TRANSPORT scope, server-only keys) ─────────────────────────────
+  /properties/{propertyId}/transport:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    get:
+      tags: [Transportation]
+      summary: Whether Transportation is on, and the property's time zone and currency
+      operationId: getTransportModule
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransportModule" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /properties/{propertyId}/transport/config/{collection}:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { $ref: "#/components/parameters/transportCollection" }
+    get:
+      tags: [Transportation]
+      summary: List a configuration collection
+      operationId: listTransportConfig
+      parameters:
+        - { name: active, in: query, schema: { type: string, enum: ["1"] }, description: Active rows only. }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportConfigRow" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Transportation]
+      summary: Create a configuration row (type, location, route, provider, vessel or rate)
+      operationId: createTransportConfig
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransportConfigRow" } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TransportConfigRow" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/TransportConflict" }
+
+  /properties/{propertyId}/transport/config/{collection}/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { $ref: "#/components/parameters/transportCollection" }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Transportation]
+      summary: Read a configuration row
+      operationId: getTransportConfig
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TransportConfigRow" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Transportation]
+      summary: Update a configuration row (partial; `isActive false` deactivates)
+      operationId: updateTransportConfig
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransportConfigRow" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TransportConfigRow" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/TransportConflict" }
+    delete:
+      tags: [Transportation]
+      summary: Delete a row nothing uses yet (otherwise 409 IN_USE — deactivate it)
+      operationId: deleteTransportConfig
+      responses:
+        "200": { description: Deleted, content: { application/json: { schema: { type: object, properties: { success: { type: boolean } } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/TransportConflict" }
+
+  /properties/{propertyId}/transport/bookings:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    get:
+      tags: [Transportation]
+      summary: List transfer bookings (cursor-paginated)
+      operationId: listTransportBookings
+      parameters:
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: direction, in: query, schema: { type: string, enum: [PICKUP, DROP_OFF] } }
+        - { name: status, in: query, schema: { type: string, enum: [DRAFT, CONFIRMED, ASSIGNED, COMPLETED, NO_SHOW, CANCELLED] } }
+        - { name: reservationId, in: query, schema: { type: string } }
+        - { name: manifestId, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: Guest name, confirmation number, flight number or group code. }
+        - { name: unassigned, in: query, schema: { type: string, enum: ["1"] } }
+        - { name: attention, in: query, schema: { type: string, enum: ["1"] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - { name: cursor, in: query, schema: { type: string }, description: "`nextCursor` from the previous page." }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TransportBooking" } }
+                  nextCursor: { type: [string, "null"] }
+        "409": { $ref: "#/components/responses/TransportConflict" }
+    post:
+      tags: [Transportation]
+      summary: Create a transfer booking
+      operationId: createTransportBooking
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransportBookingRequest" } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TransportBooking" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/TransportConflict" }
+
+  /properties/{propertyId}/transport/bookings/{bookingId}:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { name: bookingId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Transportation]
+      summary: Read a transfer booking
+      operationId: getTransportBooking
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TransportBooking" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Transportation]
+      summary: Change a transfer booking (re-prices it while unposted)
+      operationId: updateTransportBooking
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransportBookingRequest" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TransportBooking" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /properties/{propertyId}/transport/bookings/{bookingId}/status:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { name: bookingId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Transportation]
+      summary: Confirm, complete, mark no-show, cancel or reinstate
+      operationId: setTransportBookingStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [DRAFT, CONFIRMED, ASSIGNED, COMPLETED, NO_SHOW, CANCELLED] }
+                reason: { type: string, maxLength: 300 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { booking: { $ref: "#/components/schemas/TransportBooking" }, note: { type: [string, "null"] } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /properties/{propertyId}/transport/bookings/{bookingId}/billing:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { name: bookingId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Transportation]
+      summary: Post the transfer charge (full or custom), waive it, or bill it again. Voids are refused for API keys.
+      operationId: transportBillingAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [POST, WAIVE, RESUME] }
+                mode: { type: string, enum: [FULL, CUSTOM], default: FULL }
+                amount: { type: number, description: "CUSTOM only." }
+                reason: { type: string, description: "Required for CUSTOM and WAIVE." }
+                chargeCodeId: { type: [string, "null"], description: "CUSTOM only — e.g. a penalty code." }
+                description: { type: [string, "null"], maxLength: 120 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: "#/components/schemas/TransportBooking" }
+                  posted: { type: object, properties: { grandTotal: { type: number }, folioId: { type: string } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/TransportConflict" }
+
+  /properties/{propertyId}/transport/quote:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    post:
+      tags: [Transportation]
+      summary: The rate a booking would get and its folio total
+      operationId: quoteTransport
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TransportBookingRequest" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+
+  /properties/{propertyId}/transport/manifests:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    get:
+      tags: [Transportation]
+      summary: List departures with their passengers
+      operationId: listTransportManifests
+      parameters:
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: direction, in: query, schema: { type: string, enum: [PICKUP, DROP_OFF] } }
+        - { name: routeId, in: query, schema: { type: string } }
+        - { name: includeCancelled, in: query, schema: { type: string, enum: ["1"] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportManifest" } } } } } } }
+    post:
+      tags: [Transportation]
+      summary: Create a departure, optionally with bookings on it
+      operationId: createTransportManifest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [routeId, direction, serviceDate, departureTime]
+              properties:
+                routeId: { type: string }
+                direction: { type: string, enum: [PICKUP, DROP_OFF] }
+                serviceDate: { $ref: "#/components/schemas/Day" }
+                departureTime: { type: string, pattern: "^\\d{2}:\\d{2}$", description: Property local time. }
+                transportTypeId: { type: [string, "null"] }
+                providerId: { type: [string, "null"] }
+                vesselId: { type: [string, "null"] }
+                driverName: { type: [string, "null"] }
+                driverContact: { type: [string, "null"] }
+                notes: { type: [string, "null"] }
+                bookingIds: { type: array, items: { type: string } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TransportManifest" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /properties/{propertyId}/transport/manifests/{manifestId}:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { name: manifestId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Transportation]
+      summary: Read a departure
+      operationId: getTransportManifest
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TransportManifest" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Transportation]
+      summary: Change a departure's time, vessel, driver, notes or status (COMPLETED completes its passengers; CANCELLED releases them)
+      operationId: updateTransportManifest
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  manifest: { $ref: "#/components/schemas/TransportManifest" }
+                  cascade: { type: object, properties: { completed: { type: integer }, released: { type: integer } } }
+
+  /properties/{propertyId}/transport/manifests/{manifestId}/bookings:
+    parameters:
+      - { $ref: "#/components/parameters/propertyId" }
+      - { name: manifestId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [Transportation]
+      summary: Put bookings on this departure (moving them from another), take them off, or keep them after a flight change
+      operationId: changeTransportManifestBookings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, bookingIds]
+              properties:
+                action: { type: string, enum: [ATTACH, DETACH, KEEP] }
+                bookingIds: { type: array, items: { type: string }, maxItems: 200 }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TransportManifest" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /properties/{propertyId}/transport/manifests/from-slots:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    post:
+      tags: [Transportation]
+      summary: Create a day's departures from the routes' default departure times
+      operationId: createTransportManifestsFromSlots
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serviceDate, direction]
+              properties:
+                serviceDate: { $ref: "#/components/schemas/Day" }
+                direction: { type: string, enum: [PICKUP, DROP_OFF] }
+                routeId: { type: [string, "null"] }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { created: { type: integer }, skipped: { type: integer } } } } } }
+
+  /properties/{propertyId}/transport/board:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    get:
+      tags: [Transportation]
+      summary: The day's bookings and departures, with a week of arrival/departure counts
+      operationId: getTransportBoard
+      parameters:
+        - { name: date, in: query, required: true, schema: { $ref: "#/components/schemas/Day" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+
+  /properties/{propertyId}/transport/report:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    get:
+      tags: [Transportation]
+      summary: The Daily Transportation Report's data (at most 62 days)
+      operationId: getTransportReport
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Day" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+
+  /properties/{propertyId}/transport/suggestions:
+    parameters: [{ $ref: "#/components/parameters/propertyId" }]
+    get:
+      tags: [Transportation]
+      summary: Arrivals and departures with no transfer booked yet (nothing is created)
+      operationId: getTransportSuggestions
+      parameters:
+        - { name: from, in: query, required: true, schema: { $ref: "#/components/schemas/Day" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Day" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { type: object, additionalProperties: true } } } } } } }
+
 components:
   securitySchemes:
     bearerKey:
@@ -588,7 +945,23 @@ components:
       schema: { type: string }
       description: Property id from `GET /properties`. A property not covered by the key answers 404.
 
+    transportCollection:
+      name: collection
+      in: path
+      required: true
+      schema: { type: string, enum: [types, locations, routes, providers, vessels, rates] }
+
   responses:
+    TransportConflict:
+      description: Transportation refusal
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          examples:
+            disabled: { value: { error: "Transportation is not switched on for this property.", code: "MODULE_NOT_ENABLED", details: { reason: "NOT_ENABLED" } } }
+            noAddon: { value: { error: "Transportation is not available for this property.", code: "MODULE_NOT_ENABLED", details: { reason: "ADDON_NOT_ENABLED" } } }
+            inUse: { value: { error: "This route is in use and cannot be deleted — deactivate it instead.", code: "IN_USE" } }
+            duplicate: { value: { error: "A route with this code already exists at this property", code: "DUPLICATE" } }
     BadRequest:
       description: Validation or date-window error
       content:
@@ -692,6 +1065,16 @@ components:
             - ADD_ONS_NOT_OFFERED
             - ADD_ON_NOT_FOUND
             - BOOKING_REJECTED
+            - INVALID_REFERENCE
+            - IN_USE
+            - DUPLICATE
+            - DIRECTION_MISMATCH
+            - INVALID_STATUS_CHANGE
+            - PROVIDER_REQUIRED
+            - ALREADY_POSTED
+            - NO_PRICE
+            - NO_OPEN_FOLIO
+            - FORBIDDEN
             - IDEMPOTENCY_CONFLICT
             - RATE_LIMITED
             - SCOPE_NOT_GRANTED
@@ -1357,3 +1740,115 @@ components:
         endTime: { type: string }
         partySize: { type: integer }
         guests: { type: array, items: { type: string } }
+
+    TransportModule:
+      type: object
+      properties:
+        propertyId: { type: string }
+        enabled: { type: boolean }
+        timeZone: { type: string, example: Indian/Maldives }
+        currency: { type: string, example: USD }
+        pricesIncludeTaxes: { type: boolean }
+        attentionToleranceMinutes: { type: integer }
+        requireProvider: { type: boolean }
+
+    TransportConfigRow:
+      type: object
+      description: >-
+        One row of a configuration collection; fields depend on the collection (see /docs/api/transport).
+        Every row has `id` and `isActive`.
+      additionalProperties: true
+      properties:
+        id: { type: string, readOnly: true }
+        isActive: { type: boolean }
+
+    LocalTime:
+      type: [object, "null"]
+      properties:
+        dateKey: { $ref: "#/components/schemas/Day" }
+        time: { type: string, example: "14:00" }
+
+    TransportBookingRequest:
+      type: object
+      properties:
+        reservationId: { type: [string, "null"], description: Create only. Omit for a traveller without a stay (then guestName is required). }
+        guestName: { type: [string, "null"] }
+        guestContact: { type: [string, "null"] }
+        direction: { type: string, enum: [PICKUP, DROP_OFF] }
+        status: { type: string, enum: [DRAFT, CONFIRMED], description: Create only. }
+        serviceDate: { $ref: "#/components/schemas/Day" }
+        adults: { type: integer }
+        children: { type: integer }
+        infants: { type: integer }
+        routeId: { type: [string, "null"] }
+        transportTypeId: { type: [string, "null"] }
+        departureTime: { type: [string, "null"], description: "HH:MM, property local time." }
+        airline: { type: [string, "null"] }
+        flightNo: { type: [string, "null"] }
+        flightDate: { oneOf: [{ $ref: "#/components/schemas/Day" }, { type: "null" }] }
+        flightTime: { type: [string, "null"], description: "HH:MM local — ETA for a pickup, ETD for a drop-off." }
+        terminal: { type: [string, "null"] }
+        airportRepUserId: { type: [string, "null"] }
+        meetingNotes: { type: [string, "null"] }
+        providerId: { type: [string, "null"] }
+        vesselId: { type: [string, "null"] }
+        driverName: { type: [string, "null"] }
+        driverContact: { type: [string, "null"] }
+        seatNote: { type: [string, "null"], description: Informational only. }
+        vehicleCount: { type: integer }
+        notes: { type: [string, "null"] }
+        priceOverride:
+          type: [object, "null"]
+          properties:
+            amount: { type: number }
+            reason: { type: string }
+
+    TransportBooking:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        reference: { type: string, example: TR-B40355 }
+        status: { type: string, enum: [DRAFT, CONFIRMED, ASSIGNED, COMPLETED, NO_SHOW, CANCELLED] }
+        direction: { type: string, enum: [PICKUP, DROP_OFF] }
+        serviceDate: { $ref: "#/components/schemas/Day" }
+        pax: { type: integer }
+        guestName: { type: string }
+        flightNo: { type: [string, "null"] }
+        flightAt: { type: [string, "null"], format: date-time }
+        flightLocal: { $ref: "#/components/schemas/LocalTime" }
+        effectiveDepartureAt: { type: [string, "null"], format: date-time }
+        departureLocal: { $ref: "#/components/schemas/LocalTime" }
+        manifest: { type: [object, "null"], additionalProperties: true }
+        pricing: { type: object, additionalProperties: true }
+        billing:
+          type: object
+          properties:
+            status: { type: string, enum: [NOT_BILLED, PENDING, POSTED, VOIDED, WAIVED, NON_BILLABLE] }
+            folioLineItemId: { type: [string, "null"] }
+            postedGross: { type: [number, "null"] }
+            note: { type: [string, "null"] }
+        attention:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string, enum: [TOO_SOON_AFTER_LANDING, TOO_CLOSE_TO_FLIGHT, FLIGHT_CHANGED, FLIGHT_MISSING, RESERVATION_CLOSED] }
+              message: { type: string }
+
+    TransportManifest:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        reference: { type: string, example: DEP-0FB307 }
+        serviceDate: { $ref: "#/components/schemas/Day" }
+        departureAt: { type: string, format: date-time }
+        departureLocal: { $ref: "#/components/schemas/LocalTime" }
+        direction: { type: string, enum: [PICKUP, DROP_OFF] }
+        status: { type: string, enum: [OPEN, CONFIRMED, DEPARTED, COMPLETED, CANCELLED] }
+        pax: { type: integer }
+        capacity: { type: [integer, "null"] }
+        capacityState: { type: string, enum: [OK, FULL, OVER, UNKNOWN] }
+        attentionCount: { type: integer }
+        bookings: { type: array, items: { $ref: "#/components/schemas/TransportBooking" } }

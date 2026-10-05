@@ -15,6 +15,28 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.5.0",
+    date: "2026-10-05",
+    highlights: "Transportation: airport meet-and-greet, speedboat and seaplane transfers and island trips, planned on a daily board and charged at Night Audit.",
+    new: [
+      "Transportation, an add-on: once it is enabled for your enterprise, each property switches it on in the Hub. Set up transport types, locations (airports, jetties, seaplane platforms, islands), routes with their usual departure times, your own boats and outside operators with their seats, and prices per route — per person, per vehicle or per trip, by season, each with its own charge code and tax. Load defaults sets up the usual Maldivian basics in one click.",
+      "Book a pickup or drop-off for a reservation, or for a traveller with no stay. The price comes from the route straight away, with tax; a manager can set it by hand with a reason. Airport transfers carry the flight, the airport rep and the meeting point.",
+      "Departures: put guests from different reservations on the same boat or seaplane, see seats used against the vessel, and move guests between departures. Departures can be created from the routes' usual times, or from the guests you select.",
+      "The Transportation board: one day at a time with a week overview, grouped by transport type, filtered by type, route, provider, status, airport rep, flight or group. An Airport rep view lists the day's flights in time order, and a Dispatch view shows each boat with its passengers — both made for phones and tablets.",
+      "Needs attention: a warning when a boat leaves too soon after a flight lands, reaches the airport too close to take-off, or a flight time changes after the guest was put on a departure. Warnings never stop you saving.",
+      "Suggested transfers: this week's arrivals and departures without a transfer, created as drafts for you to confirm.",
+      "Night Audit charges transfers to the guest's bill — pickups on the arrival day, drop-offs on the last night, dated the departure day — once per transfer. No-shows and cancellations are never charged automatically; post a fee, waive or void from the transfer.",
+      "Daily Transportation Report in PDF, CSV or Excel, from the board or Daily Reports.",
+      "A Transportation card on the reservation page, and a transfer mark in the reservations list.",
+      "The Booking API can run Transportation from your own systems, with a server-only key.",
+    ],
+    improved: [
+      "The proforma invoice, daily details and Advance Bill include the stay's transfers.",
+      "The reservation's Transport section is simpler: flight number, transport number and flight time for the pickup and the drop-off — nothing else. Charges for a transfer are no longer entered there; any already entered still post at Night Audit as before.",
+      "Where Transportation is on, the reservation's Transport section becomes read-only and shows what is booked in Transportation; transfers are added and changed there. Transport entered on a reservation before is carried over when you book the transfer, and never charged twice.",
+    ],
+  },
+  {
     version: "8.4.0",
     date: "2026-09-26",
     highlights: "Cleaner folios: a charge and its Service Charge, GST and Green Tax now show as one line you can expand.",

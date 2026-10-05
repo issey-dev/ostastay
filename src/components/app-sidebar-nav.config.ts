@@ -11,6 +11,7 @@ import {
   Landmark,
   LayoutDashboard,
   LayoutGrid,
+  Ship,
   Sparkles,
   Store,
   TrendingUp,
@@ -71,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Fast Post", url: "/dashboard/pos", icon: Store, module: "POS" },
       { title: "Excursions", url: "/dashboard/excursions", icon: Compass, module: "EXCURSIONS" },
       { title: "Spa", url: "/dashboard/spa", icon: Sparkles, module: "SPA" },
+      { title: "Transportation", url: "/dashboard/transportation", icon: Ship, module: "TRANSPORTATION" },
     ],
   },
   {

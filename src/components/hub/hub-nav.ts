@@ -17,6 +17,7 @@ import {
   MonitorPlay,
   Receipt,
   Settings2,
+  Ship,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -38,7 +39,7 @@ import {
 // Excursions, when the enterprise holds that add-on). Adding a section is adding a row
 // here plus its page; nothing else in the shell needs to change.
 
-export type HubAddon = "SPA" | "EXCURSIONS"
+export type HubAddon = "SPA" | "EXCURSIONS" | "TRANSPORTATION"
 
 export type HubNavItem = {
   key: string
@@ -148,6 +149,15 @@ export const PROPERTY_NAV: HubNavItem[] = [
     modules: ["CONTROLS"],
     addon: "SPA",
     description: "Treatments, therapists, treatment rooms and spa policies.",
+  },
+  {
+    key: "transportation",
+    title: "Transportation",
+    path: "transportation",
+    icon: Ship,
+    modules: ["CONTROLS"],
+    addon: "TRANSPORTATION",
+    description: "Transfer types, locations, routes, providers, boats and rates.",
   },
   {
     key: "night-audit",

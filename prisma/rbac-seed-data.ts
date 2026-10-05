@@ -66,6 +66,8 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     NIGHT_AUDIT: EDIT_NO_DELETE,
     EXCURSIONS: EDIT_NO_DELETE,
     SPA: EDIT_NO_DELETE,
+    // Bookings and manifests, but not billing overrides (delete) — those are a manager's.
+    TRANSPORTATION: EDIT_NO_DELETE,
     // Every operational role keeps the Operations Dashboard it has always had. VIEW_ONLY,
     // not FULL: `update` on this module is the right to decide which widgets OTHER roles
     // see, which is an administrator's job, not a desk's.

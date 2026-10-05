@@ -25,6 +25,7 @@ const DEFAULT_ORDER = [
   "/dashboard/maintenance",
   "/dashboard/spa",
   "/dashboard/excursions",
+  "/dashboard/transportation",
 ]
 const ORDER_BY_JOB: Record<string, string[]> = {
   HOUSEKEEPING: ["/dashboard/housekeeping", "/dashboard/maintenance", "/dashboard/front-office", "/dashboard/overview"],
@@ -42,6 +43,7 @@ const SHORT_TITLE: Record<string, string> = {
   Cashiering: "Cashier",
   "Fast Post": "Post",
   Excursions: "Trips",
+  Transportation: "Transfers",
 }
 
 export function MobileBottomNav({

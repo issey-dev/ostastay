@@ -23,6 +23,13 @@ export async function voidPostedCharge(
   const ids = [item.id, ...item.generatedLines.map((l) => l.id)];
   await tx.folioLineItem.updateMany({ where: { id: { in: ids } }, data: { isVoid: true } });
 
+  // A voided transfer charge (src/lib/transport/billing.ts) shows as VOIDED on its booking,
+  // however it was voided — from the booking, the folio screen or a group void.
+  await tx.transportBooking.updateMany({
+    where: { folioLineItemId: item.id, billingStatus: "POSTED" },
+    data: { billingStatus: "VOIDED", billingNote: input.reason },
+  });
+
   // Reservation-backed folios get a trace row recording who voided what and why. Walk-in
   // folios have no reservation to attach one to; the flagged row itself is the record.
   if (item.folio.reservationId) {

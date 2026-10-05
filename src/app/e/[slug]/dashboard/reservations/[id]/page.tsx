@@ -28,6 +28,7 @@ import { RoomMoveModal } from "@/components/front-office/room-move-modal"
 import { CheckInWizard } from "@/components/front-office/check-in-wizard"
 import { DepositDialog } from "@/components/front-office/deposit-dialog"
 import { ReservationTransport } from "@/components/front-office/reservation-transport"
+import { ReservationTransportation, useTransportAccess } from "@/components/transport/reservation-transportation"
 import { ERegistrationPanel } from "@/components/front-office/eregistration-panel"
 import { CountryLabel } from "@/components/ui/country-flag"
 import { useNationalities } from "@/components/ui/nationality-select"
@@ -91,6 +92,11 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const [isFolioOpen, setIsFolioOpen] = useState(false)
   const [isTraceOpen, setIsTraceOpen] = useState(false)
   const [transportSignal, setTransportSignal] = useState(0)
+  const [transferSignal, setTransferSignal] = useState(0)
+  const [transportRefresh, setTransportRefresh] = useState(0)
+  // Transportation module (add-on + property switch): when it is active the simple Transport
+  // section turns read-only (filled from the module) and the module's card books transfers.
+  const transportAccess = useTransportAccess(reservation?.propertyId)
   const [isRoomMoveOpen, setIsRoomMoveOpen] = useState(false)
   const [isCheckInOpen, setIsCheckInOpen] = useState(false)
   const [isDepositOpen, setIsDepositOpen] = useState(false)
@@ -536,7 +542,10 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     railNext = { label: reversing ? "Reinstating…" : "Reinstate", icon: RotateCcw, onClick: handleReinstate, disabled: reversing, variant: "outline" }
   }
   const addLinks: { label: string; onClick: () => void }[] = []
-  if ((reservation.transports?.length ?? 0) === 0 && liveBooking) addLinks.push({ label: "Add transport", onClick: () => setTransportSignal((n) => n + 1) })
+  const transportModuleOn = !!transportAccess?.enabled && !!transportAccess.perms.view
+  if (transportModuleOn) {
+    if (liveBooking && transportAccess!.perms.manageBookings) addLinks.push({ label: "Add transfer", onClick: () => setTransferSignal((n) => n + 1) })
+  } else if (transportAccess && !transportAccess.enabled && (reservation.transports?.length ?? 0) === 0 && liveBooking) addLinks.push({ label: "Add transport", onClick: () => setTransportSignal((n) => n + 1) })
   if (depositRows.length === 0 && reservation.status === "RESERVED") addLinks.push({ label: "Add deposit", onClick: () => setIsDepositOpen(true) })
   if ((reservation.traces?.length ?? 0) === 0) addLinks.push({ label: "Add trace", onClick: () => setIsTraceOpen(true) })
 
@@ -898,20 +907,47 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         </Button>
 
         <div className={`max-md:order-2 max-md:space-y-6 md:contents ${showMoreSections ? "" : "max-md:hidden"}`}>
-        {/* 3. Transport */}
+        {/* 3. Transport — the simple section (read-only, from Transportation, where the module is active),
+            then the module's own card for booking transfers */}
+        {transportAccess !== null && (
         <ReservationTransport
           reservationId={id}
-          propertyId={reservation.propertyId}
           checkInDate={reservation.checkInDate}
           checkOutDate={reservation.checkOutDate}
-          transports={reservation.transports ?? []}
+          refreshKey={transportRefresh}
           onChanged={() => {
             fetchReservation()
             fetchBreakdown()
           }}
           openSignal={transportSignal}
-          className={(reservation.transports?.length ?? 0) === 0 ? "lg:hidden" : undefined}
+          transportationHref={transportModuleOn ? `/e/${slug}/dashboard/transportation` : undefined}
+          className={!transportAccess.enabled && (reservation.transports?.length ?? 0) === 0 ? "lg:hidden" : undefined}
         />
+        )}
+        {transportModuleOn && (
+          <ReservationTransportation
+            reservation={{
+              id,
+              propertyId: reservation.propertyId,
+              confirmationNo: reservation.confirmationNo,
+              status: reservation.status,
+              checkInDate: reservation.checkInDate,
+              checkOutDate: reservation.checkOutDate,
+              adults: reservation.adults,
+              children: reservation.children,
+              infants: reservation.infants ?? 0,
+              guestName,
+              groupBlock: reservation.groupBlock ?? null,
+            }}
+            perms={transportAccess!.perms}
+            openSignal={transferSignal}
+            onChanged={() => {
+              setTransportRefresh((n) => n + 1)
+              fetchReservation()
+              fetchBreakdown()
+            }}
+          />
+        )}
 
         <ERegistrationPanel reservationId={id} />
         </div>

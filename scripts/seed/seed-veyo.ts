@@ -4,6 +4,7 @@ import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS, ensureRoles } from "../../prisma/r
 import { expandScheduleDates } from "../../src/lib/excursions";
 import { ensureChargeTree } from "../../src/lib/posting/ensure-charge-tree";
 import { generatesForTreatment } from "../../src/lib/posting/charge-tree";
+import { seedTransport } from "./seed-transport";
 import { seedDemoData, seedSpaAndExcursionBookings, ensureSeedPaymentMethods, BUSINESS_DATE, bizPlus } from "./seed-demo-data";
 import { provisionOutletSubgroup } from "../../src/lib/posting/outlet-subgroup";
 
@@ -805,6 +806,10 @@ async function main() {
     bookedByUserId: admin.id,
   });
 
+  // ── 14. Transportation (TRANSPORTATION_PLAN.md) — switched on at the Lagoon: routes,
+  // boats, a seaplane operator, rates, and today's arrivals/departures on shared departures.
+  const transport = await seedTransport(prisma, { propertyId: lagoon.id, userId: admin.id, businessDate: BUSINESS_DATE });
+
   console.log("\nVeyo enterprise seeded successfully.");
   console.log(`Login URL slug: /e/${veyo.slug}/login`);
   console.log("Users (password: password123):");
@@ -814,6 +819,7 @@ async function main() {
   console.log("  frontdesk@veyo.mv      Front Desk");
   console.log("  housekeeping@veyo.mv   Housekeeping");
   console.log("  spa@veyo.mv            Front Desk, linked to therapist Aisha Rahman");
+  console.log(`Transportation: on at Veyo Lagoon Retreat — ${transport.bookings} transfers seeded.`);
   console.log(`Spa + Excursions add-ons: Veyo Lagoon Retreat only — ${bookings.spa} appointments, ${bookings.excursions} excursion bookings.`);
   console.log(`
 Business date pinned to ${BUSINESS_DATE.toISOString().slice(0, 10)} on both properties:`);

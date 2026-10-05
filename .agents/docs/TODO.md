@@ -2,6 +2,27 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Transportation module (2026-10-04, released 8.5.0) — BUILT, follow-ups open
+
+See [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md). Built on `claude/transportation-module-pms-93kxk5`:
+Hub configuration, board / airport rep / dispatch views, bookings + manifests, Night Audit
+billing, reservation card, report export, Booking API `TRANSPORT` scope, docs + release notes.
+Follow-up (same day): Osta add-on + property switch (T-1); the reservation's Transport section
+simplified to flight no. / transport no. / flight time, read-only from the module when active (T-11).
+- [x] Owner confirmed drop-off posting timing (last-night audit, dated the departure day — T-6).
+- [ ] Legacy charge fields on `ReservationTransport` (chargeToGuest/chargeCodeId/chargeAmount,
+      transportType, transportTime, remarks) can no longer be entered; existing unposted charges
+      still post via Night Audit / Advance Bill. Drop the columns and those code paths once no
+      unposted legacy charge remains (needs a data check per environment first).
+- [x] Owner confirmed 8.5.0; `package.json` bumped and tagged `v8.5.0` (2026-10-05).
+- [ ] Per-departure printable passenger list.
+- [ ] Hub Overview banner: Transportation on but no routes/rates.
+- [ ] Copy-from-property for the transport catalogue.
+- [ ] Booking API transport writes are not idempotent (no Idempotency-Key) — fine for v1.
+- Found along the way, not changed: `scripts/docs-shots.ts`, `docs-pdf.ts` and `mobile-audit.ts`
+  launch Chromium without `--no-sandbox`, so they fail when run as root (containers); a
+  `PUPPETEER_EXECUTABLE_PATH` wrapper adding the flag works around it.
+
 ## Browser click-through tests (2026-09-26, 8.4.3) — DONE, follow-ups open
 
 `npm run test:e2e` (README "Browser click-through tests"): puppeteer specs in `tests/e2e/`
