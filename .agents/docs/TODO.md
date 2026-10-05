@@ -2,7 +2,7 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Transportation module (2026-10-04, proposed 8.5.0) — BUILT, follow-ups open
+## Transportation module (2026-10-04, released 8.5.0) — BUILT, follow-ups open
 
 See [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md). Built on `claude/transportation-module-pms-93kxk5`:
 Hub configuration, board / airport rep / dispatch views, bookings + manifests, Night Audit
@@ -14,7 +14,7 @@ simplified to flight no. / transport no. / flight time, read-only from the modul
       transportType, transportTime, remarks) can no longer be entered; existing unposted charges
       still post via Night Audit / Advance Bill. Drop the columns and those code paths once no
       unposted legacy charge remains (needs a data check per environment first).
-- [ ] Owner: confirm version 8.5.0, then bump `package.json`.
+- [x] Owner confirmed 8.5.0; `package.json` bumped and tagged `v8.5.0` (2026-10-05).
 - [ ] Per-departure printable passenger list.
 - [ ] Hub Overview banner: Transportation on but no routes/rates.
 - [ ] Copy-from-property for the transport catalogue.

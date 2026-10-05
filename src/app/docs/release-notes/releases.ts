@@ -16,7 +16,7 @@ export type Release = {
 export const RELEASES: Release[] = [
   {
     version: "8.5.0",
-    date: "2026-10-04",
+    date: "2026-10-05",
     highlights: "Transportation: airport meet-and-greet, speedboat and seaplane transfers and island trips, planned on a daily board and charged at Night Audit.",
     new: [
       "Transportation, an add-on: once it is enabled for your enterprise, each property switches it on in the Hub. Set up transport types, locations (airports, jetties, seaplane platforms, islands), routes with their usual departure times, your own boats and outside operators with their seats, and prices per route — per person, per vehicle or per trip, by season, each with its own charge code and tax. Load defaults sets up the usual Maldivian basics in one click.",

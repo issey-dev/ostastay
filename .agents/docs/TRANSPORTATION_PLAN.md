@@ -2,8 +2,8 @@
 
 > Status (2026-10-04): **BUILT** on branch `claude/transportation-module-pms-93kxk5` —
 > Phase 1 (Hub configuration), Phase 2 (operations, billing), Phase 3 (Booking API, docs,
-> release notes). Proposed version **8.5.0** — release-notes entry written, `package.json`
-> NOT bumped (owner confirms after testing). Open items at the bottom.
+> release notes). Released as **8.5.0** (2026-10-05, owner approved; tag `v8.5.0`).
+> Open items at the bottom.
 
 ## What it is
 
@@ -125,7 +125,7 @@ TRANSPORTATION view, ≤ 62 days, `export` rate-limit bucket 10/min per user, pd
 ## Open items / follow-ups
 
 - [x] Owner confirmed T-6 drop-off timing (last-night audit, dated the departure day) — 2026-10-04.
-- [ ] Version bump to 8.5.0 in `package.json` after the owner's test pass.
+- [x] Version bumped to 8.5.0 in `package.json` (owner, 2026-10-05).
 - [ ] Booking API idempotency keys for transport writes (not required in v1; creates are not
       idempotent — retry with care).
 - [ ] Per-manifest printable passenger list (today: the daily report PDF and the Dispatch view).
