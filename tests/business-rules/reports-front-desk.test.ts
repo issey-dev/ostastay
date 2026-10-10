@@ -54,6 +54,16 @@ describe("Reporting engine — Front Desk reports + renderers", () => {
     expect(row.status).toBe("Expected");
   });
 
+  it("rows carry the reservation id that the on-screen link column points at", async () => {
+    const res = await run("fd-arrivals", { date: BIZ }, propertyId);
+    const linkCol = res.columns.find((c) => c.link);
+    expect(linkCol?.key).toBe("conf");
+    const id = res.rows![0][linkCol!.link!.idKey];
+    expect(typeof id).toBe("string");
+    const found = await prisma.reservation.findUnique({ where: { id: id as string }, select: { confirmationNo: true } });
+    expect(found?.confirmationNo).toBe(res.rows![0].conf);
+  });
+
   it("Guest Event Calendar surfaces the birthday during the stay window", async () => {
     const res = await run("fd-guest-events", { range: { from: BIZ, to: new Date(BIZ.getTime() + 2 * 86_400_000) } }, propertyId);
     expect(res.rows!.some((r) => r.event === "Birthday" && r.guest === "Bea Day")).toBe(true);

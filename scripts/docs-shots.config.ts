@@ -108,6 +108,8 @@ export const SHOTS: Shot[] = [
   { name: "prop-spa", path: resort("spa"), maxHeight: 1200 },
   { name: "prop-transportation", path: resort("transportation"), maxHeight: 1400 },
   // Operations guide.
+  { name: "ops-daily-reports", path: (ids) => `/e/${ids.slug}/dashboard/reports?report=res-availability&q=${encodeURIComponent(JSON.stringify({ range: { from: "2026-09-24", to: "2026-10-07" } }))}`, maxHeight: 1500, before: async () => { await settle(2500) } },
+  { name: "ops-daily-reports-download", path: (ids) => `/e/${ids.slug}/dashboard/reports?report=res-availability&q=${encodeURIComponent(JSON.stringify({ range: { from: "2026-09-24", to: "2026-10-07" } }))}`, dialog: true, before: async ({ page }) => { await settle(2500); await click(page, "Download as") } },
   { name: "ops-transportation-board", path: (ids) => `/e/${ids.slug}/dashboard/transportation`, maxHeight: 1000 },
   { name: "prop-online-booking", path: resort("online-booking") },
   { name: "prop-channel-mapping", path: resort("channel-manager/mapping") },

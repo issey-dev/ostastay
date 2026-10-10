@@ -5,6 +5,7 @@ import { requireSession, toErrorResponse } from "@/lib/scope";
 import { renderReport, reportFilename } from "@/lib/reports/engine";
 import { encodeReportRequest, reportIsLandscape, runReport, ReportRequestError } from "@/lib/reports/run";
 import { generateReportPdf } from "@/lib/stationery-pdf";
+import { logActivity } from "@/lib/activity-log";
 import { parseExportOptions } from "@/lib/reports/export-options";
 import type { ReportFormat, ReportPreview } from "@/lib/reports/types";
 
@@ -40,6 +41,18 @@ export async function POST(request: Request) {
 
     let file = format === "pdf" ? await chromePdf() : null;
     if (!file) file = await renderReport(def, result, branding, format, options);
+
+    // Downloads are the one read that leaves the system, so they are on the audit trail
+    // (the on-screen view is not — views are never logged).
+    await logActivity({
+      ctx,
+      module: "REPORTS",
+      action: "EXPORT",
+      description: `Downloaded "${result.title}" as ${format === "txt" ? "delimited text" : format.toUpperCase()}`,
+      entityType: "Report",
+      entityId: def.key,
+      metadata: { format, propertyId, params: req.params, ...(format === "txt" || format === "csv" ? { layout: options.layout } : {}) },
+    });
 
     return new NextResponse(new Uint8Array(file.body), {
       status: 200,

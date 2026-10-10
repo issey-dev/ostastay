@@ -37,12 +37,12 @@ const journal: ReportDef = {
 
     const charges = await prisma.folioLineItem.findMany({
       where: { folio: { propertyId }, date: { gte, lt } },
-      include: { chargeCode: { select: { code: true } }, folio: { select: { folioNumber: true, reservation: { select: { confirmationNo: true } } } } },
+      include: { chargeCode: { select: { code: true } }, folio: { select: { folioNumber: true, reservation: { select: { id: true, confirmationNo: true } } } } },
       orderBy: { createdAt: "asc" },
     });
     const payments = await prisma.payment.findMany({
       where: { folio: { propertyId }, shift: { businessDate: gte } },
-      include: { paymentMethod: { select: { name: true } }, folio: { select: { folioNumber: true, reservation: { select: { confirmationNo: true } } } } },
+      include: { paymentMethod: { select: { name: true } }, folio: { select: { folioNumber: true, reservation: { select: { id: true, confirmationNo: true } } } } },
       orderBy: { createdAt: "asc" },
     });
 
@@ -50,6 +50,7 @@ const journal: ReportDef = {
       ...charges.map((c) => ({
         _t: c.createdAt.getTime(),
         kind: c.isVoid ? "Void" : "Charge",
+        resId: c.folio.reservation?.id ?? null,
         ref: c.folio.reservation?.confirmationNo ?? `Folio ${c.folio.folioNumber}`,
         detail: c.description,
         code: c.chargeCode?.code ?? "",
@@ -58,6 +59,7 @@ const journal: ReportDef = {
       ...payments.map((p) => ({
         _t: p.createdAt.getTime(),
         kind: p.isRefund ? "Refund" : "Payment",
+        resId: p.folio.reservation?.id ?? null,
         ref: p.folio.reservation?.confirmationNo ?? `Folio ${p.folio.folioNumber}`,
         detail: p.paymentMethod.name,
         code: "",
@@ -72,7 +74,7 @@ const journal: ReportDef = {
       subtitle: `${fmtDay(gte)} — ${charges.length} charge(s), ${payments.length} payment(s)`,
       columns: [
         { key: "kind", label: "Type", width: 0.8 },
-        { key: "ref", label: "Reference", width: 1.2 },
+        { key: "ref", label: "Reference", width: 1.2, link: { to: "reservation", idKey: "resId" } },
         { key: "detail", label: "Detail", width: 2 },
         { key: "code", label: "Code", width: 0.8 },
         { key: "amount", label: "Amount", width: 1, format: "currency" },
@@ -421,7 +423,7 @@ const greenTaxMissing: ReportDef = {
     const reservations = await prisma.reservation.findMany({
       where: { propertyId, status: { in: ["IN_HOUSE", "CHECKED_OUT"] }, checkInDate: { lt }, checkOutDate: { gt: gte } },
       select: {
-        confirmationNo: true, status: true, checkInDate: true, checkOutDate: true, checkedInAt: true, checkedOutAt: true,
+        id: true, confirmationNo: true, status: true, checkInDate: true, checkOutDate: true, checkedInAt: true, checkedOutAt: true,
         primaryGuestId: true,
         travelAgent: { select: { firstName: true, lastName: true, companyName: true, profileType: true, bookingMethod: true } },
         assignments: { select: { roomType: { select: { name: true, isPseudo: true } } } },
@@ -457,6 +459,7 @@ const greenTaxMissing: ReportDef = {
         const base = {
           regNo: reg?.registrationNo ?? null,
           guest: sheetGuestName(p),
+          resId: res.id,
           conf: res.confirmationNo,
           roomType: roomTypes.join(", "),
           travelAgent: ta ? guestName(ta) : "",
@@ -507,7 +510,7 @@ const greenTaxMissing: ReportDef = {
         { key: "regNo", label: "Reg No", width: 0.6, format: "number" },
         { key: "guest", label: "Name of Guest", width: 1.5 },
         { key: "issue", label: "Issue", width: 1.8 },
-        { key: "conf", label: "Confirmation", width: 0.9 },
+        { key: "conf", label: "Confirmation", width: 0.9, link: { to: "reservation", idKey: "resId" } },
         { key: "roomType", label: "Room Type", width: 0.9 },
         { key: "travelAgent", label: "Travel Agent", width: 1.1 },
         { key: "idNo", label: "Identification No.", width: 1 },
@@ -573,7 +576,7 @@ const gst: ReportDef = {
         },
         reservation: {
           select: {
-            confirmationNo: true, checkInDate: true, checkOutDate: true,
+            id: true, confirmationNo: true, checkInDate: true, checkOutDate: true,
             primaryGuest: guestSelect,
             travelAgent: { select: { firstName: true, lastName: true, companyName: true, profileType: true, tinNumber: true } },
           },
@@ -598,6 +601,7 @@ const gst: ReportDef = {
           invoiceDate: res ? res.checkOutDate : f.closedBusinessDate!,
           // A folio whose tax invoice was never printed has no invoice number yet — shown
           // by its confirmation and folio number so it can still be found and printed.
+          resId: res?.id ?? null,
           invoiceNo: f.taxInvoiceNumber ?? (res ? `${res.confirmationNo} / F${f.folioNumber}` : `Folio ${f.folioNumber}`),
           guest: res ? guestName(res.primaryGuest) : f.payeeProfile ? guestName(f.payeeProfile) : (f.walkInGuestName ?? "Walk-in"),
           travelAgent: ta ? guestName(ta) : "",
@@ -636,7 +640,7 @@ const gst: ReportDef = {
         : "Invoice date is the departure date (walk-in bills: the day the bill was closed).",
       columns: [
         { key: "invoiceDate", label: "Invoice Date", width: 0.9, format: "date" },
-        { key: "invoiceNo", label: "Invoice No", width: 1 },
+        { key: "invoiceNo", label: "Invoice No", width: 1, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest Name", width: 1.4 },
         { key: "travelAgent", label: "Travel Agent", width: 1.3 },
         { key: "tin", label: "Agent TIN", width: 1 },

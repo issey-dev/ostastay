@@ -46,6 +46,8 @@ export type ReportColumn = {
   align?: "left" | "right" | "center";
   format?: ColumnFormat;
   width?: number; // relative weight for PDF column sizing / Excel width
+  // On screen only: the cell links to the record whose id is in row[idKey] (files ignore it).
+  link?: { to: "reservation"; idKey: string };
 };
 
 // A report may return flat rows, or rows split into labelled groups (each with an
