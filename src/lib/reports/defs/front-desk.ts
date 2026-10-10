@@ -35,7 +35,7 @@ const arrival: ReportDef = {
       title: "Arrival Report",
       subtitle: `Arrivals for ${date.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}`,
       columns: [
-        { key: "conf", label: "Confirmation", width: 1.3 },
+        { key: "conf", label: "Confirmation", width: 1.3, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest", width: 1.8 },
         { key: "vip", label: "VIP", width: 0.5, align: "center" },
         { key: "roomType", label: "Room Type", width: 1.2 },
@@ -46,6 +46,7 @@ const arrival: ReportDef = {
         { key: "status", label: "Status", width: 0.9 },
       ],
       rows: rows.map((r) => ({
+        resId: r.id,
         conf: r.confirmationNo,
         guest: guestName(r.primaryGuest),
         vip: isVip(r.primaryGuest) ? "VIP" : "",
@@ -91,6 +92,7 @@ const departure: ReportDef = {
     let rows = reservations.map((r) => {
       const balance = r.folios.reduce((s, f) => s + computeFolioBalance(f.lineItems, f.payments), 0);
       return {
+        resId: r.id,
         conf: r.confirmationNo,
         guest: guestName(r.primaryGuest),
         room: primaryRoom(r.assignments),
@@ -106,7 +108,7 @@ const departure: ReportDef = {
       title: "Departure Report",
       subtitle: `Departures for ${date.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}`,
       columns: [
-        { key: "conf", label: "Confirmation", width: 1.3 },
+        { key: "conf", label: "Confirmation", width: 1.3, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest", width: 2 },
         { key: "room", label: "Room", width: 0.9 },
         { key: "nights", label: "Nts", width: 0.5, format: "number" },
@@ -152,7 +154,8 @@ const inHouse: ReportDef = {
       room: primaryRoom(r.assignments),
       guest: guestName(r.primaryGuest),
       vip: isVip(r.primaryGuest) ? "VIP" : "",
-      conf: r.confirmationNo,
+      resId: r.id,
+        conf: r.confirmationNo,
       arrival: r.checkInDate,
       departure: r.checkOutDate,
       nights: nights(r.checkInDate, r.checkOutDate),
@@ -169,7 +172,7 @@ const inHouse: ReportDef = {
         { key: "room", label: "Room", width: 0.8 },
         { key: "guest", label: "Guest", width: 1.8 },
         { key: "vip", label: "VIP", width: 0.5, align: "center" },
-        { key: "conf", label: "Confirmation", width: 1.2 },
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
         { key: "arrival", label: "Arrival", width: 1, format: "date" },
         { key: "departure", label: "Departure", width: 1, format: "date" },
         { key: "nights", label: "Nts", width: 0.5, format: "number" },
@@ -232,7 +235,8 @@ const guestEvents: ReportDef = {
           event: type,
           guest: guestName(g),
           room: primaryRoom(r.assignments),
-          conf: r.confirmationNo,
+          resId: r.id,
+        conf: r.confirmationNo,
           stay: `${r.checkInDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })} – ${r.checkOutDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })}`,
         });
       }
@@ -246,7 +250,7 @@ const guestEvents: ReportDef = {
         { key: "event", label: "Event", width: 1 },
         { key: "guest", label: "Guest", width: 1.8 },
         { key: "room", label: "Room", width: 0.8 },
-        { key: "conf", label: "Confirmation", width: 1.2 },
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
         { key: "stay", label: "Stay", width: 1.4 },
       ],
       rows,

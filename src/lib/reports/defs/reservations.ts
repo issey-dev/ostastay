@@ -125,7 +125,7 @@ const entered: ReportDef = {
       subtitle: `Booked ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${reservations.length} reservation(s)`,
       columns: [
         { key: "entered", label: "Entered", width: 1.3, format: "datetime" },
-        { key: "conf", label: "Confirmation", width: 1.2 },
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest", width: 1.7 },
         { key: "roomType", label: "Room Type", width: 1.1 },
         { key: "arrival", label: "Arrival", width: 1, format: "date" },
@@ -135,6 +135,7 @@ const entered: ReportDef = {
       ],
       rows: reservations.map((r) => ({
         entered: r.createdAt,
+        resId: r.id,
         conf: r.confirmationNo,
         guest: guestName(r.primaryGuest),
         roomType: r.assignments[0]?.roomType?.name ?? "—",
@@ -189,6 +190,7 @@ const cancellations: ReportDef = {
       return {
         date: isNoShow ? r.noShowAt : r.cancelledAt,
         kind: isNoShow ? "No-Show" : "Cancelled",
+        resId: r.id,
         conf: r.confirmationNo,
         guest: guestName(r.primaryGuest),
         arrival: r.checkInDate,
@@ -203,7 +205,7 @@ const cancellations: ReportDef = {
       columns: [
         { key: "date", label: "Date", width: 1, format: "date" },
         { key: "kind", label: "Type", width: 0.9 },
-        { key: "conf", label: "Confirmation", width: 1.2 },
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest", width: 1.7 },
         { key: "arrival", label: "Arrival", width: 1, format: "date" },
         { key: "reason", label: "Reason", width: 1.8 },
@@ -246,14 +248,14 @@ const deposits: ReportDef = {
       .map((r) => {
         const deposit = r.folios.reduce((s, f) => s + f.payments.reduce((x, p) => x + (p.isRefund ? -p.amount : p.amount), 0), 0);
         const balance = r.folios.reduce((s, f) => s + computeFolioBalance(f.lineItems, f.payments), 0);
-        return { conf: r.confirmationNo, guest: guestName(r.primaryGuest), arrival: r.checkInDate, deposit, balance };
+        return { resId: r.id, conf: r.confirmationNo, guest: guestName(r.primaryGuest), arrival: r.checkInDate, deposit, balance };
       })
       .filter((r) => Math.abs(r.deposit) > 0.005);
     return {
       title: "Reservations with Deposits",
       subtitle: `Arrivals ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} reservation(s)`,
       columns: [
-        { key: "conf", label: "Confirmation", width: 1.2 },
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest", width: 2 },
         { key: "arrival", label: "Arrival", width: 1.1, format: "date" },
         { key: "deposit", label: "Deposit Held", width: 1, format: "currency" },
@@ -311,7 +313,7 @@ const traces: ReportDef = {
         { key: "date", label: "Action Date", width: 1.1, format: "date" },
         { key: "type", label: "Type", width: 1.1 },
         { key: "resolved", label: "Status", width: 0.8 },
-        { key: "conf", label: "Confirmation", width: 1.1 },
+        { key: "conf", label: "Confirmation", width: 1.1, link: { to: "reservation", idKey: "resId" } },
         { key: "guest", label: "Guest", width: 1.5 },
         { key: "description", label: "Description", width: 2.4 },
       ],
@@ -319,6 +321,7 @@ const traces: ReportDef = {
         date: t.actionDate,
         type: titleCase(t.traceType),
         resolved: t.isResolved ? "Resolved" : "Open",
+        resId: t.reservation.id,
         conf: t.reservation.confirmationNo,
         guest: guestName(t.reservation.primaryGuest),
         description: t.description,
