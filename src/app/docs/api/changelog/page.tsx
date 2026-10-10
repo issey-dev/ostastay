@@ -9,6 +9,14 @@ export default function Changelog() {
     <>
       <DocTitle title="Changelog" lead="Everything here is additive: nothing is removed or renamed within v1." />
 
+      <H2 id="2026-10-10">October 2026 — stop sale documented</H2>
+      <ul>
+        <li>
+          New <a href="/docs/api/rooms#stop-sale">Stop sale</a> section on the Rooms page: how a closed night appears in availability,
+          the quote and the booking refusal, and that a website can never book through one. No change to the API itself.
+        </li>
+      </ul>
+
       <H2 id="2026-10-04">October 2026 — Transportation</H2>
       <ul>
         <li>

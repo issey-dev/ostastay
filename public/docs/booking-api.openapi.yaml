@@ -93,6 +93,12 @@ paths:
         inventory, never below 0), whether a stop-sale closes the night, and the room rate on the
         rate plan configured in the Hub. At most 62 nights per call. Nightly `price` is the room
         rate only — use the quote endpoint for the amount a guest pays.
+
+        A stop sale (a property closing a room type, or the whole property, for a night) shows as
+        `closed: true` with `available: 0`. It applies to every rate plan, never changes existing
+        bookings, and cannot be overridden through this API: a booking that includes a closed night is
+        refused with 409 `STOP_SALE`. Closing the departure date does not block a stay that leaves that
+        day. Read `closed` on each call; there is no webhook when a stop sale is lifted.
       parameters:
         - name: from
           in: query
