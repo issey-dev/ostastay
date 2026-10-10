@@ -32,7 +32,8 @@ export async function GET(request: Request) {
     const result = await transportReportResult(propertyId, from, to)
     if (format === "json") return NextResponse.json(result, { headers: { "Cache-Control": "no-store", ...rateLimitHeaders(quota) } })
     const branding = await loadBranding(ctx, propertyId)
-    const file = await renderReport(TRANSPORT_REPORTS[0], result, branding, format)
+    // The board's CSV keeps its original shape (title block, subtotals) for anyone importing it.
+    const file = await renderReport(TRANSPORT_REPORTS[0], result, branding, format, { layout: "presentation", encoding: "utf8", lineEnding: "lf" })
     return new NextResponse(new Uint8Array(file.body), {
       status: 200,
       headers: {

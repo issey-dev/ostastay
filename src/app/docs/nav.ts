@@ -124,6 +124,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/operations", title: "Overview", summary: "Day-to-day guides for property staff." },
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk", summary: "For front office and spa staff: finding and handling online bookings." },
           { href: "/docs/operations/transportation", title: "Transportation", summary: "For front office, airport reps and dispatch: transfers, departures, charges and the daily report." },
+          { href: "/docs/operations/daily-reports", title: "Daily Reports", summary: "For managers, front office and finance: reading a report on screen and downloading it as PDF, Excel, delimited text or CSV." },
           { href: "/docs/operations/stop-sale", title: "Price calendar and stop sale", summary: "For revenue, reservations and front office: reading and changing prices on the calendar, closing dates to sale, and overriding a closed date." },
         ],
       },

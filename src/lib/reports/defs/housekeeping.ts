@@ -11,6 +11,12 @@ const specialRequests: ReportDef = {
   module: "HOUSEKEEPING",
   name: "Special Requests",
   description: "Guest special requests for stays in-house on the selected date.",
+  insights: {
+    kpis: [
+      { label: "Requests", agg: "count" },
+      { label: "Rooms", agg: "distinct", column: "room" },
+    ],
+  },
   params: [{ key: "date", label: "In-house on", type: "date", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -56,6 +62,18 @@ const attendant: ReportDef = {
   module: "HOUSEKEEPING",
   name: "Attendant Report",
   description: "Housekeeping tasks per attendant on the selected date, with time on task.",
+  insights: {
+    kpis: [
+      { label: "Tasks", agg: "count" },
+      { label: "Rooms", agg: "distinct", column: "room" },
+      { label: "Total minutes", agg: "sum", column: "mins" },
+      { label: "Average minutes per task", agg: "avg", column: "mins" },
+    ],
+    visuals: [
+      { type: "donut", title: "Task status", by: "status", centerLabel: "tasks" },
+      { type: "ranked", title: "Tasks per attendant", by: "$group" },
+    ],
+  },
   params: [{ key: "date", label: "Date", type: "date", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);

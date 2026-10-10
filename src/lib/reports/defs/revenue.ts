@@ -23,6 +23,18 @@ const historyForecast: ReportDef = {
   module: "REVENUE",
   name: "History & Forecast",
   description: "Occupancy, room revenue and ADR — actuals from Night Audit, projections from the books.",
+  insights: {
+    kpis: [
+      { label: "Room revenue", agg: "sum", column: "revenue", format: "currency" },
+      { label: "Room nights", agg: "sum", column: "occupied" },
+      { label: "Average occupancy", agg: "avg", column: "occPct", format: "percent" },
+      { label: "Average ADR", agg: "avg", column: "adr", format: "currency" },
+    ],
+    visuals: [
+      { type: "line", title: "Occupancy %", x: "date", y: "occPct", label: "Occupancy", format: "percent" },
+      { type: "line", title: "Room revenue", x: "date", y: "revenue", label: "Revenue", format: "currency" },
+    ],
+  },
   params: [{ key: "range", label: "Date range", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -96,6 +108,17 @@ const nationality: ReportDef = {
   module: "REVENUE",
   name: "Nationality Statistics",
   description: "Guest nationalities of stays overlapping the period, by room nights and guests.",
+  insights: {
+    kpis: [
+      { label: "Nationalities", agg: "count" },
+      { label: "Guests", agg: "sum", column: "guests", fromTotals: true },
+      { label: "Room nights", agg: "sum", column: "roomNights", fromTotals: true },
+    ],
+    visuals: [
+      { type: "ranked", title: "Room nights by nationality", by: "nationality", value: "roomNights", top: 8 },
+      { type: "donut", title: "Guest share", by: "nationality", value: "guests", centerLabel: "guests" },
+    ],
+  },
   params: [{ key: "range", label: "Stay period", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -145,6 +168,18 @@ const production: ReportDef = {
   module: "REVENUE",
   name: "Profile Production (TA & Corporate)",
   description: "Room nights, room revenue and commission produced by each travel agent / company.",
+  insights: {
+    kpis: [
+      { label: "Accounts", agg: "count" },
+      { label: "Room revenue", agg: "sum", column: "roomRevenue", fromTotals: true, format: "currency" },
+      { label: "Commission", agg: "sum", column: "commission", fromTotals: true, format: "currency" },
+      { label: "Room nights", agg: "sum", column: "roomNights", fromTotals: true },
+    ],
+    visuals: [
+      { type: "ranked", title: "Top accounts by revenue", by: "agent", value: "roomRevenue", format: "currency", top: 8 },
+      { type: "donut", title: "Revenue by account type", by: "type", value: "roomRevenue", format: "currency", centerLabel: "revenue" },
+    ],
+  },
   params: [{ key: "range", label: "Arrival between", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);

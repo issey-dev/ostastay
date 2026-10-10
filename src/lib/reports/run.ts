@@ -4,6 +4,7 @@ import { resolveBusinessDate, serverToday } from "@/lib/business-date";
 import { getReport } from "@/lib/reports/registry";
 import { coerceParams, missingRequired } from "@/lib/reports/params";
 import { loadBranding } from "@/lib/reports/engine";
+import { buildInsights } from "@/lib/reports/insights";
 import type { ReportBranding, ReportDef, ReportResult } from "@/lib/reports/types";
 
 // Resolve, validate and run one report for a signed-in user. Shared by the generate API
@@ -14,6 +15,8 @@ export type ReportRequest = {
   key: string;
   propertyId?: string | null;
   params?: Record<string, unknown>;
+  /** PDF-only presentation choices from the Download dialog; carried to the print page. */
+  pdf?: { includeVisuals?: boolean; orientation?: "auto" | "portrait" | "landscape" };
 };
 
 /** A request the caller got wrong (unknown report, missing parameter) — not a server fault. */
@@ -48,13 +51,14 @@ export async function runReport(
   const missing = missingRequired(def, params);
   if (missing.length) throw new ReportRequestError(`Missing required parameter(s): ${missing.join(", ")}`, 400);
 
-  const result = await def.run({ ctx, propertyId, params });
+  const result = buildInsights(await def.run({ ctx, propertyId, params }), def.insights);
   const branding = await loadBranding(ctx, propertyId);
   return { def, result, branding, propertyId };
 }
 
 /** Portrait fits up to six columns comfortably; wider reports print landscape. */
-export function reportIsLandscape(result: ReportResult): boolean {
+export function reportIsLandscape(result: ReportResult, orientation: "auto" | "portrait" | "landscape" = "auto"): boolean {
+  if (orientation !== "auto") return orientation === "landscape";
   return result.columns.length > 6;
 }
 

@@ -15,6 +15,24 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.7.0",
+    date: "2026-10-10",
+    highlights: "Daily Reports are redesigned: each report opens on screen with key figures and charts, and files are downloaded from one Download as window.",
+    new: [
+      "Reports open on screen at once, with key figures and charts above the list. Pick a report from the list at the side, set its dates, and it updates by itself — there is no separate Preview step.",
+      "Download as: one window for PDF, Excel, Delimited text (.txt) and CSV. Choose the delimiter, quoting, encoding and line ending for text files, the page orientation and charts for PDF, and a Summary sheet for Excel. Your last choice is remembered.",
+      "Star the reports you use most to keep them under Favorites at the top of the list, with your three latest reports under Recent. Report groups start folded and open when you search.",
+      "The report list, its dates and filters are kept in the page address, so a report can be bookmarked or sent to a colleague.",
+      "On the list: click a heading to sort, search within the report, fold groups away, and see totals stay in view.",
+      "Reports can now be read on a phone or tablet, with the list shown as cards and Download as within reach at the bottom of the screen.",
+    ],
+    improved: [
+      "PDF reports now include the key figures and charts (this can be turned off when downloading).",
+      "Text and CSV files are data only by default — one heading row and one line per record, with plain numbers and year-month-day dates — so other systems can read them. The older layout with title and subtotals is still available as As printed.",
+      "Text in downloaded files that starts with =, +, - or @ is now marked as plain text, so a spreadsheet can never run it as a formula.",
+    ],
+  },
+  {
     version: "8.6.5",
     date: "2026-10-10",
     highlights: "A view-only price Calendar is now the first tab of Revenue, Rate seasons is the one place to change prices, and a stop sale can be overridden by staff who are allowed to.",

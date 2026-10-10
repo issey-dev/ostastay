@@ -10,6 +10,17 @@ const arrival: ReportDef = {
   module: "FRONT_DESK",
   name: "Arrival Report",
   description: "Guests due to arrive on the selected date (expected and already checked in).",
+  insights: {
+    kpis: [
+      { label: "Arrivals", agg: "count" },
+      { label: "Already arrived", agg: "count", where: { column: "status", equals: ["Arrived"] } },
+      { label: "VIP", agg: "count", where: { column: "vip", equals: ["VIP"] } },
+    ],
+    visuals: [
+      { type: "donut", title: "Arrival status", by: "status", centerLabel: "arrivals" },
+      { type: "ranked", title: "By room type", by: "roomType" },
+    ],
+  },
   params: [{ key: "date", label: "Arrival date", type: "date", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -55,6 +66,14 @@ const departure: ReportDef = {
   module: "FRONT_DESK",
   name: "Departure Report",
   description: "Guests due to depart on the selected date, with folio balances.",
+  insights: {
+    kpis: [
+      { label: "Departures", agg: "count" },
+      { label: "Departed", agg: "count", where: { column: "status", equals: ["Departed"] } },
+      { label: "Balance due", agg: "sum", column: "balance", fromTotals: true, format: "currency" },
+    ],
+    visuals: [{ type: "donut", title: "Departure status", by: "status", centerLabel: "departures" }],
+  },
   params: [
     { key: "date", label: "Departure date", type: "date", required: true, defaultToday: true },
     { key: "withBalanceOnly", label: "Only show balances due", type: "boolean" },
@@ -106,6 +125,15 @@ const inHouse: ReportDef = {
   module: "FRONT_DESK",
   name: "In-House Guest List",
   description: "Guests in-house on the selected night, with balances.",
+  insights: {
+    kpis: [
+      { label: "Rooms in house", agg: "count" },
+      { label: "VIP guests", agg: "count", where: { column: "vip", equals: ["VIP"] } },
+      { label: "Average stay (nights)", agg: "avg", column: "nights" },
+      { label: "Outstanding balance", agg: "sum", column: "balance", fromTotals: true, format: "currency" },
+    ],
+    visuals: [{ type: "column", title: "Departures ahead", by: "departure", values: [{ label: "Rooms" }] }],
+  },
   params: [
     { key: "date", label: "Night of", type: "date", required: true, defaultToday: true },
     { key: "vipOnly", label: "VIP only", type: "boolean" },
@@ -160,6 +188,14 @@ const guestEvents: ReportDef = {
   module: "FRONT_DESK",
   name: "Guest Event Calendar",
   description: "Birthdays and anniversaries of guests staying during the selected period.",
+  insights: {
+    kpis: [
+      { label: "Events", agg: "count" },
+      { label: "Birthdays", agg: "count", where: { column: "event", equals: ["Birthday"] } },
+      { label: "Anniversaries", agg: "count", where: { column: "event", equals: ["Anniversary"] } },
+    ],
+    visuals: [{ type: "column", title: "Events by day", by: "date", values: [{ label: "Events" }] }],
+  },
   params: [{ key: "range", label: "Stay period", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);

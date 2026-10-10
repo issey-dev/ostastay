@@ -28,7 +28,7 @@ export default async function ReportPrintPage({ searchParams }: { searchParams: 
     throw e
   }
 
-  const orientation = reportIsLandscape(run.result) ? "landscape" : "portrait"
+  const orientation = reportIsLandscape(run.result, request.pdf?.orientation) ? "landscape" : "portrait"
   return (
     <div className="min-h-screen bg-white p-6 print:p-0">
       {/* Phones only, never in the printed/PDF output. */}
@@ -37,7 +37,7 @@ export default async function ReportPrintPage({ searchParams }: { searchParams: 
         for A4 paper; on a phone, download the PDF from the Reports page instead.
       </p>
       <div className={`mx-auto ${orientation === "landscape" ? "max-w-[1100px]" : "max-w-[800px]"}`}>
-        <ReportDocument result={run.result} branding={run.branding} />
+        <ReportDocument result={run.result} branding={run.branding} includeVisuals={request.pdf?.includeVisuals !== false} />
       </div>
       <style
         dangerouslySetInnerHTML={{
@@ -51,6 +51,7 @@ export default async function ReportPrintPage({ searchParams }: { searchParams: 
               .report-document .report-totals { display: table-row-group; }
               .report-document tr { break-inside: avoid; }
               .report-document header { break-after: avoid; }
+              .report-document .report-kpis, .report-document .report-visuals { break-inside: avoid; }
             }
           `,
         }}

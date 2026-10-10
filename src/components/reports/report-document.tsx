@@ -1,6 +1,7 @@
 import type { ReportBranding, ReportColumn, ReportResult } from "@/lib/reports/types"
 import { formatCell, isNumericColumn } from "@/lib/reports/format"
 import { PRODUCT_NAME } from "@/lib/brand"
+import { PrintKpis, PrintVisuals } from "@/components/reports/report-visuals-print"
 
 // ─── The report as a paper document ──────────────────────────────────────────
 // ONE layout for every report, used twice:
@@ -29,7 +30,7 @@ function stamp(branding: Branding): string {
   return `Generated ${when} by ${branding.generatedBy}`
 }
 
-export function ReportDocument({ result, branding }: { result: ReportResult; branding: Branding }) {
+export function ReportDocument({ result, branding, includeVisuals = true }: { result: ReportResult; branding: Branding; includeVisuals?: boolean }) {
   const cols = result.columns
   const totalWeight = cols.reduce((s, c) => s + (c.width ?? 1), 0)
   const rowCount = result.groups ? result.groups.reduce((n, g) => n + g.rows.length, 0) : (result.rows?.length ?? 0)
@@ -73,6 +74,9 @@ export function ReportDocument({ result, branding }: { result: ReportResult; bra
         </div>
         {result.note && <p className="mt-2 text-[10px] italic text-[var(--print-muted)]">{result.note}</p>}
       </header>
+
+      {includeVisuals && result.summary && result.summary.length > 0 && <PrintKpis items={result.summary} branding={branding} />}
+      {includeVisuals && result.visuals && result.visuals.length > 0 && <PrintVisuals visuals={result.visuals} branding={branding} />}
 
       <table className="w-full table-fixed border-collapse">
         <colgroup>

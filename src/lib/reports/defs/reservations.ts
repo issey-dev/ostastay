@@ -12,6 +12,17 @@ const availability: ReportDef = {
   module: "RESERVATIONS",
   name: "Availability",
   description: "Rooms sold vs. available by room type across the selected date range.",
+  insights: {
+    kpis: [
+      { label: "Room nights sold", agg: "sum", column: "sold" },
+      { label: "Room nights available", agg: "sum", column: "available" },
+      { label: "Peak occupancy", agg: "max", column: "occPct", format: "percent" },
+    ],
+    visuals: [
+      { type: "column", title: "Sold vs available by night", by: "date", values: [{ label: "Sold", column: "sold" }, { label: "Available", column: "available" }] },
+      { type: "ranked", title: "Room nights sold by room type", by: "$group", value: "sold" },
+    ],
+  },
   params: [
     { key: "range", label: "Date range", type: "dateRange", required: true, defaultToday: true },
     { key: "roomTypeIds", label: "Room types", type: "multiSelect", optionSource: "roomTypes" },
@@ -87,6 +98,18 @@ const entered: ReportDef = {
   module: "RESERVATIONS",
   name: "Reservations Entered",
   description: "Reservations created (booked) within the selected date range.",
+  insights: {
+    kpis: [
+      { label: "Reservations entered", agg: "count" },
+      { label: "Room nights", agg: "sum", column: "nights" },
+      { label: "Average stay (nights)", agg: "avg", column: "nights" },
+    ],
+    visuals: [
+      { type: "column", title: "Entered per day", by: "entered", values: [{ label: "Reservations" }] },
+      { type: "donut", title: "Status", by: "status", centerLabel: "reservations" },
+      { type: "ranked", title: "By room type", by: "roomType" },
+    ],
+  },
   params: [{ key: "range", label: "Entered between", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -130,6 +153,17 @@ const cancellations: ReportDef = {
   module: "RESERVATIONS",
   name: "Cancellations & No-Shows",
   description: "Reservations cancelled or marked no-show within the selected date range.",
+  insights: {
+    kpis: [
+      { label: "Total", agg: "count" },
+      { label: "Cancelled", agg: "count", where: { column: "kind", equals: ["Cancelled"] }, tone: "danger" },
+      { label: "No-shows", agg: "count", where: { column: "kind", equals: ["No-Show"] }, tone: "danger" },
+    ],
+    visuals: [
+      { type: "donut", title: "Cancellations vs no-shows", by: "kind", centerLabel: "lost bookings" },
+      { type: "column", title: "Per day", by: "date", values: [{ label: "Reservations" }] },
+    ],
+  },
   params: [
     { key: "range", label: "Date range", type: "dateRange", required: true, defaultToday: true },
     { key: "kinds", label: "Include", type: "multiSelect", options: [ { label: "Cancellations", value: "CANCELLED" }, { label: "No-Shows", value: "NO_SHOW" } ] },
@@ -185,6 +219,14 @@ const deposits: ReportDef = {
   module: "RESERVATIONS",
   name: "Reservations with Deposits",
   description: "Upcoming reservations (arriving in range) that hold a pre-arrival deposit, with balance.",
+  insights: {
+    kpis: [
+      { label: "Reservations with deposits", agg: "count" },
+      { label: "Deposits held", agg: "sum", column: "deposit", fromTotals: true, format: "currency" },
+      { label: "Balance due", agg: "sum", column: "balance", fromTotals: true, format: "currency" },
+    ],
+    visuals: [{ type: "column", title: "Deposits held by arrival date", by: "arrival", values: [{ label: "Deposit", column: "deposit" }], format: "currency" }],
+  },
   params: [{ key: "range", label: "Arrival between", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -229,6 +271,17 @@ const traces: ReportDef = {
   module: "RESERVATIONS",
   name: "Reservation Traces",
   description: "Operational traces (messages, wake-up calls, maintenance, front-desk) due in the range.",
+  insights: {
+    kpis: [
+      { label: "Traces", agg: "count" },
+      { label: "Open", agg: "count", where: { column: "resolved", equals: ["Open"] }, tone: "danger" },
+      { label: "Resolved", agg: "count", where: { column: "resolved", equals: ["Resolved"] }, tone: "success" },
+    ],
+    visuals: [
+      { type: "donut", title: "Open vs resolved", by: "resolved", centerLabel: "traces" },
+      { type: "ranked", title: "By type", by: "type" },
+    ],
+  },
   params: [
     { key: "range", label: "Trace date range", type: "dateRange", required: true, defaultToday: true },
     { key: "traceTypes", label: "Trace types", type: "multiSelect", optionSource: "traceTypes" },

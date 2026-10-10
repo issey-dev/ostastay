@@ -2,6 +2,15 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Daily Reports rework (2026-10-10, 8.7.0) — BUILT, follow-ups open
+
+See [REPORTS_REWORK_PLAN.md](REPORTS_REWORK_PLAN.md) ("What shipped" / "Left open").
+- [ ] Row click-through from report rows to the reservation/folio (needs ids in each report's rows).
+- [ ] Re-shoot docs screenshot for `/docs/operations/daily-reports`; add `/reports` to the `mobile:audit` baseline.
+- [ ] Log report downloads (who/what/params/format) to the activity log.
+- [ ] Owner call: should downloading need its own right (`REPORTS:export`) apart from viewing? (Not built.)
+- [ ] CSV default is now data-only: if a client script relied on the old title/subtotal rows, they pick "As printed".
+
 ## Stop-sale override follow-ups (2026-10-10)
 
 - **Group pickup** (`api/groups/[id]/pickup`) still hard-blocks a stop sale with no override, unlike

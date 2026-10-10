@@ -41,3 +41,11 @@ export function excelNumFmt(format: ColumnFormat | undefined): string | undefine
 export function isNumericColumn(col: ReportColumn): boolean {
   return col.format === "currency" || col.format === "number";
 }
+
+// Spreadsheet-formula injection guard. A text cell that starts with = + - @ (or a tab/CR)
+// is executed as a formula when the file is opened in Excel, so a guest or company named
+// "=HYPERLINK(...)" could run on a manager's machine. Prefixing an apostrophe makes
+// Excel treat it as plain text. Applied to TEXT cells only — numbers stay numbers.
+export function guardFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
