@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Callout, CodeBlock, DocTitle, Endpoint, H2, Pager } from "../../components"
+import { Callout, CodeBlock, DocTitle, Endpoint, H2, Pager, Table } from "../../components"
 
 export const metadata: Metadata = { title: "Rooms" }
 
@@ -123,6 +123,27 @@ export default function Rooms() {
       <Callout tone="warn" title="Don't add nightly prices up">
         <p>For the total a guest pays, call the quote. It adds taxes, service charge, levies and package components.</p>
       </Callout>
+
+      <H2 id="stop-sale">Stop sale</H2>
+      <p>
+        A stop sale is how a property closes dates to new bookings — a whole property, or one room type, for any number of nights. It
+        applies to every rate plan and is set by the property, never through this API.
+      </p>
+      <Table
+        head={["Where you see it", "What it looks like"]}
+        rows={[
+          ["Availability", <>The night has <code>closed: true</code> and <code>available: 0</code>, whatever the real inventory. Other nights of the same stay are unaffected.</>],
+          ["Quote", <>A stay that includes a closed night comes back with <code>available: false</code>. The prices are still shown; disable the booking button.</>],
+          ["Booking", <>Refused with <code>409</code> and code <code>STOP_SALE</code>. If the type is also sold out, <code>STOP_SALE</code> is still the code you get.</>],
+        ]}
+      />
+      <ul>
+        <li>A stop sale closes <em>nights</em>. Closing the departure date does not block a stay that leaves that day.</li>
+        <li>It never cancels or changes a booking that already exists, and it cannot be overridden through this API. Only the property can book a closed night, at its own desk.</li>
+        <li>It takes effect on the next call. Do not cache availability for longer than a few minutes, and always read <code>closed</code> rather than inferring it from <code>available</code>.</li>
+        <li>When the property lifts it, the nights return with their real <code>available</code> and <code>closed: false</code>. There is no webhook for this; read the availability again.</li>
+        <li>Where the property also sells through a channel manager, the same closure is sent to the channels at the same time, so the two stay in step.</li>
+      </ul>
 
       <H2>Quote a stay</H2>
       <Endpoint method="POST" path="/properties/{propertyId}/quote" note="ROOMS" />
