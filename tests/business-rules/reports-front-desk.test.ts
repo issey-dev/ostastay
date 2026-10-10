@@ -70,8 +70,12 @@ describe("Reporting engine — Front Desk reports + renderers", () => {
     expect(xlsx.body.length).toBeGreaterThan(500);
     expect(xlsx.filename.endsWith(".xlsx")).toBe(true);
 
-    const csv = renderCsv(res);
-    expect(csv).toContain("Arrival Report");
+    // Default CSV is data only (header row + records); "presentation" keeps the title block.
+    const csv = renderCsv(res).toString("utf8");
     expect(csv).toContain("Bea Day");
+    expect(csv).not.toContain("Arrival Report");
+    const printed = renderCsv(res, { layout: "presentation" }).toString("utf8");
+    expect(printed).toContain("Arrival Report");
+    expect(printed).toContain("Bea Day");
   });
 });
