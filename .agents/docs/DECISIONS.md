@@ -3442,3 +3442,33 @@ Owner follow-up, same day (answers to the questions after the first build):
   shown filled from the module's bookings, with the module's Transportation card (Add transfer)
   kept under it (T-11).
 - **Drop-off charge on the guest's last night** — confirmed as built.
+
+## Revenue Calendar, Rate seasons steps, and stop-sale override (2026-10-10)
+
+App-owner direction for the Revenue module and stop sale.
+
+- **Revenue's first tab is a view-only Calendar** (replaces Manager Flash, whose component was
+  deleted). It opens on the property's Base Rate plan and first room type, with a rate plan and room
+  type filter. Daily price only; extra adult/child prices on hover. A night the plan has no price
+  of its own shows **NA** — the Base Rate fallback is not displayed (Night Audit still falls back
+  to it when posting). Rate plans > Calendar opens the same view **locked to that plan**
+  (`/revenue/calendar?ratePlanId=`, no switching).
+- **All price changes happen in Rate seasons.** Picking days on the calendar offers **Update
+  prices** (opens Rate seasons with plan, room type and dates filled in, and returns to the
+  calendar after the push) and **Stop sale**.
+- **Rate seasons is three locked steps** (plan -> season & price -> room types): a step opens
+  only after the previous is saved with its mandatory fields. Arriving from the calendar unlocks
+  all three.
+- **Stop sale is not per rate plan** — it closes a room type (or the whole property) for every
+  plan. Per-plan closure was not requested and would need a schema change.
+- **Stop sale restricts NEW sales, never existing bookings.** The website API and channel
+  manager always honour it (website: `STOP_SALE` 409; channel: `override: "blackout"`). Setting
+  or lifting a stop sale now **pushes to the channel manager immediately** (`pushPropertyNow`,
+  fire-and-forget; the scheduled sweep remains the safety net).
+- **Two independent desk overrides**: **Overbook** (`acknowledgeOverbook`) ignores physical
+  inventory; **Override Restriction** (`overrideStopSale`) ignores a stop sale and needs
+  **Availability update access** (the same right that sets a stop sale; Admin, Manager, Front Desk
+  and Reservations roles have it by default). If a night is both closed and sold out, the prompt
+  shows both warnings and needs both. The website and channel paths can never override (their
+  system context has no permissions). Supersedes the earlier "hard block, no override" rule
+  (2026-07-26) for desk users. `gateBookingConflicts` in `src/lib/restrictions.ts`.

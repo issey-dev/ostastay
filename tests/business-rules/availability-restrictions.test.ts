@@ -232,3 +232,95 @@ describe("Availability grid + Stop Sale restrictions", () => {
     expect(row.cells[0].available).toBe(2);
   });
 });
+
+describe("Stop sale: Override Restriction vs Overbook", () => {
+  const closeStd = (ctx: Ctx, date: string) =>
+    asUser(ctx.adminId, () => setRestriction("POST", { propertyId: ctx.propertyId, roomTypeIds: [ctx.stdId], startDate: date }));
+
+  it("offers the override to a user with Availability update access, and books once it is confirmed", async () => {
+    const ctx = await setup();
+    await closeStd(ctx, "2026-08-02");
+
+    const first = await asUser(ctx.adminId, () => book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03" }));
+    expect(first.status).toBe(409);
+    const body = await first.json();
+    expect(body.requiresStopSaleOverride).toBe(true);
+    expect(body.requiresOverbookConfirm).toBeUndefined(); // rooms are free — only the restriction applies
+
+    const second = await asUser(ctx.adminId, () =>
+      book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03", overrideStopSale: true })
+    );
+    expect(second.status).toBe(201);
+  });
+
+  it("reports BOTH warnings when the closed room type is also sold out, and needs both confirmations", async () => {
+    const ctx = await setup();
+    // Fill both STD rooms for Aug 1→3, then close Aug 2.
+    for (let i = 0; i < 2; i++) {
+      const r = await asUser(ctx.adminId, () => book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03" }));
+      expect(r.status).toBe(201);
+    }
+    await closeStd(ctx, "2026-08-02");
+
+    const first = await asUser(ctx.adminId, () => book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03" }));
+    expect(first.status).toBe(409);
+    const body = await first.json();
+    expect(body.requiresStopSaleOverride).toBe(true);
+    expect(body.requiresOverbookConfirm).toBe(true);
+    expect(body.stopSaleMessage).toBeTruthy();
+    expect(body.overbookMessage).toBeTruthy();
+
+    // Overriding the restriction alone does not oversell.
+    const overrideOnly = await asUser(ctx.adminId, () =>
+      book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03", overrideStopSale: true })
+    );
+    expect(overrideOnly.status).toBe(409);
+    expect((await overrideOnly.json()).requiresOverbookConfirm).toBe(true);
+
+    // Overbook alone does not lift the restriction.
+    const overbookOnly = await asUser(ctx.adminId, () =>
+      book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03", acknowledgeOverbook: true })
+    );
+    expect(overbookOnly.status).toBe(409);
+    expect((await overbookOnly.json()).requiresStopSaleOverride).toBe(true);
+
+    const both = await asUser(ctx.adminId, () =>
+      book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03", overrideStopSale: true, acknowledgeOverbook: true })
+    );
+    expect(both.status).toBe(201);
+  });
+
+  it("leaves a booking already holding a closed night alone when an unrelated field is edited", async () => {
+    const ctx = await setup();
+    const made = await asUser(ctx.adminId, () => book(ctx, { checkInDate: "2026-08-01", checkOutDate: "2026-08-03" }));
+    expect(made.status).toBe(201);
+    await closeStd(ctx, "2026-08-02");
+    // Existing nights are exempt — covered in depth by the reservation edit path; here we only
+    // assert the closure itself did not touch the stay.
+    const res = await asUser(ctx.adminId, () => grid(ctx, { startDate: "2026-08-01", days: "3" }));
+    const row = (await res.json()).rows.find((r: { roomTypeId: string }) => r.roomTypeId === ctx.stdId);
+    expect(row.cells[1].occupancy).toBe(1);
+    expect(row.cells[1].closed).toBe(true);
+  });
+});
+
+describe("gateBookingConflicts", () => {
+  it("never honours an override from a caller without Availability update access", async () => {
+    const { gateBookingConflicts } = await import("@/lib/restrictions");
+    const gate = gateBookingConflicts({
+      stopSale: ["Room type Standard is closed (Stop Sale) on 2026-08-02"],
+      availability: [],
+      overrideStopSale: true,
+      canOverrideStopSale: false,
+    });
+    expect(gate).not.toBeNull();
+    expect(gate!.requiresStopSaleOverride).toBe(false);
+    expect(gate!.requiresOverbookConfirm).toBe(false);
+    expect(gate!.error).toMatch(/Availability access/);
+  });
+
+  it("returns null when nothing blocks the stay", async () => {
+    const { gateBookingConflicts } = await import("@/lib/restrictions");
+    expect(gateBookingConflicts({ stopSale: [], availability: [], canOverrideStopSale: true })).toBeNull();
+  });
+});

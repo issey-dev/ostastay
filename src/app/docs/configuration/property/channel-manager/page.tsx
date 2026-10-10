@@ -45,7 +45,8 @@ export default function ChannelManager() {
         Use <strong>Send prices for a date range</strong> (Rate plan tab) or <strong>Resync</strong> (Inventory tab) to preview
         exactly what would be sent: × for stop-sell, 0 for sold out, — for no price, and a list of room types not published and why.
         When it looks right, switch <strong>Share</strong> on. From then on availability and prices are sent automatically, a year
-        ahead.
+        ahead. A stop sale you set or lift is sent to the channel straight away rather than waiting for the next automatic update,
+        and the channel can never book through a stop sale.
       </p>
 
       <H2>3. Inbound Bookings and the Exchange Log</H2>

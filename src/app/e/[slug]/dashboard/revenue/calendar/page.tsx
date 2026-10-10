@@ -1,40 +1,13 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef, Suspense } from "react"
-import { useSearchParams, useParams, useRouter } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
+import { useSearchParams, useParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Save, Loader2 } from "@/components/icons"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, startOfDay } from "date-fns"
-
+import { ArrowLeft } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { DatePicker } from "@/components/ui/date-picker"
-import { Skeleton } from "@/components/ui/skeleton"
-import { ErrorState } from "@/components/ui/error-state"
-import type { DateRange } from "react-day-picker"
-import { useProperty } from "@/components/providers/property-provider"
-import { InfoHint } from "@/components/ui/info-hint"
-import { toast } from "@/lib/toast"
-import { INPUT_MONEY } from "@/lib/input-presets"
 import { PageHeader } from "@/components/ui/page-header"
-
-type RatePlan = { id: string; name: string; code: string; parentRatePlanId: string | null; parentRatePlan?: { id: string; name: string; code: string } | null; derivedAdjustmentType: string | null; derivedAdjustmentValue: number | null }
-type RoomType = { id: string; name: string; code: string }
-// `source`/`derived` say how the price was resolved — the same way Night Audit posts it
-// (src/lib/effective-price-calendar.ts): the plan's own (or, for a derived plan, its
-// parent's) calendar, else the Base Rate plan's, plus a derived plan's adjustment.
-type PriceEntry = {
-  date: string
-  price: number
-  extraAdultPrice: number | null
-  extraChildPrice: number | null
-  source?: "OWN" | "BASE_FALLBACK"
-  derived?: boolean
-}
+import { RateCalendar } from "@/components/revenue/rate-calendar"
+import { useProperty } from "@/components/providers/property-provider"
 
 export default function PriceCalendarPage() {
   return (
@@ -44,486 +17,46 @@ export default function PriceCalendarPage() {
   )
 }
 
+// Reached from a rate plan's "Calendar" button: the calendar is pinned to that plan (it can't
+// be switched to another rate from here — the Calendar tab on Revenue is the filterable one).
+// Without ?ratePlanId= it falls back to the same view as that tab. Read only; prices are
+// changed in Rate seasons.
 function PriceCalendarPageContent() {
   const searchParams = useSearchParams()
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
-  const initialRatePlanId = searchParams.get("ratePlanId")
-
-  const [ratePlans, setRatePlans] = useState<RatePlan[]>([])
-  const [roomTypes, setRoomTypes] = useState<RoomType[]>([])
-  
-  const [selectedRatePlanId, setSelectedRatePlanId] = useState<string>(initialRatePlanId || "")
-  const [selectedRoomTypeId, setSelectedRoomTypeId] = useState<string>("")
-  const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()))
-  
-  const [prices, setPrices] = useState<PriceEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
-  const [bulkSubmitting, setBulkSubmitting] = useState(false)
-
-  // Bulk update state
-  const [bulkDateRange, setBulkDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: endOfMonth(new Date()),
-  })
-  // Click a day, then another, to set the Bulk Update range from the grid (DESKTOP_PLAN —
-  // the cells were display-only). The first click anchors, the second closes the range.
-  const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null)
-  const priceInputRef = useRef<HTMLInputElement>(null)
-  const [bulkPrice, setBulkPrice] = useState("")
-  const [bulkExtraAdultPrice, setBulkExtraAdultPrice] = useState("")
-  const [bulkExtraChildPrice, setBulkExtraChildPrice] = useState("")
-  // Which room type(s) Apply Prices writes to — independent of the single Room Type
-  // selector above (that one only controls which room type's grid is being viewed).
-  // Defaults to whichever room type is being viewed, then the admin can check more so
-  // one Apply Prices call can price several room types at once instead of repeating
-  // the whole flow per room type.
-  const [bulkRoomTypeIds, setBulkRoomTypeIds] = useState<string[]>([])
-
+  const ratePlanId = searchParams.get("ratePlanId")
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
+  const [plan, setPlan] = useState<{ code: string; name: string } | null>(null)
 
   useEffect(() => {
-    if (!propertyId) return
-    Promise.all([
-      fetch(`/api/rate-plans?propertyId=${propertyId}`).then(r => r.json()),
-      fetch(`/api/room-types?propertyId=${propertyId}`).then(r => r.json())
-    ]).then(([rpData, rtData]) => {
-      setRatePlans(rpData)
-      setRoomTypes(rtData)
+    if (!propertyId || !ratePlanId) return
+    fetch(`/api/rate-plans?propertyId=${propertyId}`)
+      .then((r) => r.json())
+      .then((plans) => setPlan(Array.isArray(plans) ? plans.find((p: { id: string }) => p.id === ratePlanId) ?? null : null))
+      .catch(() => setPlan(null))
+  }, [propertyId, ratePlanId])
 
-      if (!initialRatePlanId && rpData.length > 0) {
-        setSelectedRatePlanId(rpData[0].id)
-      }
-      if (rtData.length > 0) {
-        setSelectedRoomTypeId(rtData[0].id)
-        setBulkRoomTypeIds([rtData[0].id])
-      }
-    })
-  }, [initialRatePlanId, propertyId])
-
-  // Clicking a different rate plan's "Calendar" link while already on this page is a
-  // client-side navigation to the same route (only the ?ratePlanId= query differs), so
-  // Next.js doesn't remount the component — the useState initial value above only ever
-  // runs once. Without this, the plan shown stays stuck at whichever was first opened.
-  useEffect(() => {
-    if (initialRatePlanId) setSelectedRatePlanId(initialRatePlanId)
-  }, [initialRatePlanId])
-
-  // Switching which room type the grid is viewing also resets the bulk-apply
-  // selection to just that one — an admin who then wants to price several room
-  // types the same way checks the extra boxes from there.
-  useEffect(() => {
-    if (selectedRoomTypeId) setBulkRoomTypeIds([selectedRoomTypeId])
-     
-  }, [selectedRoomTypeId])
-
-  const pickDay = (day: Date) => {
-    if (!rangeAnchor) {
-      setRangeAnchor(day)
-      setBulkDateRange({ from: day, to: day })
-    } else {
-      const [from, to] = day < rangeAnchor ? [day, rangeAnchor] : [rangeAnchor, day]
-      setBulkDateRange({ from, to })
-      setRangeAnchor(null)
-      priceInputRef.current?.focus()
-    }
-  }
-  const inBulkRange = (day: Date) =>
-    !!bulkDateRange?.from && !!bulkDateRange?.to && day >= startOfDay(bulkDateRange.from) && day <= startOfDay(bulkDateRange.to)
-
-  // Switching plan is a navigation (?ratePlanId=), so the plan being edited is always the
-  // one named in the breadcrumb and the tab title.
-  const switchPlan = (id: string) => {
-    router.replace(`/e/${slug}/dashboard/revenue/calendar?ratePlanId=${id}`)
-  }
-
-  const toggleBulkRoomType = (id: string, checked: boolean) => {
-    setBulkRoomTypeIds(prev => checked ? [...prev, id] : prev.filter(rid => rid !== id))
-  }
-
-  const fetchPrices = () => {
-    if (!selectedRatePlanId || !selectedRoomTypeId) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setLoadError(false)
-    const start = format(currentMonth, "yyyy-MM-dd")
-    const end = format(endOfMonth(currentMonth), "yyyy-MM-dd")
-
-    fetch(`/api/price-calendar?ratePlanId=${selectedRatePlanId}&roomTypeId=${selectedRoomTypeId}&startDate=${start}&endDate=${end}`)
-      .then(res => {
-        if (!res.ok) throw new Error()
-        return res.json()
-      })
-      .then(data => {
-        if (Array.isArray(data)) setPrices(data)
-      })
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    fetchPrices()
-  }, [selectedRatePlanId, selectedRoomTypeId, currentMonth])
-
-  const handleBulkUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedRatePlanId || !bulkPrice) return
-
-    // Edge cases the server would otherwise reject with a generic 400 — catch them
-    // here with a message that actually says what's wrong.
-    if (bulkRoomTypeIds.length === 0) {
-      toast.error("Check at least one room type to apply this price to.")
-      return
-    }
-    if (!bulkDateRange?.from || !bulkDateRange?.to) {
-      toast.error("Pick both a From and a To date.")
-      return
-    }
-    if (bulkDateRange.from > bulkDateRange.to) {
-      toast.error("The From date must be on or before the To date.")
-      return
-    }
-
-    setBulkSubmitting(true)
-    try {
-      // Same multi-room-type endpoint the Rate Seasons "Define a rate season" tool
-      // uses — one Apply Prices call now covers every checked room type instead of
-      // requiring the whole flow to be repeated per room type.
-      const res = await fetch("/api/price-calendar/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ratePlanId: selectedRatePlanId,
-          roomTypeIds: bulkRoomTypeIds,
-          startDate: format(bulkDateRange.from, "yyyy-MM-dd"),
-          endDate: format(bulkDateRange.to, "yyyy-MM-dd"),
-          price: parseFloat(bulkPrice),
-          extraAdultPrice: bulkExtraAdultPrice === "" ? null : parseFloat(bulkExtraAdultPrice),
-          extraChildPrice: bulkExtraChildPrice === "" ? null : parseFloat(bulkExtraChildPrice),
-        })
-      })
-
-      if (res.ok) {
-        const data = await res.json().catch(() => null)
-        toast.success(data?.message || "Prices updated")
-        setBulkPrice("")
-        setBulkExtraAdultPrice("")
-        setBulkExtraChildPrice("")
-        // The applied range can fall outside whatever month the grid currently shows
-        // (the two independent From/To pickers make that easy to do by accident) —
-        // jump the grid to the start of the range just priced so the update is
-        // actually visible instead of looking like nothing happened.
-        const targetMonth = startOfMonth(bulkDateRange.from)
-        if (targetMonth.getTime() !== startOfMonth(currentMonth).getTime()) {
-          setCurrentMonth(targetMonth)
-        } else {
-          fetchPrices()
-        }
-      } else {
-        const data = await res.json().catch(() => null)
-        const message = typeof data?.error === "string" ? data.error : Array.isArray(data?.error) ? data.error.map((i: { message: string }) => i.message).join(", ") : "Failed to update prices."
-        toast.error(message)
-      }
-    } catch {
-      toast.error("An error occurred.")
-    } finally {
-      setBulkSubmitting(false)
-    }
-  }
-
-  // Calendar Grid Logic
-  const daysInMonth = useMemo(() => {
-    return eachDayOfInterval({ start: currentMonth, end: endOfMonth(currentMonth) })
-  }, [currentMonth])
-
-  const startingDayIndex = getDay(currentMonth) // 0 = Sunday, 1 = Monday, etc.
-
-  const getEntryForDate = (date: Date) => {
-    return prices.find(p => isSameDay(new Date(p.date), date)) ?? null
-  }
-
-  const selectedRatePlan = ratePlans.find(r => r.id === selectedRatePlanId)
-  const isDerivedPlan = !!selectedRatePlan?.parentRatePlanId
+  const returnPath = `/e/${slug}/dashboard/revenue/calendar${ratePlanId ? `?ratePlanId=${ratePlanId}` : ""}`
 
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-4">
         {/* Phones only: the breadcrumb is the way back on desktop. */}
-        <Link href={`/e/${slug}/dashboard/revenue`} className="md:hidden">
+        <Link href={`/e/${slug}/dashboard/revenue?tab=rate-plans`} className="md:hidden">
           <Button variant="outline" size="icon" aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <PageHeader
           className="flex-1"
-          crumb={selectedRatePlan?.code ?? null}
+          crumb={plan?.code ?? null}
           title="Price calendar"
-          tabTitle={selectedRatePlan ? `Price calendar · ${selectedRatePlan.code}` : "Price calendar"}
-          hint="Daily rates by room type. Click a day, then another, to fill the bulk update range."
-          actions={
-            ratePlans.length > 1 && (
-              <Select value={selectedRatePlanId} onValueChange={(v) => v && switchPlan(String(v))}>
-                <SelectTrigger className="w-64 max-md:w-full" aria-label="Rate plan">
-                  <SelectValue placeholder="Rate plan">
-                    {ratePlans.find((r) => r.id === selectedRatePlanId)?.name}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {ratePlans.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name} ({r.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )
-          }
+          tabTitle={plan ? `Price calendar · ${plan.code}` : "Price calendar"}
+          hint={plan ? `Daily rates for ${plan.name} by room type. View only — change prices in Rate seasons.` : "Daily rates by room type. View only — change prices in Rate seasons."}
         />
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
-        {/* Left Sidebar: Filters & Bulk Update — below the calendar on a phone, where the
-            calendar is what you came to read. */}
-        <div className="md:col-span-1 space-y-6 max-md:order-2">
-          {isDerivedPlan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Derived rate plan
-                  <InfoHint label="Derived rate plan">
-                    Nights where the parent has no price use the Base Rate price plus the adjustment (marked
-                    &quot;Base + adj.&quot;). Edit the adjustment on the Rate Plans tab.
-                  </InfoHint>
-                </CardTitle>
-                <CardDescription>
-                  Priced live from &quot;{selectedRatePlan?.parentRatePlan?.name}&quot;
-                  {selectedRatePlan?.derivedAdjustmentType === "FLAT"
-                    ? ` ${(selectedRatePlan?.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}$${selectedRatePlan?.derivedAdjustmentValue} flat`
-                    : ` ${(selectedRatePlan?.derivedAdjustmentValue ?? 0) >= 0 ? "+" : ""}${selectedRatePlan?.derivedAdjustmentValue}%`}
-                  . Change the parent plan&apos;s prices to change this one.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-            Bulk update
-            <InfoHint label="Bulk update">Apply a price to a date range.</InfoHint>
-          </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleBulkUpdate} className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Room type(s)</Label>
-                      <button
-                        type="button"
-                        className="text-xs text-info hover:underline pointer-coarse:min-h-11"
-                        onClick={() => setBulkRoomTypeIds(bulkRoomTypeIds.length === roomTypes.length ? [] : roomTypes.map(r => r.id))}
-                      >
-                        {bulkRoomTypeIds.length === roomTypes.length ? "Clear all" : "Select all"}
-                      </button>
-                    </div>
-                    <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1.5 bg-card">
-                      {roomTypes.map(rt => (
-                        <div key={rt.id} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`bulk-rt-${rt.id}`}
-                            checked={bulkRoomTypeIds.includes(rt.id)}
-                            onCheckedChange={(checked) => toggleBulkRoomType(rt.id, !!checked)}
-                          />
-                          <Label htmlFor={`bulk-rt-${rt.id}`} className="font-normal cursor-pointer text-sm">
-                            {rt.name} <span className="text-muted-foreground text-xs">({rt.code})</span>
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>From</Label>
-                      <DatePicker
-                        value={bulkDateRange?.from}
-                        onChange={(date) => setBulkDateRange(prev => ({ from: date ? new Date(date) : undefined, to: prev?.to }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>To</Label>
-                      <DatePicker
-                        value={bulkDateRange?.to}
-                        onChange={(date) => setBulkDateRange(prev => ({ from: prev?.from, to: date ? new Date(date) : undefined }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Daily price ($)</Label>
-                    <Input ref={priceInputRef} {...INPUT_MONEY} type="number" min="0" step="0.01" required value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} placeholder="199.00" />
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Extra adult ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
-                      <Input {...INPUT_MONEY} type="number" min="0" step="0.01" value={bulkExtraAdultPrice} onChange={e => setBulkExtraAdultPrice(e.target.value)} placeholder="0.00" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Extra child ($) <span className="text-muted-foreground font-normal">Optional</span></Label>
-                      <Input {...INPUT_MONEY} type="number" min="0" step="0.01" value={bulkExtraChildPrice} onChange={e => setBulkExtraChildPrice(e.target.value)} placeholder="0.00" />
-                    </div>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={bulkSubmitting || !selectedRatePlanId || bulkRoomTypeIds.length === 0}>
-                    {bulkSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Apply prices{bulkRoomTypeIds.length > 1 ? ` (${bulkRoomTypeIds.length} room types)` : ""}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Right Side: Calendar Grid */}
-        <div className="md:col-span-3 max-md:order-1">
-          <Card className="h-full">
-            <CardHeader className="flex flex-col gap-4 border-b pb-4 mb-4">
-              {/* Room type being previewed — the only place this is chosen now
-                  (Configuration's old duplicate dropdown was removed). Independent of
-                  Bulk Update's own checkbox list, which controls what gets written. */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {roomTypes.map(rt => (
-                  <Button
-                    key={rt.id}
-                    type="button"
-                    variant={rt.id === selectedRoomTypeId ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedRoomTypeId(rt.id)}
-                  >
-                    {rt.name}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center justify-center gap-2 sm:gap-4">
-                  <Button variant="outline" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>Previous</Button>
-                  <h3 className="text-lg font-semibold text-center sm:w-48 sm:text-xl">{format(currentMonth, "MMMM yyyy")}</h3>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>Next</Button>
-                </div>
-                <Button variant="outline" size="sm" className="w-full md:w-auto" onClick={() => setCurrentMonth(startOfMonth(new Date()))}>Today</Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
-                  {Array.from({ length: 35 }).map((_, i) => (
-                    <Skeleton key={i} className="h-24 rounded-none" />
-                  ))}
-                </div>
-              ) : loadError ? (
-                <ErrorState title="Couldn't load prices" onRetry={fetchPrices} />
-              ) : !selectedRatePlanId || !selectedRoomTypeId ? (
-                <div className="h-96 flex items-center justify-center text-muted-foreground">
-                  Select a rate plan and room type to view calendar.
-                </div>
-              ) : (
-                <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
-                  {/* Days of week header — abbreviated further on mobile so a narrow
-                      7-column grid doesn't force horizontal scroll on a phone. */}
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                    <div key={day} className="bg-muted py-2 text-center text-xs font-medium text-muted-foreground sm:text-sm">
-                      <span className="sm:hidden">{day.slice(0, 1)}</span>
-                      <span className="hidden sm:inline">{day}</span>
-                    </div>
-                  ))}
-
-                  {/* Empty padding cells for start of month */}
-                  {Array.from({ length: startingDayIndex }).map((_, i) => (
-                    <div key={`empty-${i}`} className="bg-card min-h-[64px] p-1 sm:min-h-[100px] sm:p-2" />
-                  ))}
-
-                  {/* Calendar Days */}
-                  {daysInMonth.map(day => {
-                    const entry = getEntryForDate(day)
-                    const isToday = isSameDay(day, new Date())
-                    const selected = !isDerivedPlan && inBulkRange(day)
-                    const anchor = !!rangeAnchor && isSameDay(day, rangeAnchor)
-                    return (
-                      <div
-                        key={day.toISOString()}
-                        role={isDerivedPlan ? undefined : "button"}
-                        tabIndex={isDerivedPlan ? undefined : 0}
-                        aria-pressed={isDerivedPlan ? undefined : selected}
-                        onClick={isDerivedPlan ? undefined : () => pickDay(day)}
-                        onKeyDown={isDerivedPlan ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickDay(day) } }}
-                        className={`bg-card min-h-[64px] p-1 flex flex-col group hover:bg-muted transition-colors sm:min-h-[100px] sm:p-2 ${isToday ? 'bg-info-muted/30' : ''} ${isDerivedPlan ? '' : 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'} ${selected ? 'bg-accent/40 ring-1 ring-inset ring-foreground/20' : ''} ${anchor ? 'ring-2 ring-foreground/50' : ''}`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <span className={`text-xs font-medium sm:text-sm ${isToday ? 'bg-info text-info-foreground rounded-none w-5 h-5 flex items-center justify-center sm:w-6 sm:h-6' : 'text-muted-foreground'}`}>
-                            {format(day, "d")}
-                          </span>
-                        </div>
-                        <div className="mt-auto pt-1 flex flex-col gap-0.5 sm:pt-2">
-                          {entry !== null ? (
-                            <>
-                              <span
-                                className={`text-xs font-bold tabular-nums sm:text-lg ${entry.source === "BASE_FALLBACK" ? "text-muted-foreground" : entry.derived ? "text-info" : "text-success"}`}
-                                title={
-                                  entry.source === "BASE_FALLBACK"
-                                    ? entry.derived
-                                      ? "No parent price for this night — Base Rate price plus this plan's adjustment (what Night Audit posts)"
-                                      : "No price set for this night — Night Audit falls back to the Base Rate price"
-                                    : entry.derived
-                                      ? "Parent plan's price plus this plan's adjustment"
-                                      : undefined
-                                }
-                              >
-                                {/* Phones: whole numbers — "$250.00" doesn't fit a 1/7 column. */}
-                                <span className="sm:hidden">${Math.round(entry.price)}</span>
-                                <span className="max-sm:hidden">${entry.price.toFixed(2)}</span>
-                              </span>
-                              {(entry.derived || entry.source === "BASE_FALLBACK") && (
-                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight max-sm:hidden">
-                                  {entry.source === "BASE_FALLBACK" ? (entry.derived ? "Base + adj." : "Base fallback") : "Derived"}
-                                </span>
-                              )}
-                              {/* Phones: the source label becomes a dot (legend under the grid). */}
-                              {(entry.derived || entry.source === "BASE_FALLBACK") && (
-                                <span
-                                  aria-label={entry.source === "BASE_FALLBACK" ? (entry.derived ? "Base + adj." : "Base fallback") : "Derived"}
-                                  className={`h-1.5 w-1.5 rounded-full sm:hidden ${entry.source === "BASE_FALLBACK" ? (entry.derived ? "bg-warning" : "bg-muted-foreground") : "bg-info"}`}
-                                />
-                              )}
-                              {(entry.extraAdultPrice != null || entry.extraChildPrice != null) && (
-                                <span className="hidden text-[11px] text-muted-foreground leading-tight sm:block">
-                                  {entry.extraAdultPrice != null && `+$${entry.extraAdultPrice.toFixed(2)} adult`}
-                                  {entry.extraAdultPrice != null && entry.extraChildPrice != null && " · "}
-                                  {entry.extraChildPrice != null && `+$${entry.extraChildPrice.toFixed(2)} child`}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground italic sm:text-sm">No rate</span>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              {/* Phones: legend for the source dots used in place of the cell labels. */}
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:hidden">
-                <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-info" /> Derived</span>
-                <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" /> Base Rate fallback</span>
-                <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-warning" /> Base + adjustment</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-      </div>
+      <RateCalendar lockedRatePlanId={ratePlanId} returnPath={returnPath} />
     </div>
   )
 }

@@ -15,6 +15,26 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.6.5",
+    date: "2026-10-10",
+    highlights: "A view-only price Calendar is now the first tab of Revenue, Rate seasons is the one place to change prices, and a stop sale can be overridden by staff who are allowed to.",
+    new: [
+      "Revenue now opens on a Calendar tab, replacing Manager Flash: a view-only month of nightly prices for one room type and one rate plan. It starts on the Base Rate; choose another rate plan or room type to look at it. Hover a day for the extra adult and child prices. A night a plan has no price for shows NA.",
+      "Click a day, or a first and last day, on the calendar and choose Update prices: Rate seasons opens with the rate plan, room type and dates already filled in, and brings you back to the calendar when the prices are pushed. Stop sale is in the same bar.",
+      "Days closed to sale are marked Closed on the calendar.",
+      "Override Restriction: staff with Availability update access can book a night under stop sale after a warning. It is separate from Overbook. If a night is both closed and sold out, one message shows both warnings and both must be accepted. Overrides are recorded in the activity log.",
+    ],
+    improved: [
+      "Rate seasons is now three steps — rate plan, then season and price, then room types — and each opens only after the one before is saved. Arriving from the calendar, all three are already filled in.",
+      "A rate plan's Calendar button opens the same calendar fixed to that plan, view only. The bulk update form on it is gone; prices are changed in Rate seasons.",
+      "Setting or lifting a stop sale is sent to your channel manager straight away instead of at the next scheduled update.",
+      "Selected days on the calendar are shaded in a soft red.",
+    ],
+    fixed: [
+      "Your website and channel manager still cannot book through a stop sale; the refusal now reports a stop sale rather than a sold-out room when both apply.",
+    ],
+  },
+  {
     version: "8.5.0",
     date: "2026-10-05",
     highlights: "Transportation: airport meet-and-greet, speedboat and seaplane transfers and island trips, planned on a daily board and charged at Night Audit.",

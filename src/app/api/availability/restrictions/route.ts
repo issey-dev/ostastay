@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { toUtcMidnight } from "@/lib/business-date";
+import { pushPropertyNow } from "@/lib/channels/push";
 
 const DAY_MS = 86_400_000;
 // A single Stop-Sale mutation can't span more than ~2 years — guards against a huge
@@ -92,6 +93,9 @@ export async function POST(request: Request) {
         (roomTypeIds.length > 0 ? `${roomTypeIds.length} room type(s)` : "property-wide"),
     });
 
+    // Tell the channel manager now rather than at the next scheduled sweep (not awaited).
+    void pushPropertyNow(propertyId);
+
     return NextResponse.json({ closed });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
@@ -127,6 +131,8 @@ export async function DELETE(request: Request) {
         `Stop Sale removed (Open) for ${dates.length} date(s) — ` +
         (roomTypeIds.length > 0 ? `${roomTypeIds.length} room type(s)` : "property-wide"),
     });
+
+    void pushPropertyNow(propertyId);
 
     return NextResponse.json({ opened: result.count });
   } catch (error) {

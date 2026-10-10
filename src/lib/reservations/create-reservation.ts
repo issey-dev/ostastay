@@ -2,11 +2,11 @@ import { Prisma } from "@prisma/client";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
-import { assertPropertyAccess, type AuthContext } from "@/lib/scope";
+import { assertPropertyAccess, hasPermission, type AuthContext } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
-import { findStopSaleConflicts } from "@/lib/restrictions";
+import { findStopSaleConflicts, gateBookingConflicts, type ConflictGate } from "@/lib/restrictions";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { logActivity } from "@/lib/activity-log";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
@@ -60,6 +60,9 @@ export type CreateReservationInput = {
   noShowFeeRuleId?: string | null;
   groupBlockId?: string | null;
   acknowledgeOverbook?: boolean;
+  /** "Override Restriction": book on a night under stop sale. Honoured only for a user with
+   *  Availability update access; the website and channel paths never set it. */
+  overrideStopSale?: boolean;
   /** Skip the "arrival cannot predate the business date" floor. Set ONLY by the channel
    *  conversion path: an OTA has already confirmed that stay to the guest, so refusing it
    *  here would turn a real paid booking into a failed conversion. Same reasoning as
@@ -105,10 +108,26 @@ export type CreateReservationResult =
       status: number;
       error: string;
       requiresOverbookConfirm?: boolean;
+      /** The stay hits a stop sale the caller (Availability update access) may override. */
+      requiresStopSaleOverride?: boolean;
+      stopSaleMessage?: string;
+      overbookMessage?: string;
     };
 
 function fail(status: number, error: string, requiresOverbookConfirm?: boolean): CreateReservationResult {
   return requiresOverbookConfirm ? { ok: false, status, error, requiresOverbookConfirm } : { ok: false, status, error };
+}
+
+function failGate(gate: ConflictGate): CreateReservationResult {
+  return {
+    ok: false,
+    status: 409,
+    error: gate.error,
+    ...(gate.requiresOverbookConfirm ? { requiresOverbookConfirm: true } : {}),
+    ...(gate.requiresStopSaleOverride ? { requiresStopSaleOverride: true } : {}),
+    ...(gate.stopSaleMessage ? { stopSaleMessage: gate.stopSaleMessage } : {}),
+    ...(gate.overbookMessage ? { overbookMessage: gate.overbookMessage } : {}),
+  };
 }
 
 export async function createReservation(ctx: AuthContext, body: CreateReservationInput): Promise<CreateReservationResult> {
@@ -279,25 +298,39 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     groupBlockId = block.id;
   }
 
-  // Stop-Sale is a HARD block (no acknowledge/override) — checked FIRST so a closed
-  // date fails fast rather than after the soft overbook prompt below. A date closed for
-  // a room type or property-wide cannot be sold.
+  // Two separate soft blocks, reported together so a stay that is both restricted and sold
+  // out shows both warnings at once:
+  //  - Stop sale: a night closed for the room type (or property-wide) cannot be sold — to the
+  //    website, a channel, or a desk user — unless a user with Availability update access
+  //    chooses "Override Restriction" (overrideStopSale). Websites and channels never can.
+  //  - Overbooking: a property may deliberately oversell a room type (src/lib/availability.ts).
+  //    Staff must acknowledge it (acknowledgeOverbook). The physical same-room double-booking
+  //    guard further down stays hard.
+  // First pass without the flags returns 409 + requiresStopSaleOverride / requiresOverbookConfirm
+  // so the UI can confirm and resend.
   const stopSaleConflicts = await findStopSaleConflicts({ propertyId: body.propertyId, segments: bookingSegments });
-  if (stopSaleConflicts.length > 0) {
-    return fail(409, stopSaleConflicts.join("; "));
-  }
-
-  // Type-level overbooking is a SOFT warning: a property may deliberately oversell a
-  // room type (see src/lib/availability.ts). Staff must acknowledge it (acknowledgeOverbook)
-  // — the physical same-room double-booking guard below stays hard. First pass without
-  // acknowledgement returns 409 + requiresOverbookConfirm so the UI can confirm.
   const availabilityConflicts = await findTypeAvailabilityConflicts({
     propertyId: body.propertyId,
     segments: bookingSegments,
     excludeGroupBlockId: groupBlockId ?? undefined,
   });
-  if (availabilityConflicts.length > 0 && !body.acknowledgeOverbook) {
-    return fail(409, availabilityConflicts.join("; "), true);
+  const gate = gateBookingConflicts({
+    stopSale: stopSaleConflicts,
+    availability: availabilityConflicts,
+    overrideStopSale: body.overrideStopSale,
+    acknowledgeOverbook: body.acknowledgeOverbook,
+    canOverrideStopSale: hasPermission(ctx, "AVAILABILITY", "update"),
+  });
+  if (gate) return failGate(gate);
+  if (stopSaleConflicts.length > 0) {
+    await logActivity({
+      ctx,
+      module: "AVAILABILITY",
+      action: "UPDATE",
+      entityType: "Reservation",
+      entityId: body.propertyId,
+      description: `Stop sale overridden to book: ${stopSaleConflicts.join("; ")}`,
+    });
   }
   const overbookWarning = availabilityConflicts.length > 0 ? availabilityConflicts.join("; ") : null;
 

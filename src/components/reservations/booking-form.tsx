@@ -1,5 +1,6 @@
 "use client"
 
+import { conflictPrompt, conflictFlags } from "@/lib/conflict-prompt"
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useForm, type Resolver, type Path, type PathValue } from "react-hook-form"
@@ -505,13 +506,14 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
       const url = isEditMode ? `/api/reservations/${reservationId}` : `/api/reservations`
       const method = isEditMode ? "PUT" : "POST"
 
-      // Type-level overbooking is allowed with confirmation: the first save returns 409 +
-      // requiresOverbookConfirm; we ask, then resend with acknowledgeOverbook.
-      const send = async (acknowledgeOverbook: boolean) => {
+      // Overbooking and stop sale are each allowed with confirmation: the first save returns
+      // 409 + requiresOverbookConfirm and/or requiresStopSaleOverride; we ask once for whatever
+      // came back, then resend with the matching flag(s).
+      const send = async (flags: { acknowledgeOverbook: boolean; overrideStopSale: boolean }) => {
         const res = await fetch(url, {
           method,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, acknowledgeOverbook }),
+          body: JSON.stringify({ ...payload, ...flags }),
         })
         if (res.ok) {
           // Land on what was just touched, not back on a list (DESKTOP_PLAN D2).
@@ -535,23 +537,20 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           return
         }
         const err = await res.json()
-        if (res.status === 409 && err.requiresOverbookConfirm) {
+        const prompt = res.status === 409 ? conflictPrompt(err) : null
+        if (prompt) {
           setSubmitting(false)
-          const ok = await confirm({
-            title: "Overbook this room type?",
-            description: `${err.error}. This will oversell the room type — proceed anyway?`,
-            confirmLabel: "Overbook",
-          })
+          const ok = await confirm(prompt)
           if (ok) {
             setSubmitting(true)
-            await send(true)
+            await send(conflictFlags(err))
           }
           return
         }
         toast.error(err.error || "Couldn't save the booking. Try again.")
         setSubmitting(false)
       }
-      await send(false)
+      await send({ acknowledgeOverbook: false, overrideStopSale: false })
     } catch {
       toast.error("Couldn't save the booking. Try again.")
       setSubmitting(false)

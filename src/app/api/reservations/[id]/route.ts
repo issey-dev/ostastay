@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
-import { findStopSaleConflicts } from "@/lib/restrictions";
+import { findStopSaleConflicts, gateBookingConflicts } from "@/lib/restrictions";
 import { logActivity } from "@/lib/activity-log";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
 import { checkHardDeleteGate, checkHardDeleteTarget, HARD_DELETE_FLAG } from "@/lib/reservations/hard-delete-gate";
@@ -258,9 +258,11 @@ export async function PUT(
       endDate: new Date(a.endDate),
     }));
 
-    // Stop-Sale is a HARD block (no override) — checked FIRST so a closed date fails fast
-    // before the soft overbook prompt. Only nights/room-types this edit NEWLY sells count;
-    // a segment the reservation already held on a since-closed date is exempt.
+    // Stop sale and type-level overbooking are separate soft blocks, reported together (see
+    // gateBookingConflicts). Only nights/room-types this edit NEWLY sells count for a stop sale;
+    // a segment the reservation already held on a since-closed date is exempt. "Override
+    // Restriction" (overrideStopSale) needs Availability update access. Physical room conflicts
+    // above stay hard.
     const stopSaleConflicts = await findStopSaleConflicts({
       propertyId: existing.propertyId,
       segments: editSegments,
@@ -270,21 +272,28 @@ export async function PUT(
         endDate: a.endDate,
       })),
     });
-    if (stopSaleConflicts.length > 0) {
-      return NextResponse.json({ error: stopSaleConflicts.join("; ") }, { status: 409 });
-    }
-
-    // Type-level overbooking guard (excluding this reservation's own existing assignments)
-    // — an edit that grows the stay or switches room type must still fit the property's
-    // sellable inventory. Soft, acknowledgeable (physical room conflicts above stay hard).
     const availabilityConflicts = await findTypeAvailabilityConflicts({
       propertyId: existing.propertyId,
       segments: editSegments,
       excludeReservationId: id,
     });
-    if (availabilityConflicts.length > 0 && !(body as { acknowledgeOverbook?: boolean }).acknowledgeOverbook) {
+    const flags = body as { acknowledgeOverbook?: boolean; overrideStopSale?: boolean };
+    const gate = gateBookingConflicts({
+      stopSale: stopSaleConflicts,
+      availability: availabilityConflicts,
+      overrideStopSale: flags.overrideStopSale,
+      acknowledgeOverbook: flags.acknowledgeOverbook,
+      canOverrideStopSale: hasPermission(ctx, "AVAILABILITY", "update"),
+    });
+    if (gate) {
       return NextResponse.json(
-        { error: availabilityConflicts.join("; "), requiresOverbookConfirm: true },
+        {
+          error: gate.error,
+          ...(gate.requiresOverbookConfirm ? { requiresOverbookConfirm: true } : {}),
+          ...(gate.requiresStopSaleOverride ? { requiresStopSaleOverride: true } : {}),
+          ...(gate.stopSaleMessage ? { stopSaleMessage: gate.stopSaleMessage } : {}),
+          ...(gate.overbookMessage ? { overbookMessage: gate.overbookMessage } : {}),
+        },
         { status: 409 }
       );
     }

@@ -139,3 +139,53 @@ export async function findStopSaleConflicts(opts: {
   // De-dupe: two split-stay segments of the same type could both hit the same closed night.
   return [...new Set(conflicts)];
 }
+
+export type ConflictGate = {
+  /** Everything the user needs to read, as one message. */
+  error: string;
+  /** The stay hits a stop sale and the caller may override it (Availability update access). */
+  requiresStopSaleOverride: boolean;
+  /** The stay oversells a room type and the caller may acknowledge it. */
+  requiresOverbookConfirm: boolean;
+  stopSaleMessage?: string;
+  overbookMessage?: string;
+};
+
+// Combines the two soft-blocking checks of a new/edited stay into one answer, so a booking
+// that is BOTH restricted and sold out reports both at once instead of one after the other.
+//   Override Restriction (overrideStopSale) — book on a stop-sale night. Needs Availability
+//     update access; never set by the website or channel paths, which a stop sale exists to stop.
+//   Overbook (acknowledgeOverbook) — ignore physical inventory. Independent of the above.
+// Returns null when nothing blocks the stay.
+export function gateBookingConflicts(opts: {
+  stopSale: string[];
+  availability: string[];
+  overrideStopSale?: boolean;
+  acknowledgeOverbook?: boolean;
+  canOverrideStopSale: boolean;
+}): ConflictGate | null {
+  const needStop = opts.stopSale.length > 0 && !(opts.overrideStopSale && opts.canOverrideStopSale);
+  const needOver = opts.availability.length > 0 && !opts.acknowledgeOverbook;
+  if (!needStop && !needOver) return null;
+
+  const stopSaleMessage = needStop ? opts.stopSale.join("; ") : undefined;
+  const overbookMessage = needOver ? opts.availability.join("; ") : undefined;
+
+  if (needStop && !opts.canOverrideStopSale) {
+    // Nothing the user can confirm their way past — just say so.
+    return {
+      error: `${stopSaleMessage}. Only staff with Availability access can override a stop sale.`,
+      requiresStopSaleOverride: false,
+      requiresOverbookConfirm: false,
+      stopSaleMessage,
+      overbookMessage,
+    };
+  }
+  return {
+    error: [stopSaleMessage, overbookMessage].filter(Boolean).join("; "),
+    requiresStopSaleOverride: needStop,
+    requiresOverbookConfirm: needOver,
+    stopSaleMessage,
+    overbookMessage,
+  };
+}

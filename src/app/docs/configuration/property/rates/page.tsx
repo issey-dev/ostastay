@@ -32,27 +32,43 @@ export default function Rates() {
 
       <H2>1. Price the Base Rate</H2>
       <Where path="Dashboard › Finance › Revenue › Rate seasons" who="Revenue" />
+      <Callout title="All price changes are made here">
+        <p>
+          The <strong>Calendar</strong> tab only shows prices; it never edits them. To change a price, use Rate seasons — or pick days
+          on the calendar and choose <strong>Update prices</strong>, which opens Rate seasons already filled in.
+        </p>
+      </Callout>
       <p>
         Do this first. When a night has no price on the booked plan, night audit falls back to the Base Rate, and when the Base Rate
         has no price either, the night posts <strong>zero</strong>. Price the Base Rate for at least a year ahead.
       </p>
-      <Shot name="prop-rate-seasons" alt="The Rate seasons tab: choose a rate plan, a season's dates and prices, and the room types, with a review panel." />
+      <Shot name="prop-rate-seasons" alt="The Rate seasons tab: a three-step form (rate plan, season and price, room types) with later steps locked until the first is saved, and a review panel." />
+      <p>The form has three steps. Each opens only after the one before it is saved, so you fill them in order:</p>
       <ol className="docs-steps">
-        <li><strong>Select target rate plan</strong>: Base Rate.</li>
-        <li><strong>Season</strong>: the first and last night (both get the price). <strong>Daily Price</strong>: per room per night, at the room type&apos;s base occupancy. Optionally the <strong>Extra Adult</strong> and <strong>Extra child price</strong>.</li>
+        <li><strong>Select target rate plan</strong>: Base Rate. Choose <strong>Save &amp; continue</strong>.</li>
+        <li><strong>Season</strong>: the first and last night (both get the price). <strong>Daily Price</strong>: per room per night, at the room type&apos;s base occupancy. Optionally the <strong>Extra Adult</strong> and <strong>Extra child price</strong>. Choose <strong>Save &amp; continue</strong> (it stays grey until the season and price are filled in).</li>
         <li><strong>Apply to room types</strong>: tick the room types this price is for.</li>
         <li>Check the <strong>Review</strong> panel and choose <strong>Push prices to calendar</strong>.</li>
       </ol>
+      <p>A finished step folds up to a one-line summary; click it to change it.</p>
       <p>
         Repeat for each season and each group of room types that shares a price. A push overwrites prices already set for those
         dates, so enter seasons from the broadest to the most specific: the whole year first, then peak weeks on top.
       </p>
       <p>
-        To check or fine-tune, open the plan&apos;s <strong>Calendar</strong> from the Rate plans tab: a month view per room type,
-        with a <strong>Bulk update</strong> form for date ranges. Each day shows the price night audit will actually charge, marked{" "}
-        <strong>Derived</strong>, <strong>Base + adj.</strong> or <strong>Base fallback</strong> when it doesn&apos;t come from the
-        plan itself. <strong>No rate</strong> means nothing is priced and the night would post zero. Click a day, then another, to
-        fill the bulk update dates; a drop-down in the header switches to another rate plan.
+        To check your prices, open the <strong>Calendar</strong> tab, the first tab of Revenue: a view-only month per room type that
+        opens on the Base Rate, with a drop-down to look at another rate plan. A plan&apos;s own <strong>Calendar</strong> button on
+        the Rate plans tab opens the same view fixed to that plan. Each day shows its nightly price; hover a day for the extra adult
+        and child prices. <strong>NA</strong> means that plan has no price of its own for the night — price it in Rate seasons. (Night
+        audit would still fall back to the Base Rate for such a night, so keep the Base Rate priced.) A small dot marks a price
+        derived from a parent plan, and days closed with <strong>Stop sale</strong> are marked <strong>Closed</strong>.
+      </p>
+      <Shot name="prop-rate-calendar" alt="The Revenue Calendar tab: a month of nightly prices for the Base Rate, with rate plan and room type filters." />
+      <p>
+        To change prices from the calendar, click a day (or a first and last day) and choose <strong>Update prices</strong>: Rate seasons
+        opens with the plan, room type and dates already filled in, and brings you back to the calendar once the prices are pushed.
+        <strong> Stop sale</strong> in the same bar closes those dates for the room type — see{" "}
+        <a href="/docs/operations/stop-sale">Price calendar and stop sale</a>.
       </p>
 
       <H2>2. Rate plans</H2>

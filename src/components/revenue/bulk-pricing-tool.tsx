@@ -2,7 +2,8 @@
 
 import { InlineLoading } from "@/components/ui/inline-loading"
 import { useState, useEffect, useMemo } from "react"
-import { AlertTriangle, CalendarDays, Save } from "@/components/icons"
+import { useRouter } from "next/navigation"
+import { AlertTriangle, CalendarDays, ChevronDown, Lock, Save } from "@/components/icons"
 import { differenceInCalendarDays, format } from "date-fns"
 import type { DateRange } from "react-day-picker"
 import { Button } from "@/components/ui/button"
@@ -34,7 +35,75 @@ function SummaryRow({ label, value, hint }: { label: string; value?: string | nu
   )
 }
 
-export function BulkPricingTool({ propertyId }: { propertyId: string }) {
+type StepState = "locked" | "open" | "closed"
+
+/** One step of the season form: a header that is locked, open or collapsed to a one-line summary. */
+function Step({
+  n,
+  title,
+  state,
+  summary,
+  onToggle,
+  children,
+}: {
+  n: number
+  title: string
+  state: StepState
+  summary: string | null
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  const locked = state === "locked"
+  return (
+    <section className={cn("rounded-md border", locked && "bg-muted/30")}>
+      <button
+        type="button"
+        disabled={locked}
+        aria-expanded={state === "open"}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:cursor-not-allowed"
+      >
+        <span
+          className={cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
+            locked ? "text-muted-foreground" : "border-primary/50 text-primary"
+          )}
+        >
+          {n}
+        </span>
+        <span className={cn("text-sm font-medium", locked ? "text-muted-foreground" : "text-foreground")}>{title}</span>
+        {state === "closed" && summary && (
+          <span className="ml-auto min-w-0 truncate text-sm text-muted-foreground">{summary}</span>
+        )}
+        {locked ? (
+          <Lock className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-label="Locked until the previous step is saved" />
+        ) : (
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", state === "open" ? "rotate-180" : summary ? "" : "ml-auto")} />
+        )}
+      </button>
+      {state === "open" && <div className="border-t px-4 py-4">{children}</div>}
+    </section>
+  )
+}
+
+/** Values handed over by the Calendar when someone picks days there and chooses "Update prices". */
+export type SeasonPrefill = {
+  ratePlanId: string | null
+  roomTypeId: string | null
+  from: string | null // yyyy-MM-dd
+  to: string | null
+  /** Where to go once the price is applied (already checked to be a Revenue screen). */
+  returnTo: string | null
+}
+
+const parseDay = (s: string | null) => {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined
+  const d = new Date(`${s}T00:00:00`)
+  return isNaN(d.getTime()) ? undefined : d
+}
+
+export function BulkPricingTool({ propertyId, prefill }: { propertyId: string; prefill?: SeasonPrefill }) {
+  const router = useRouter()
   const [ratePlans, setRatePlans] = useState<any[]>([])
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,6 +116,12 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
   const [extraAdultPrice, setExtraAdultPrice] = useState("")
   const [extraChildPrice, setExtraChildPrice] = useState("")
   const [selectedRoomTypes, setSelectedRoomTypes] = useState<string[]>([])
+
+  // Which step is open, and which of steps 1 and 2 have been saved (that is what unlocks the
+  // next one).
+  const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(1)
+  const [confirmed1, setConfirmed1] = useState(false)
+  const [confirmed2, setConfirmed2] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,6 +141,25 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
     }
     fetchData()
   }, [propertyId])
+
+  // Calendar -> "Update prices": start with the plan, room type and dates that were picked.
+  const prefillKey = prefill ? [prefill.ratePlanId, prefill.roomTypeId, prefill.from, prefill.to].join("|") : ""
+  useEffect(() => {
+    if (!prefill) return
+    const from = parseDay(prefill.from)
+    const to = parseDay(prefill.to) ?? from
+    if (prefill.ratePlanId) setRatePlanId(prefill.ratePlanId)
+    if (prefill.roomTypeId) setSelectedRoomTypes([prefill.roomTypeId])
+    if (from) setDateRange({ from, to })
+    // Picked on the calendar: every step is already filled in, so open them all up. The price
+    // is the one thing still missing — start there.
+    if (prefill.ratePlanId) {
+      setConfirmed1(true)
+      if (from && prefill.roomTypeId) setConfirmed2(true)
+      setOpenStep(2)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the handed-over values change
+  }, [prefillKey])
 
   // Derived plans are priced from their parent, and /api/price-calendar/bulk rejects them —
   // so they are not offered here either.
@@ -92,6 +186,12 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
     : !(parsedPrice >= 0) ? "Enter a daily price."
     : selectedRoomTypes.length === 0 ? "Select at least one room type."
     : null
+
+  // Step 2 needs its mandatory fields: a valid season and a daily price.
+  const step2Valid = days >= 1 && !rangeTooLong && parsedPrice >= 0
+  const stepUnlocked = (n: 1 | 2 | 3) => n === 1 || (n === 2 ? confirmed1 && !!ratePlanId : confirmed1 && !!ratePlanId && confirmed2)
+  const stepState = (n: 1 | 2 | 3): StepState => (!stepUnlocked(n) ? "locked" : openStep === n ? "open" : "closed")
+  const toggleStep = (n: 1 | 2 | 3) => setOpenStep(openStep === n ? null : n)
 
   const handleSelectAllRooms = (checked: boolean) => {
     if (checked) {
@@ -143,6 +243,10 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
         setExtraAdultPrice("")
         setExtraChildPrice("")
         setSelectedRoomTypes([])
+        setConfirmed2(false)
+        setOpenStep(2)
+        // Came from the calendar: go back to it so the new prices show.
+        if (prefill?.returnTo) router.push(prefill.returnTo)
       } else {
         toast.error(data.error || "Couldn't push the prices. Try again.")
       }
@@ -181,32 +285,57 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
             already set for those dates are overwritten.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-6">
-          <div className="space-y-8">
+        <CardContent className="space-y-3 p-6">
+          {/* Three steps that open one at a time. A step stays locked until the one before it
+              has been saved with its required fields, so the form is filled in order. Coming
+              from the Calendar, the plan, room type and dates are already in and every step is
+              open to edit. */}
+          <Step
+            n={1}
+            title="Select target rate plan"
+            state={stepState(1)}
+            summary={selectedPlan ? `${selectedPlan.name}${selectedPlan.isNegotiated ? " (Negotiated)" : ""}` : null}
+            onToggle={() => toggleStep(1)}
+          >
+            <div className="max-w-md space-y-4">
+              <Select value={ratePlanId} onValueChange={(val) => setRatePlanId(val ?? "")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a rate plan...">
+                    {selectedPlan ? `${selectedPlan.name}${selectedPlan.isNegotiated ? " (Negotiated)" : ""}` : undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {pushablePlans.map(rp => (
+                    <SelectItem key={rp.id} value={rp.id}>
+                      {rp.name} {rp.isNegotiated ? "(Negotiated)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Derived rate plans aren&apos;t listed — their price is computed from their parent plan, not pushed directly. Edit the adjustment on the Rate plans tab instead.</p>
+              <Button type="button" disabled={!ratePlanId} onClick={() => { setConfirmed1(true); setOpenStep(2) }}>
+                Save &amp; continue
+              </Button>
+            </div>
+          </Step>
 
-            <section className="space-y-4">
-              <h3 className="text-sm font-medium text-foreground border-b pb-2">1. Select target rate plan</h3>
-              <div className="max-w-md">
-                <Select required value={ratePlanId} onValueChange={(val) => setRatePlanId(val ?? "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a rate plan...">
-                      {selectedPlan ? `${selectedPlan.name}${selectedPlan.isNegotiated ? " (Negotiated)" : ""}` : undefined}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pushablePlans.map(rp => (
-                      <SelectItem key={rp.id} value={rp.id}>
-                        {rp.name} {rp.isNegotiated ? "(Negotiated)" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-2">Derived rate plans aren&apos;t listed — their price is computed from their parent plan, not pushed directly. Edit the adjustment on the Rate plans tab instead.</p>
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <h3 className="text-sm font-medium text-foreground border-b pb-2">2. Define Season (Date Range) &amp; Price</h3>
+          <Step
+            n={2}
+            title="Define Season (Date Range) &amp; Price"
+            state={stepState(2)}
+            summary={days > 0 && parsedPrice >= 0 ? `${format(dateRange!.from!, "MMM d")} – ${format(dateRange!.to!, "MMM d, yyyy")} · ${currency(parsedPrice)}` : null}
+            onToggle={() => toggleStep(2)}
+          >
+            <div
+              className="space-y-4"
+              onKeyDown={(e) => {
+                // Enter in a price field moves on to the next step; it never pushes the season.
+                if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+                  e.preventDefault()
+                  if (step2Valid) { setConfirmed2(true); setOpenStep(3) }
+                }
+              }}
+            >
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Season *</Label>
@@ -227,7 +356,7 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                 </div>
                 <div className="space-y-2">
                   <Label>Daily price *</Label>
-                  <Input type="number" step="0.01" min="0" required placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} />
+                  <Input type="number" step="0.01" min="0" placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} />
                   <p className="text-xs text-muted-foreground">Per night, per room, at each room type&apos;s Base Occupancy.</p>
                 </div>
                 <div className="space-y-2">
@@ -241,62 +370,62 @@ export function BulkPricingTool({ propertyId }: { propertyId: string }) {
                   <p className="text-xs text-muted-foreground">Per night, per child.</p>
                 </div>
               </div>
-            </section>
+              <Button type="button" disabled={!step2Valid} onClick={() => { setConfirmed2(true); setOpenStep(3) }}>
+                Save &amp; continue
+              </Button>
+            </div>
+          </Step>
 
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-3 border-b pb-2">
-                <h3 className="text-sm font-medium text-foreground">3. Apply to room types</h3>
-                {roomTypes.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {selectedRoomTypes.length} of {roomTypes.length} selected
-                  </span>
-                )}
-              </div>
-              {roomTypes.length === 0 ? (
-                <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  This property has no room types yet — add one under Inventory before pushing prices.
-                </p>
-              ) : (
-                <div className="rounded-md border">
-                  <label className="flex cursor-pointer items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 text-sm font-semibold">
-                    <Checkbox
-                      checked={allSelected}
-                      indeterminate={someSelected}
-                      onCheckedChange={() => handleSelectAllRooms(!allSelected)}
-                    />
-                    Select all room types
-                  </label>
-                  {/* auto-fill, not sm:/lg: column counts — those track the viewport, and this
-                      grid sits in a column the review panel has already narrowed, which is how
-                      room type names ended up truncated. Tiles fit themselves to the real width. */}
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 p-3">
-                    {roomTypes.map(rt => {
-                      const checked = selectedRoomTypes.includes(rt.id)
-                      return (
-                        <label
-                          key={rt.id}
-                          className={cn(
-                            "flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm transition-colors hover:bg-accent/40",
-                            checked ? "border-primary/50 bg-primary/5" : "border-border"
-                          )}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(c) => handleRoomTypeToggle(rt.id, !!c)}
-                          />
-                          {/* Wraps rather than truncates: a room type the user can't read in
-                              full is not a room type they can safely tick. */}
-                          <span className="min-w-0 flex-1">{rt.name}</span>
-                          <span className="shrink-0 font-mono text-xs text-muted-foreground">{rt.code}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
+          <Step
+            n={3}
+            title="Apply to room types"
+            state={stepState(3)}
+            summary={roomTypes.length > 0 ? `${selectedRoomTypes.length} of ${roomTypes.length} selected` : null}
+            onToggle={() => toggleStep(3)}
+          >
+            {roomTypes.length === 0 ? (
+              <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                This property has no room types yet — add one under Inventory before pushing prices.
+              </p>
+            ) : (
+              <div className="rounded-md border">
+                <label className="flex cursor-pointer items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 text-sm font-semibold">
+                  <Checkbox
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    onCheckedChange={() => handleSelectAllRooms(!allSelected)}
+                  />
+                  Select all room types
+                </label>
+                {/* auto-fill, not sm:/lg: column counts — those track the viewport, and this
+                    grid sits in a column the review panel has already narrowed, which is how
+                    room type names ended up truncated. Tiles fit themselves to the real width. */}
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 p-3">
+                  {roomTypes.map(rt => {
+                    const checked = selectedRoomTypes.includes(rt.id)
+                    return (
+                      <label
+                        key={rt.id}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm transition-colors hover:bg-accent/40",
+                          checked ? "border-primary/50 bg-primary/5" : "border-border"
+                        )}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(c) => handleRoomTypeToggle(rt.id, !!c)}
+                        />
+                        {/* Wraps rather than truncates: a room type the user can't read in
+                            full is not a room type they can safely tick. */}
+                        <span className="min-w-0 flex-1">{rt.name}</span>
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground">{rt.code}</span>
+                      </label>
+                    )
+                  })}
                 </div>
-              )}
-            </section>
-
-          </div>
+              </div>
+            )}
+          </Step>
         </CardContent>
       </Card>
 
