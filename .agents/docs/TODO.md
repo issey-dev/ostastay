@@ -2,6 +2,17 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Stop-sale override follow-ups (2026-10-10)
+
+- **Group pickup** (`api/groups/[id]/pickup`) still hard-blocks a stop sale with no override, unlike
+  the reservation create/edit screens. Add `overrideStopSale` + the shared prompt
+  (`src/lib/conflict-prompt.ts`) there if desk users need it.
+- **Per-rate-plan stop sale** does not exist (closures are per room type / property-wide).
+- A channel booking that arrives for a night closed after the OTA sold it stays RECEIVED and is
+  retried (it never overrides) — someone has to resolve it by hand or lift the stop sale.
+- The override is logged to Activity as a reservation entry before the booking row exists; if a
+  later validation fails the log line remains.
+
 ## Transportation module (2026-10-04, released 8.5.0) — BUILT, follow-ups open
 
 See [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md). Built on `claude/transportation-module-pms-93kxk5`:

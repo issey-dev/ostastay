@@ -1,5 +1,6 @@
 "use client"
 
+import { conflictPrompt, conflictFlags } from "@/lib/conflict-prompt"
 import { useEffect, useMemo, useState } from "react"
 import { addDays, format, startOfDay } from "date-fns"
 import type { DateRange } from "react-day-picker"
@@ -176,9 +177,10 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
         primaryGuestId = profileData.upid
       }
 
-      // 2. Create the reservation (single segment, room pre-picked). Overbooking is
-      // allowed with confirmation (409 + requiresOverbookConfirm → confirm → resend).
-      const createReservation = (acknowledgeOverbook: boolean) =>
+      // 2. Create the reservation (single segment, room pre-picked). Overbooking and stop sale
+      // are allowed with confirmation (409 + requiresOverbookConfirm / requiresStopSaleOverride
+      // → confirm → resend).
+      const createReservation = (flags: { acknowledgeOverbook: boolean; overrideStopSale: boolean }) =>
         fetch(`/api/reservations`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -192,19 +194,16 @@ export function WalkInBookingDialog({ propertyId, isOpen, onClose, onDone, mode 
             roomTypeId: values.roomTypeId,
             roomId: values.roomId,
             ratePlanId: values.ratePlanId,
-            acknowledgeOverbook,
+            ...flags,
           }),
         })
-      let resRes = await createReservation(false)
+      let resRes = await createReservation({ acknowledgeOverbook: false, overrideStopSale: false })
       let resData = await resRes.json()
-      if (!resRes.ok && resRes.status === 409 && resData.requiresOverbookConfirm) {
-        const ok = await confirm({
-          title: "Overbook this room type?",
-          description: `${resData.error}. This will oversell the room type — proceed anyway?`,
-          confirmLabel: "Overbook",
-        })
+      const prompt = !resRes.ok && resRes.status === 409 ? conflictPrompt(resData) : null
+      if (prompt) {
+        const ok = await confirm(prompt)
         if (!ok) return
-        resRes = await createReservation(true)
+        resRes = await createReservation(conflictFlags(resData))
         resData = await resRes.json()
       }
       if (!resRes.ok) {

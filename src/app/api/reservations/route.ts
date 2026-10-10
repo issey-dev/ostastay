@@ -145,7 +145,13 @@ export async function POST(request: Request) {
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, ...(result.requiresOverbookConfirm ? { requiresOverbookConfirm: true } : {}) },
+        {
+          error: result.error,
+          ...(result.requiresOverbookConfirm ? { requiresOverbookConfirm: true } : {}),
+          ...(result.requiresStopSaleOverride ? { requiresStopSaleOverride: true } : {}),
+          ...(result.stopSaleMessage ? { stopSaleMessage: result.stopSaleMessage } : {}),
+          ...(result.overbookMessage ? { overbookMessage: result.overbookMessage } : {}),
+        },
         { status: result.status }
       );
     }

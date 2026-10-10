@@ -26,6 +26,8 @@ export type StopSaleInitial = {
   roomTypeId?: string | null;
   // Pre-fill the range with a single clicked date.
   date?: string;
+  // Last date of the pre-filled range; defaults to `date`.
+  endDate?: string;
 };
 
 export function StopSaleDialog({
@@ -55,7 +57,8 @@ export function StopSaleDialog({
     setPropertyWide(wide);
     setSelectedTypeIds(new Set(wide ? [] : [initial!.roomTypeId as string]));
     const d = initial?.date ? new Date(initial.date) : undefined;
-    setRange(d ? { from: d, to: d } : undefined);
+    const e = initial?.endDate ? new Date(initial.endDate) : d;
+    setRange(d ? { from: d, to: e } : undefined);
   }, [open, initial]);
 
   const toggleType = (id: string) => {

@@ -481,8 +481,9 @@ export async function createWebsiteBooking(opts: {
     // so the Hub can see what the site tried and why it was refused.
     await recordFailure(baseRow, result.error);
     if (result.status === 409) {
-      const code = result.requiresOverbookConfirm ? "SOLD_OUT" : "STOP_SALE";
-      const error = result.requiresOverbookConfirm
+      const stopSale = !!result.stopSaleMessage || !result.requiresOverbookConfirm;
+      const code = stopSale ? "STOP_SALE" : "SOLD_OUT";
+      const error = !stopSale
         ? "No rooms of this type are available for the selected dates."
         : "The property is not accepting bookings for one or more of the selected dates.";
       return { ok: false, status: 409, code, error };

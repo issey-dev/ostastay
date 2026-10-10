@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { Plus, Pencil, Trash2, CalendarDays, Check, Lock } from "@/components/icons"
@@ -23,7 +23,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ErrorState } from "@/components/ui/error-state"
 import { BulkPricingTool } from "@/components/revenue/bulk-pricing-tool"
-import { FlashReport } from "@/components/revenue/flash-report"
+import { RateCalendar } from "@/components/revenue/rate-calendar"
 import { AllocationsManager, type AllocationDto } from "@/components/revenue/allocations-manager"
 import { useProperty } from "@/components/providers/property-provider"
 import { InfoHint } from "@/components/ui/info-hint"
@@ -75,7 +75,7 @@ type ChargeCodeOption = {
   chargeSubgroup?: { chargeGroup?: { reportBucket?: string } | null } | null
 }
 
-const REVENUE_TABS = ["rate-plans", "flash-report", "allocations", "seasonal-pricing"] as const
+const REVENUE_TABS = ["calendar", "rate-plans", "allocations", "seasonal-pricing"] as const
 type RevenueTab = (typeof REVENUE_TABS)[number]
 
 // useUrlState reads the query string — the page needs a Suspense boundary.
@@ -118,16 +118,20 @@ function RevenueDashboard() {
   const { currentProperty } = useProperty()
   const propertyId = currentProperty?.id ?? ""
 
-  // Desktop opens on Rate Plans, as it always has. A phone opens on Manager Flash — the
-  // one tab that is read on the go — chosen after mount, so the server render (and every
-  // desktop) keeps the Rate Plans default. The tab lives in the URL (?tab=), so Back and
-  // refresh keep it; a phone only switches when the URL didn't name a tab.
-  const [tab, setTab] = useUrlState<RevenueTab>("tab", "rate-plans", REVENUE_TABS)
-  useEffect(() => {
-    const named = new URLSearchParams(window.location.search).has("tab")
-    if (!named && window.matchMedia("(max-width: 767px)").matches) setTab("flash-report")
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
-  }, [])
+  // Opens on the (view-only) Calendar. The tab lives in the URL (?tab=), so Back and refresh
+  // keep it. Rate seasons arrives from the calendar with ratePlanId, roomTypeId, from and to
+  // already filled in, plus `return` — where to go once the price is applied.
+  const [tab, setTab] = useUrlState<RevenueTab>("tab", "calendar", REVENUE_TABS)
+  const searchParams = useSearchParams()
+  const returnTo = searchParams.get("return")
+  const seasonPrefill = {
+    ratePlanId: searchParams.get("ratePlanId"),
+    roomTypeId: searchParams.get("roomTypeId"),
+    from: searchParams.get("from"),
+    to: searchParams.get("to"),
+    // Only ever send the user back to a Revenue screen of this enterprise.
+    returnTo: returnTo && returnTo.startsWith(`/e/${slug}/dashboard/revenue`) ? returnTo : null,
+  }
 
   const fetchRatePlans = () => {
     if (!propertyId) return
@@ -251,21 +255,21 @@ function RevenueDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Revenue" hint="Configure dynamic rate plans, priorities, and price calendars." />
+      <PageHeader title="Revenue" hint="Configure dynamic rate plans and priorities, view the price calendar, and set prices in Rate seasons." />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as RevenueTab)} className="w-full">
         {/* 2x2 on a phone, one row from md up — four triggers at whitespace-nowrap width
             overflow a 375px screen if forced into a single row (see the same fix on
             front-office's operations tabs). */}
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted/50 mb-6 data-horizontal:h-auto md:flex md:h-8 md:w-fit md:gap-0 md:data-horizontal:h-8">
-          <TabsTrigger value="flash-report">Manager Flash</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="rate-plans">Rate plans</TabsTrigger>
           <TabsTrigger value="allocations">Allocations</TabsTrigger>
           <TabsTrigger value="seasonal-pricing">Rate seasons</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="flash-report" className="m-0">
-          <FlashReport />
+        <TabsContent value="calendar" className="m-0">
+          <RateCalendar returnPath={`/e/${slug}/dashboard/revenue`} />
         </TabsContent>
 
         <TabsContent value="allocations" className="m-0">
@@ -785,7 +789,7 @@ function RevenueDashboard() {
       </TabsContent>
 
       <TabsContent value="seasonal-pricing" className="m-0">
-        <BulkPricingTool propertyId={propertyId} />
+        <BulkPricingTool propertyId={propertyId} prefill={seasonPrefill} />
       </TabsContent>
     </Tabs>
     </div>

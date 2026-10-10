@@ -157,3 +157,28 @@ export async function pushAllEnabledLinks(enterpriseId: string): Promise<PushRes
   }
   return results;
 }
+
+/**
+ * Publish one property's availability right now, outside the scheduled sweep.
+ *
+ * Used when something must reach the channel immediately — a stop sale being set or lifted
+ * is the case that matters: the sweep alone would leave the OTAs selling a closed night until
+ * its next run. Fire-and-forget by design: it never throws and never delays the caller, and a
+ * failed or skipped push (sharing off, no credentials, rate-limit pause) is simply picked up
+ * by the next sweep. pushAvailabilityForLink itself refuses to publish an unshared property.
+ */
+export async function pushPropertyNow(propertyId: string): Promise<void> {
+  try {
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { enterpriseId: true } });
+    if (!property) return;
+    const links = await prisma.channelPropertyLink.findMany({
+      where: { propertyId, syncEnabled: true, connection: { enterpriseId: property.enterpriseId } },
+      select: { id: true },
+    });
+    for (const l of links) {
+      await pushAvailabilityForLink({ enterpriseId: property.enterpriseId, linkId: l.id });
+    }
+  } catch (e) {
+    console.error("[channels] immediate push failed; the scheduled sweep will retry", e);
+  }
+}
