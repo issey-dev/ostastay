@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import type { ReportResult, ReportBranding, ReportColumn } from "@/lib/reports/types";
-import { excelNumFmt, isNumericColumn } from "@/lib/reports/format";
+import { excelNumFmt, guardFormula, isNumericColumn } from "@/lib/reports/format";
+import { formatInsight } from "@/lib/reports/insights";
 import { CRIMSON_OS, OBSIDIAN_BLACK, STEEL_SLATE } from "@/lib/brand";
 
 function argb(hex: string | null | undefined, fallback: string): string {
@@ -21,11 +22,12 @@ function cellValue(value: unknown, col: ReportColumn): string | number | null {
     const d = value instanceof Date ? value : new Date(value);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-  return String(value);
+  return guardFormula(String(value));
 }
 
-// Render a ReportResult to a styled .xlsx workbook (single sheet).
-export async function renderXlsx(result: ReportResult, branding: ReportBranding): Promise<Buffer> {
+// Render a ReportResult to a styled .xlsx workbook: the data sheet, plus (when the report
+// has KPIs or charts) a Summary sheet carrying the same figures the screen shows.
+export async function renderXlsx(result: ReportResult, branding: ReportBranding, includeSummary = true): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = branding.enterpriseName;
   wb.created = branding.generatedAt;
@@ -102,6 +104,82 @@ export async function renderXlsx(result: ReportResult, branding: ReportBranding)
     ws.getColumn(i + 1).width = Math.min(48, Math.max(12, (col.width ?? col.label.length + 4)));
   });
 
+  if (includeSummary && ((result.summary?.length ?? 0) > 0 || (result.visuals?.length ?? 0) > 0)) {
+    addSummarySheet(wb, result, branding, brand);
+  }
+
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
+}
+
+// The Summary sheet: KPI table, then each chart's numbers as a small table (Excel users
+// can chart them natively; we deliberately don't embed images that go stale on edit).
+function addSummarySheet(wb: ExcelJS.Workbook, result: ReportResult, branding: ReportBranding, brand: string) {
+  const ws = wb.addWorksheet("Summary", { views: [{ showGridLines: false }] });
+  ws.getColumn(1).width = 34;
+  ws.getColumn(2).width = 18;
+  ws.getColumn(3).width = 18;
+  let r = 1;
+  ws.getCell(r, 1).value = result.title;
+  ws.getCell(r, 1).font = { bold: true, size: 14, color: { argb: brandArgb(OBSIDIAN_BLACK) } };
+  r++;
+  ws.getCell(r, 1).value = [result.subtitle, `${branding.propertyName}${branding.currency ? ` · ${branding.currency}` : ""}`].filter(Boolean).join(" · ");
+  ws.getCell(r, 1).font = { size: 10, color: { argb: brandArgb(STEEL_SLATE) } };
+  r += 2;
+
+  const head = (row: number, labels: string[]) =>
+    labels.forEach((l, i) => {
+      const c = ws.getCell(row, i + 1);
+      c.value = l;
+      c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: brand } };
+      if (i > 0) c.alignment = { horizontal: "right" };
+    });
+
+  if (result.summary?.length) {
+    head(r, ["Key figures", "Value"]);
+    r++;
+    for (const k of result.summary) {
+      ws.getCell(r, 1).value = k.label;
+      const c = ws.getCell(r, 2);
+      if (typeof k.value === "number" && k.format !== "text") {
+        c.value = k.value;
+        c.numFmt = k.format === "currency" ? "#,##0.00" : k.format === "percent" ? '0.0"%"' : "#,##0.##";
+      } else {
+        c.value = formatInsight(k.value, k.format);
+      }
+      c.alignment = { horizontal: "right" };
+      r++;
+    }
+    r++;
+  }
+
+  for (const v of result.visuals ?? []) {
+    const numFmt = v.format === "currency" ? "#,##0.00" : v.format === "percent" ? '0.0"%"' : "#,##0.##";
+    if (v.type === "column") {
+      head(r, [v.title, ...v.series.map((s) => s.label)]);
+      r++;
+      for (const p of v.points) {
+        ws.getCell(r, 1).value = guardFormula(p.label);
+        p.values.forEach((val, i) => {
+          const c = ws.getCell(r, i + 2);
+          c.value = val;
+          c.numFmt = numFmt;
+        });
+        r++;
+      }
+    } else {
+      head(r, [v.title, v.type === "line" ? v.seriesLabel : "Value"]);
+      r++;
+      const items = v.type === "donut" ? v.slices : v.type === "ranked" ? v.rows : v.points.map((p) => ({ label: p.label, value: p.value }));
+      for (const it of items) {
+        ws.getCell(r, 1).value = guardFormula(it.label);
+        const c = ws.getCell(r, 2);
+        c.value = it.value;
+        c.numFmt = numFmt;
+        r++;
+      }
+    }
+    r++;
+  }
 }

@@ -17,6 +17,18 @@ const journal: ReportDef = {
   module: "FINANCIAL",
   name: "Transaction Journal",
   description: "Every charge and payment posted on the selected business date.",
+  insights: {
+    kpis: [
+      { label: "Entries", agg: "count" },
+      { label: "Charges", agg: "count", where: { column: "kind", equals: ["Charge"] } },
+      { label: "Payments", agg: "count", where: { column: "kind", equals: ["Payment"] } },
+      { label: "Net (charges less payments)", agg: "sum", column: "amount", fromTotals: true, format: "currency" },
+    ],
+    visuals: [
+      { type: "donut", title: "Entry types", by: "kind", centerLabel: "entries" },
+      { type: "ranked", title: "Most used codes", by: "code", top: 8 },
+    ],
+  },
   params: [{ key: "date", label: "Business date", type: "date", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -77,6 +89,17 @@ const cashierSummary: ReportDef = {
   module: "FINANCIAL",
   name: "Cashier Summary",
   description: "Collections by cashier and payment method for the selected business date.",
+  insights: {
+    kpis: [
+      { label: "Received", agg: "sum", column: "received", format: "currency" },
+      { label: "Refunded", agg: "sum", column: "refunded", format: "currency", tone: "danger" },
+      { label: "Net", agg: "sum", column: "net", fromTotals: true, format: "currency", tone: "success" },
+    ],
+    visuals: [
+      { type: "donut", title: "Received by method", by: "method", value: "received", format: "currency", centerLabel: "received" },
+      { type: "ranked", title: "Net by cashier", by: "$group", value: "net", format: "currency" },
+    ],
+  },
   params: [{ key: "date", label: "Business date", type: "date", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -124,6 +147,17 @@ const outletSales: ReportDef = {
   module: "FINANCIAL",
   name: "Outlet Sales",
   description: "Revenue posted through each outlet over the selected date range.",
+  insights: {
+    kpis: [
+      { label: "Total sales", agg: "sum", column: "total", fromTotals: true, format: "currency" },
+      { label: "Net of tax", agg: "sum", column: "net", fromTotals: true, format: "currency" },
+      { label: "Postings", agg: "sum", column: "count", fromTotals: true },
+    ],
+    visuals: [
+      { type: "ranked", title: "Sales by outlet", by: "outlet", value: "total", format: "currency" },
+      { type: "donut", title: "Share of sales", by: "outlet", value: "total", format: "currency", centerLabel: "sales" },
+    ],
+  },
   params: [
     { key: "range", label: "Date range", type: "dateRange", required: true, defaultToday: true },
     { key: "outletIds", label: "Outlets", type: "multiSelect", optionSource: "outlets" },
@@ -181,6 +215,15 @@ const folioTax: ReportDef = {
   module: "FINANCIAL",
   name: "Folio Tax",
   description: "Service charge, GST and Green Tax posted, grouped by charge category.",
+  insights: {
+    kpis: [
+      { label: "Total tax", agg: "sum", column: "totalTax", fromTotals: true, format: "currency" },
+      { label: "GST", agg: "sum", column: "gst", fromTotals: true, format: "currency" },
+      { label: "Service charge", agg: "sum", column: "serviceCharge", fromTotals: true, format: "currency" },
+      { label: "Green tax", agg: "sum", column: "greenTax", fromTotals: true, format: "currency" },
+    ],
+    visuals: [{ type: "ranked", title: "Tax by charge category", by: "category", value: "totalTax", format: "currency", top: 8 }],
+  },
   params: [{ key: "range", label: "Date range", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -238,6 +281,12 @@ const greenTax: ReportDef = {
   module: "FINANCIAL",
   name: "Green Tax Report",
   description: "MIRA Green Tax information sheet — every registered guest who stayed in the period, by registration number.",
+  insights: {
+    kpis: [
+      { label: "Guest records", agg: "count" },
+      { label: "Nationalities", agg: "distinct", column: "nationality" },
+    ],
+  },
   params: [{ key: "range", label: "Stayed between", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -351,6 +400,13 @@ const greenTaxMissing: ReportDef = {
   module: "FINANCIAL",
   name: "Missing Profile Information",
   description: "Guests whose Green Tax sheet data is incomplete — missing or skipped Reg No, ID, date of birth, nationality, booking method.",
+  insights: {
+    kpis: [
+      { label: "Issues to fix", agg: "count", tone: "danger" },
+      { label: "Reservations affected", agg: "distinct", column: "conf" },
+    ],
+    visuals: [{ type: "ranked", title: "Most common issues", by: "issue", top: 6 }],
+  },
   params: [{ key: "range", label: "Stayed between", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);
@@ -482,6 +538,18 @@ const gst: ReportDef = {
   module: "FINANCIAL",
   name: "GST Report",
   description: "One line per invoice for the GST return, dated on departure: agent and TIN, stay dates, amount excluding tax, service charge, GST, Green Tax and total including tax.",
+  insights: {
+    kpis: [
+      { label: "Invoices", agg: "count" },
+      { label: "GST", agg: "sum", column: "gst", fromTotals: true, format: "currency" },
+      { label: "Excl. tax", agg: "sum", column: "net", fromTotals: true, format: "currency" },
+      { label: "Incl. tax", agg: "sum", column: "total", fromTotals: true, format: "currency" },
+    ],
+    visuals: [
+      { type: "column", title: "Invoiced per day (incl. tax)", by: "invoiceDate", values: [{ label: "Invoiced", column: "total" }], format: "currency" },
+      { type: "ranked", title: "By travel agent", by: "travelAgent", value: "total", format: "currency", top: 6 },
+    ],
+  },
   params: [{ key: "range", label: "Invoice date", type: "dateRange", required: true, defaultToday: true }],
   async run(rc): Promise<ReportResult> {
     const propertyId = await propertyOrThrow(rc);

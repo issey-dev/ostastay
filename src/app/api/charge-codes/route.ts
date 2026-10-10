@@ -4,6 +4,7 @@ import { requireSession, assertPropertyAccess, requirePropertySetup, toErrorResp
 import { logActivity } from "@/lib/activity-log";
 import { POSTING_TYPES, TAX_CODES, type PostingType } from "@/lib/posting/charge-tree";
 import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
+import { CHARGE_CODE_INCLUDE } from "@/lib/charge-code-include";
 
 // Per property since 2026-09-23 (.agents/docs/HUB_SETUP_PLAN.md, Phase 2): GET takes
 // ?propertyId= and lists that property's chart only — readable by anyone working there
@@ -12,12 +13,6 @@ import { resolveChargeCode } from "@/lib/posting/resolve-charge-code";
 // Level 3 of the charge hierarchy. Classification is a ChargeSubgroup FK — the
 // free-text `category` string it replaced (three mutually contradictory "authoritative"
 // lists, CHARGE_CODE_PLAN.md §1.4) was dropped in phase 4 once every reader was migrated.
-
-export const CHARGE_CODE_INCLUDE = {
-  taxProfile: { include: { rates: { orderBy: { effectiveFrom: "desc" as const }, take: 1 } } },
-  chargeSubgroup: { include: { chargeGroup: true } },
-  generatesFrom: { include: { generatedCode: { select: { id: true, code: true, description: true } } }, orderBy: { sortOrder: "asc" as const } },
-} as const;
 
 export async function GET(request: Request) {
   try {

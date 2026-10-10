@@ -72,6 +72,17 @@ export const TRANSPORT_REPORTS: ReportDef[] = [
     name: "Daily Transportation Report",
     description: "Arrival and departure transfers by transport type, with departures, flights, airport reps, providers, status and billing.",
     params: [{ key: "range", label: "Dates", type: "dateRange", required: true, defaultToday: true }],
+    insights: {
+      kpis: [
+        { label: "Bookings", agg: "count" },
+        { label: "Passengers", agg: "sum", column: "pax", fromTotals: true },
+        { label: "Departures", agg: "distinct", column: "departure" },
+      ],
+      visuals: [
+        { type: "donut", title: "Booking status", by: "status", centerLabel: "bookings" },
+        { type: "ranked", title: "By route", by: "route", top: 8 },
+      ],
+    },
     async run(rc) {
       if (!rc.propertyId) throw new Error("Choose a property")
       const range = rc.params.range as { from: Date; to: Date }

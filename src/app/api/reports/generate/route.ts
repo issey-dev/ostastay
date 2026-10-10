@@ -5,23 +5,32 @@ import { requireSession, toErrorResponse } from "@/lib/scope";
 import { renderReport, reportFilename } from "@/lib/reports/engine";
 import { encodeReportRequest, reportIsLandscape, runReport, ReportRequestError } from "@/lib/reports/run";
 import { generateReportPdf } from "@/lib/stationery-pdf";
+import { parseExportOptions } from "@/lib/reports/export-options";
 import type { ReportFormat, ReportPreview } from "@/lib/reports/types";
 
-const FORMATS: (ReportFormat | "json")[] = ["pdf", "xlsx", "csv", "json"];
+const FORMATS: (ReportFormat | "json")[] = ["pdf", "xlsx", "csv", "txt", "json"];
 
 // Run a report and return it.
 // Body: { key, format, propertyId?, params }.
 //   format "json"            → { result, branding } for the on-screen Preview
 //   format "pdf"             → the print page (the same layout as the Preview) printed by
 //                              headless Chrome; the pdf-lib renderer is only a fallback
-//   format "xlsx" / "csv"    → the file
+//   format "xlsx" / "csv" / "txt" → the file (txt = delimited text)
+//   options                  → the Download dialog's choices (delimiter, encoding, layout,
+//                              PDF orientation / charts …); validated, defaults if absent
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
     const body = await request.json();
     const format = FORMATS.includes(body.format) ? (body.format as ReportFormat | "json") : "pdf";
 
-    const req = { key: String(body.key ?? ""), propertyId: body.propertyId ? String(body.propertyId) : null, params: body.params ?? {} };
+    const options = parseExportOptions(body.options);
+    const req = {
+      key: String(body.key ?? ""),
+      propertyId: body.propertyId ? String(body.propertyId) : null,
+      params: body.params ?? {},
+      pdf: { includeVisuals: options.includeVisuals, orientation: options.orientation },
+    };
     const { def, result, branding, propertyId } = await runReport(ctx, req);
 
     if (format === "json") {
@@ -30,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     let file = format === "pdf" ? await chromePdf() : null;
-    if (!file) file = await renderReport(def, result, branding, format);
+    if (!file) file = await renderReport(def, result, branding, format, options);
 
     return new NextResponse(new Uint8Array(file.body), {
       status: 200,
@@ -51,7 +60,7 @@ export async function POST(request: Request) {
       try {
         const r = encodeReportRequest({ ...req, propertyId });
         const body = await generateReportPdf(`/e/${enterprise.slug}/dashboard/reports/print?r=${r}`, authToken, {
-          landscape: reportIsLandscape(result),
+          landscape: reportIsLandscape(result, options.orientation),
           footerLabel: `${result.title} · ${branding.propertyName}`,
         });
         return { body, contentType: "application/pdf", filename: reportFilename(def.key, branding, "pdf") };

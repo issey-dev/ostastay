@@ -4,6 +4,8 @@ import type { ReportBranding, ReportDef, ReportFormat, ReportResult } from "@/li
 import { renderPdf } from "@/lib/reports/render/pdf";
 import { renderXlsx } from "@/lib/reports/render/xlsx";
 import { renderCsv } from "@/lib/reports/render/csv";
+import { renderDelimited } from "@/lib/reports/render/delimited";
+import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/reports/export-options";
 
 // Build the header/branding block for a rendered report from the property + enterprise.
 //
@@ -44,15 +46,20 @@ export async function renderReport(
   def: Pick<ReportDef, "key" | "renderXlsx">,
   result: ReportResult,
   branding: ReportBranding,
-  format: ReportFormat
+  format: ReportFormat,
+  options: Partial<ExportOptions> = {}
 ): Promise<{ body: Buffer; contentType: string; filename: string }> {
   const { key } = def;
+  const o: ExportOptions = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   if (format === "csv") {
-    return { body: Buffer.from(renderCsv(result), "utf8"), contentType: "text/csv; charset=utf-8", filename: reportFilename(key, branding, "csv") };
+    return { body: renderCsv(result, options), contentType: "text/csv; charset=utf-8", filename: reportFilename(key, branding, "csv") };
+  }
+  if (format === "txt") {
+    return { body: renderDelimited(result, o), contentType: "text/plain; charset=utf-8", filename: reportFilename(key, branding, "txt") };
   }
   if (format === "xlsx") {
     return {
-      body: def.renderXlsx ? await def.renderXlsx(result) : await renderXlsx(result, branding),
+      body: def.renderXlsx ? await def.renderXlsx(result) : await renderXlsx(result, branding, o.includeSummarySheet),
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       filename: reportFilename(key, branding, "xlsx"),
     };
