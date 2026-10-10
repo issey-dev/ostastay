@@ -31,6 +31,9 @@ export const RELEASES: Release[] = [
       "Text and CSV files are data only by default — one heading row and one line per record, with plain numbers and year-month-day dates — so other systems can read them. The older layout with title and subtotals is still available as As printed.",
       "Text in downloaded files that starts with =, +, - or @ is now marked as plain text, so a spreadsheet can never run it as a formula.",
     ],
+    fixed: [
+      "The application could not be packaged for release because of how the Charge codes and Outlets screens kept their lists of options. Those lists were moved; Charge codes and Outlets behave exactly as before.",
+    ],
   },
   {
     version: "8.6.5",

@@ -14,6 +14,11 @@ EOD snapshots not merged, recents are `localStorage` only.
 - Phones/tablets: first chart + "show more", cards 15 at a time, `MobileActionBar` (Refresh + Download as…), Print hidden below `md`.
 - Docs: `/docs/operations/daily-reports`, release notes 8.7.0. Tests: `tests/business-rules/report-export.test.ts`.
 
+### Also fixed on this branch (found by the production build)
+`next build` failed its route type check because `api/charge-codes/route.ts` and `api/outlets/route.ts` exported non-handler
+constants (Next only allows HTTP handlers + route config there). Moved to `src/lib/charge-code-include.ts` and
+`src/lib/outlet-options.ts`. Rule: never export helpers/constants from a `route.ts`.
+
 ### Left open
 - Row click-through (`rowLink`, §3.1) — report rows carry confirmation numbers, not ids; needs ids added per report.
 - Native Excel charts (Summary sheet has the numbers only); Windows-1252 maps the common characters only.

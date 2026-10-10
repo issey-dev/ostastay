@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { OUTLET_TYPES, TAX_OVERRIDE_MODES } from "../route";
+import { OUTLET_TYPES, TAX_OVERRIDE_MODES } from "@/lib/outlet-options";
 import { normalizeOutletCode, validateOutletCode } from "@/lib/outlet-code";
 import { logActivity } from "@/lib/activity-log";
 

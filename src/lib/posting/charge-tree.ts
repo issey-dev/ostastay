@@ -212,7 +212,7 @@ export const CANONICAL_GROUPS: SeedGroup[] = [
 // ── Outlet subgroup bands & templates ─────────────────────────────────────────────
 
 // Which two-digit range an outlet's own nnRV subgroup is allocated from, by outlet
-// type (see src/app/api/outlets/route.ts OUTLET_TYPES). The band's first number is the
+// type (see src/lib/outlet-options.ts OUTLET_TYPES). The band's first number is the
 // seeded default subgroup, adopted by the first outlet of that kind instead of burning
 // a fresh number. 29 is excluded from the FNB band — it's reserved for Meal Plans.
 export const OUTLET_SUBGROUP_BANDS: Record<string, { groupCode: string; from: number; to: number }> = {

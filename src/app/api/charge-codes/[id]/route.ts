@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, requirePropertySetup, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { POSTING_TYPES, type PostingType } from "@/lib/posting/charge-tree";
-import { CHARGE_CODE_INCLUDE } from "@/app/api/charge-codes/route";
+import { CHARGE_CODE_INCLUDE } from "@/lib/charge-code-include";
 
 export async function PUT(
   request: Request,

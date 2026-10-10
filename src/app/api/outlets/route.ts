@@ -3,9 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { normalizeOutletCode, validateOutletCode } from "@/lib/outlet-code";
-
-export const OUTLET_TYPES = ["SPA", "RESTAURANT", "BAR", "RETAIL", "TRANSPORT", "RECREATION", "OTHER"];
-export const TAX_OVERRIDE_MODES = ["NONE", "DEFAULT_ENGINE", "CUSTOM"];
+import { OUTLET_TYPES, TAX_OVERRIDE_MODES } from "@/lib/outlet-options";
 
 const OUTLET_INCLUDE = {
   taxProfile: { include: { rates: true } },
