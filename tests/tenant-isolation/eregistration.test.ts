@@ -113,11 +113,22 @@ describe("eRegistration tenant isolation", () => {
     // confirm this by checking the resolved reservation always matches the token's own,
     // regardless of what's smuggled into the request body.
     const a = await setupEnterprise("A" + uniq().slice(-4));
-    const res = await patchSlot(a.token, a.slotId, { firstName: "Real", reservationId: "not-a-real-id", propertyId: "also-fake" });
+    const res = await patchSlot(a.token, a.slotId, { mobile: "Real", reservationId: "not-a-real-id", propertyId: "also-fake" });
     expect(res.status).toBe(200);
     const slot = await prisma.eRegistrationGuestSlot.findUniqueOrThrow({ where: { id: a.slotId } });
     expect(slot.reservationId).toBe(a.reservationId); // unchanged — never accepted from the body
-    expect(slot.firstName).toBe("Real");
+    expect(slot.mobile).toBe("Real");
+  });
+
+  it("the lead guest's name is locked to their profile — a patched name is ignored", async () => {
+    const a = await setupEnterprise("A" + uniq().slice(-4));
+    const slotBefore = await prisma.eRegistrationGuestSlot.findUniqueOrThrow({ where: { id: a.slotId }, include: { existingProfile: true } });
+    const res = await patchSlot(a.token, a.slotId, { firstName: "Changed", lastName: "Changed", mobile: "+960 7771234" });
+    expect(res.status).toBe(200);
+    const slot = await prisma.eRegistrationGuestSlot.findUniqueOrThrow({ where: { id: a.slotId } });
+    expect(slot.firstName).toBe(slotBefore.existingProfile!.firstName);
+    expect(slot.lastName).toBe(slotBefore.existingProfile!.lastName);
+    expect(slot.mobile).toBe("+960 7771234"); // everything else on the form stays editable
   });
 
   it("a hash collision guess (right shape, wrong secret) is rejected identically to a random token", async () => {
