@@ -528,7 +528,7 @@ function SlotFormView({
             <button
               type="button"
               aria-label={guestMark === "VIP" ? "A note of thanks" : "Welcome back"}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-amber-500 opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-warning opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
               onClick={() =>
                 toast.success(
                   guestMark === "VIP"
@@ -690,7 +690,7 @@ function SlotFormView({
                 )}
                 {nameLocked && (
                   <p className="text-xs text-muted-foreground">
-                    The lead guest's name comes from the booking and can't be changed here. If it isn't right, please tell reception and they'll correct it.
+                    The lead guest&apos;s name comes from the booking and can&apos;t be changed here. If it isn&apos;t right, please tell reception and they&apos;ll correct it.
                   </p>
                 )}
                 <div className="grid gap-3 sm:grid-cols-3">

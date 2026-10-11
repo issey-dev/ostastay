@@ -271,7 +271,7 @@ function ProfilesDashboard() {
           <DialogHeader>
             <DialogTitle>Deactivate profile</DialogTitle>
             <DialogDescription>
-              {deactivating ? displayName(deactivating) : "This profile"} is linked to bookings or accounts, so it can't be deleted. Deactivating hides it from searches and pickers; its history stays and you can reactivate it any time.
+              {deactivating ? displayName(deactivating) : "This profile"} is linked to bookings or accounts, so it can&apos;t be deleted. Deactivating hides it from searches and pickers; its history stays and you can reactivate it any time.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
