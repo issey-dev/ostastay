@@ -308,6 +308,10 @@ function SlotFormView({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [autofillNote, setAutofillNote] = useState<string | null>(null)
+  // From the saved draft: the lead guest's name is fixed, and a returning/VIP guest gets a
+  // small, quiet nod in the header.
+  const [nameLocked, setNameLocked] = useState(false)
+  const [guestMark, setGuestMark] = useState<"VIP" | "RETURNING" | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), [])
 
@@ -328,6 +332,8 @@ function SlotFormView({
           documentIssueDate: d.documentIssueDate ? new Date(d.documentIssueDate).toISOString().slice(0, 10) : "",
           documentExpiryDate: d.documentExpiryDate ? new Date(d.documentExpiryDate).toISOString().slice(0, 10) : "",
         })
+        setNameLocked(!!d.nameLocked)
+        setGuestMark(d.guestMark === "VIP" || d.guestMark === "RETURNING" ? d.guestMark : null)
         setSignature(d.signatureDataUrl || null)
         setHasPhoto(!!d.hasPhoto)
         if (d.hasPhoto) setPhotoPreviewUrl(`/api/eregistration/${token}/slots/${slot.id}/photo`)
@@ -417,6 +423,7 @@ function SlotFormView({
       ]
       let filled = 0
       fillable.forEach((key) => {
+        if (nameLocked && (key === "firstName" || key === "lastName")) return
         const value = fields[key]
         if (value && !current[key]) {
           form.setValue(key, value, { shouldDirty: true, shouldValidate: true })
@@ -515,7 +522,25 @@ function SlotFormView({
         <Button type="button" variant="ghost" size="sm" className="w-fit -ml-2" onClick={onBack}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to guest list
         </Button>
-        <CardTitle>{guestName}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          {guestName}
+          {guestMark && (
+            <button
+              type="button"
+              aria-label={guestMark === "VIP" ? "A note of thanks" : "Welcome back"}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-amber-500 opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
+              onClick={() =>
+                toast.success(
+                  guestMark === "VIP"
+                    ? "Always a pleasure to host you. Thank you for being such a valued guest."
+                    : "Welcome back. It's lovely to see you again."
+                )
+              }
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+          )}
+        </CardTitle>
         <div className="space-y-2 pt-1" aria-live="polite">
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-sm font-semibold">{STEPS[step].title}</p>
@@ -663,20 +688,25 @@ function SlotFormView({
                     <AlertDescription>{autofillNote}</AlertDescription>
                   </Alert>
                 )}
+                {nameLocked && (
+                  <p className="text-xs text-muted-foreground">
+                    The lead guest's name comes from the booking and can't be changed here. If it isn't right, please tell reception and they'll correct it.
+                  </p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField control={form.control} name="firstName" render={({ field }) => (
                     <FormItem><FormLabel>First name</FormLabel><FormControl>
-                      <Input {...field} autoComplete="given-name" autoCapitalize="words" enterKeyHint="next" />
+                      <Input {...field} autoComplete="given-name" autoCapitalize="words" enterKeyHint="next" readOnly={nameLocked} className={nameLocked ? "bg-muted/50 text-muted-foreground" : undefined} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="middleName" render={({ field }) => (
                     <FormItem><FormLabel>Middle name</FormLabel><FormControl>
-                      <Input {...field} autoComplete="additional-name" autoCapitalize="words" enterKeyHint="next" />
+                      <Input {...field} autoComplete="additional-name" autoCapitalize="words" enterKeyHint="next" readOnly={nameLocked} className={nameLocked ? "bg-muted/50 text-muted-foreground" : undefined} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="lastName" render={({ field }) => (
                     <FormItem><FormLabel>Last name</FormLabel><FormControl>
-                      <Input {...field} autoComplete="family-name" autoCapitalize="words" enterKeyHint="next" />
+                      <Input {...field} autoComplete="family-name" autoCapitalize="words" enterKeyHint="next" readOnly={nameLocked} className={nameLocked ? "bg-muted/50 text-muted-foreground" : undefined} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
@@ -724,7 +754,7 @@ function SlotFormView({
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold">Address</h4>
                   <FormField control={form.control} name="addressFull" render={({ field }) => (
-                    <FormItem><FormLabel>Address</FormLabel><FormControl>
+                    <FormItem><FormLabel>Street &amp; building</FormLabel><FormControl>
                       <Textarea rows={2} autoComplete="street-address" {...field} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
@@ -736,7 +766,7 @@ function SlotFormView({
                     )} />
                     <FormField control={form.control} name="addressCountry" render={({ field }) => (
                       <FormItem><FormLabel>Country</FormLabel><FormControl>
-                        <Input {...field} autoComplete="country-name" autoCapitalize="words" enterKeyHint="next" />
+                        <NationalitySelect standardOnly mode="country" value={field.value ?? ""} onValueChange={field.onChange} />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                   </div>

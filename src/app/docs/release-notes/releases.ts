@@ -22,6 +22,9 @@ export const RELEASES: Release[] = [
       "Phone and mobile fields now have a country-code dropdown (flag, country and dialling code, searchable) next to a number-only box. You pick the country once and type just the number. It is on guest profiles and their contacts, the quick-create guest on a reservation, eRegistration, outlets, spa therapists and transport providers. Numbers already saved keep working and show as they were.",
     ],
     improved: [
+      "eRegistration now pre-fills each guest from their guest profile (name, date of birth, nationality, contact details, address and ID). The lead guest's name is fixed (reception corrects it on the profile if it is wrong), while every other detail, for the lead and for accompanying guests, can be updated, and the changes go onto the profile when reception applies the registration.",
+      "Returning and VIP guests get a small, quiet sparkle by their name on the eRegistration form; tapping it shows a short thank-you.",
+      "The eRegistration address country is now a searchable list, and the repeated \"Address\" label is gone.",
       "eRegistration now uses the same calendar date picker as the rest of the app for the date of birth, document issue and expiry dates, and children's dates of birth.",
     ],
     fixed: [
