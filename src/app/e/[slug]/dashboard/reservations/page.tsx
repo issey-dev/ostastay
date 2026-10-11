@@ -85,6 +85,7 @@ type Reservation = {
     ratePlanId: string
     ratePlan: { code: string, name: string }
     overrideRate: number | null
+    chargeRoomTypeId?: string | null
   }[]
   specialRequests?: { id: string, code: string }[]
   traces?: { id: string, alertOnOpen: boolean }[]
@@ -196,6 +197,18 @@ const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
   const requests = res.specialRequests?.length ?? 0
   if (requests > 0) out.push({ key: "req", label: n(requests, "Special request"), title: (res.specialRequests ?? []).map(r => r.code).join(", "), tone: "muted" })
   if ((res.assignments?.length ?? 0) > 1) out.push({ key: "split", label: "Split stay", title: `${res.assignments.length} room assignments during the stay`, tone: "warning" })
+  // A rate that is not the rate plan's own: a flat override typed on the booking, or a
+  // room-type change that kept the old room type's rate.
+  const overridden = (res.assignments ?? []).filter(a => a.overrideRate != null)
+  const keptRate = (res.assignments ?? []).some(a => a.chargeRoomTypeId)
+  if (overridden.length > 0 || keptRate) {
+    const amounts = [...new Set(overridden.map(a => `$${Number(a.overrideRate).toFixed(2)}`))].join(", ")
+    out.push({
+      key: "rate", label: "Override rate",
+      title: overridden.length > 0 ? `Flat override rate: ${amounts}${keptRate ? " (billed as a different room type)" : ""}` : "Billed as a different room type (rate kept after a room change)",
+      tone: "warning",
+    })
+  }
   if (res.hasScheduledRoomMove) out.push({ key: "move", label: "Room move", title: "Scheduled room move during the stay", tone: "warning" })
   if (res.travelAgent) out.push({ key: "ta", label: "Agent", title: `Travel agent: ${res.travelAgent.companyName || res.travelAgent.firstName}`, tone: "muted" })
   const tasks = getActiveTasks(res).length
