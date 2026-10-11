@@ -3242,9 +3242,9 @@ further questions, so the plan's recommended defaults apply (change any of them 
 - **Hub on phones:** quick-action pages are adapted (sessions, support access, key revoke, business
   date, inbound bookings, people status); every other setup page shows a "best on a larger screen"
   notice but stays readable.
-- **eRegistration date of birth** (guest-facing page): a native date input is allowed there as an
-  exception to the "always use `@/components/ui/date-picker`" rule — a calendar popover is slow
-  for birth dates on a phone. Staff screens keep the DatePicker (which opens in a drawer on phones).
+- **eRegistration dates** (guest-facing page): uses `@/components/ui/date-picker` like everywhere
+  else (owner, 2026-10-11 — reverses the earlier native-input exception; the DatePicker opens in a
+  drawer on phones and has year/month dropdowns).
 - **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
   "More" menu, last and in red, and keep their confirmations.
 - **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.

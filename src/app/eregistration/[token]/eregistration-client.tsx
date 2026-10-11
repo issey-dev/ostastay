@@ -1,5 +1,6 @@
 "use client"
 
+import { createPortal } from "react-dom"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import { NationalitySelect } from "@/components/ui/nationality-select"
@@ -9,6 +10,7 @@ import { useForm, type FieldErrors } from "react-hook-form"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -84,11 +86,10 @@ const STEPS: { title: string; hint: string; fields: (keyof SlotFormValues)[] }[]
 ]
 const LAST_STEP = STEPS.length - 1
 
-// Native date inputs on this guest page (owner decision 2026-09-25, DECISIONS: a calendar
-// popover is slow for birth dates). Their value is already yyyy-MM-dd, same as DatePicker's.
+// Date fields use the app DatePicker (owner decision 2026-10-11, supersedes the native-input
+// exception of 2026-09-25). Values are yyyy-MM-dd strings, same as before.
 const MIN_DATE = "1900-01-01"
 const MAX_DOC_DATE = "2100-12-31"
-const DATE_INPUT_CLASS = "[&::-webkit-date-and-time-value]:text-left"
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
@@ -295,6 +296,8 @@ function SlotFormView({
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [signature, setSignature] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const [hasPhoto, setHasPhoto] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
@@ -394,7 +397,12 @@ function SlotFormView({
     try {
       const fd = new FormData()
       fd.append("photo", file)
-      const res = await fetch(`/api/eregistration/${token}/slots/${slot.id}/scan-document`, { method: "POST", body: fd })
+      // Next stays locked while this runs; after 30s give up and let them fill the form in by hand.
+      const res = await fetch(`/api/eregistration/${token}/slots/${slot.id}/scan-document`, {
+        method: "POST",
+        body: fd,
+        signal: AbortSignal.timeout(30_000),
+      })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         toast.error(body.error || "Couldn't read that document — you can still fill the form in manually.")
@@ -426,8 +434,12 @@ function SlotFormView({
         )
         toast.success(`Auto-filled ${filled} field${filled === 1 ? "" : "s"} from your document`)
       }
-    } catch {
-      toast.error("Couldn't reach the server to scan that document.")
+    } catch (e) {
+      toast.error(
+        e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")
+          ? "We couldn't read your ID in time — please fill in your details manually and continue."
+          : "Couldn't reach the server to scan that document."
+      )
     } finally {
       setScanning(false)
     }
@@ -522,7 +534,7 @@ function SlotFormView({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={handleFormSubmit} className="space-y-6" noValidate>
+          <form id="ereg-form" onSubmit={handleFormSubmit} className="space-y-6" noValidate>
             {step === 0 && (
               <div className="space-y-5">
                 {/* Scan first — the photo upload autofills document and personal fields. */}
@@ -629,12 +641,12 @@ function SlotFormView({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FormField control={form.control} name="documentIssueDate" render={({ field }) => (
                       <FormItem><FormLabel>Issue date</FormLabel><FormControl>
-                        <Input type="date" min={MIN_DATE} max={today} className={DATE_INPUT_CLASS} {...field} value={field.value ?? ""} />
+                        <DatePicker minDate={MIN_DATE} maxDate={today} value={field.value} onChange={field.onChange} placeholder="Issue date" />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="documentExpiryDate" render={({ field }) => (
                       <FormItem><FormLabel>Expiry date</FormLabel><FormControl>
-                        <Input type="date" min={MIN_DATE} max={MAX_DOC_DATE} className={DATE_INPUT_CLASS} {...field} value={field.value ?? ""} />
+                        <DatePicker minDate={MIN_DATE} maxDate={MAX_DOC_DATE} value={field.value} onChange={field.onChange} placeholder="Expiry date" />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                   </div>
@@ -670,7 +682,7 @@ function SlotFormView({
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
                     <FormItem><FormLabel>Date of birth</FormLabel><FormControl>
-                      <Input type="date" autoComplete="bday" min={MIN_DATE} max={today} className={DATE_INPUT_CLASS} {...field} />
+                      <DatePicker minDate={MIN_DATE} maxDate={today} value={field.value} onChange={field.onChange} placeholder="Date of birth" />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="nationality" render={({ field }) => (
@@ -756,16 +768,8 @@ function SlotFormView({
                           onChange={(e) => updateChild(i, { name: e.target.value })}
                         />
                         <div className="space-y-1 sm:space-y-0">
-                          <Label className="text-xs text-muted-foreground sm:sr-only" htmlFor={`child-dob-${i}`}>Date of birth</Label>
-                          <Input
-                            id={`child-dob-${i}`}
-                            type="date"
-                            min={MIN_DATE}
-                            max={today}
-                            className={DATE_INPUT_CLASS}
-                            value={child.dateOfBirth ?? ""}
-                            onChange={(e) => updateChild(i, { dateOfBirth: e.target.value || null })}
-                          />
+                          <Label className="text-xs text-muted-foreground sm:sr-only">Date of birth</Label>
+                          <DatePicker minDate={MIN_DATE} maxDate={today} value={child.dateOfBirth} onChange={(v) => updateChild(i, { dateOfBirth: v || null })} placeholder="Date of birth" />
                         </div>
                         <Button type="button" variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label="Remove child" onClick={() => removeChild(i)}>
                           <Trash2 className="h-4 w-4" />
@@ -788,6 +792,9 @@ function SlotFormView({
             {submitError && <p className="text-sm text-destructive" role="alert">{submitError}</p>}
 
             {/* Primary action pinned to the bottom of the screen, clear of the iPhone home bar. */}
+            {/* Portalled to body: the Card gets a transform on hover, which would otherwise
+                re-anchor this fixed bar to the card and make it jump in and out. */}
+            {mounted && createPortal(
             <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
               <div className="mx-auto flex max-w-2xl gap-2 px-4">
                 {step > 0 && (
@@ -797,6 +804,7 @@ function SlotFormView({
                 )}
                 <Button
                   type="submit"
+                  form="ereg-form"
                   className="h-11 flex-1 text-base text-white"
                   disabled={submitting || busy}
                   style={{ backgroundColor: brandColor }}
@@ -815,7 +823,8 @@ function SlotFormView({
                   )}
                 </Button>
               </div>
-            </div>
+            </div>,
+            document.body)}
           </form>
         </Form>
       </CardContent>

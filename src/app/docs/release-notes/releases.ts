@@ -15,6 +15,18 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.0",
+    date: "2026-10-11",
+    highlights: "Smoother eRegistration on phones.",
+    improved: [
+      "eRegistration now uses the same calendar date picker as the rest of the app for the date of birth, document issue and expiry dates, and children's dates of birth.",
+    ],
+    fixed: [
+      "Reading a passport or ID on eRegistration is faster, and never leaves the guest stuck: Next stays locked while the ID is read, and if it can't be read within 30 seconds the guest is asked to fill in their details manually and can carry on.",
+      "On the eRegistration form, the Next button no longer flickers in and out when you move the pointer over or off the form.",
+    ],
+  },
+  {
     version: "8.7.2",
     date: "2026-10-11",
     highlights: "Every property now starts with a ready-made list of bed types, room views and room amenities.",
