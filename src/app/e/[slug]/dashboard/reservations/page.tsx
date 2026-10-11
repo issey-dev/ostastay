@@ -953,7 +953,7 @@ function ReservationsList() {
                           {res.externalRef && <span className="text-muted-foreground/70"> · ch:{res.externalRef}</span>}
                         </div>
                       </div>
-                      <span className="shrink-0 whitespace-nowrap text-right">
+                      <div className="flex shrink-0 flex-col items-end gap-1.5 whitespace-nowrap text-right"><span>
                         {first ? (
                           <>
                             <span className="text-lg font-semibold text-foreground">{first.room?.roomNumber || 'TBA'}</span>
@@ -964,6 +964,12 @@ function ReservationsList() {
                           <span className="text-sm text-muted-foreground">No rooms</span>
                         )}
                       </span>
+                        <StatusBadge
+                        label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
+                        status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
+                        className="shrink-0"
+                      />
+                      </div>
                       {/* Phone: the ⋯ menu lives in the header row next to the status. */}
                       {phone.more.length > 0 && (
                         <div className="-my-1 -mr-1 shrink-0 md:hidden" onClick={(e) => e.stopPropagation()}>
@@ -991,17 +997,12 @@ function ReservationsList() {
                         {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
                         <span className="text-muted-foreground"> · {nights}n</span>
                       </span>
-                      <StatusBadge
-                        label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
-                        status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
-                        className="shrink-0"
-                      />
-
+                      {/* Desktop: the row's actions (and the ... menu) sit here, level with the dates. */}
+                      <div className="max-md:hidden" onClick={(e) => e.stopPropagation()}>
+                        {renderRowActions(res)}
+                      </div>
                     </div>
                     <CardBadges res={res} />
-                    <div className="mt-3 max-md:hidden" onClick={(e) => e.stopPropagation()}>
-                      {renderRowActions(res)}
-                    </div>
                     {phone.primary && (
                       <div className="mt-2.5 md:hidden" onClick={(e) => e.stopPropagation()}>
                         <Button
