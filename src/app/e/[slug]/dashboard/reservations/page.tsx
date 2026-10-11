@@ -1,9 +1,10 @@
 "use client"
 
+import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -296,7 +297,6 @@ function ReservationsList() {
   const [requestingRoomId, setRequestingRoomId] = useState("")
 
   const [housekeepingCodes, setHousekeepingCodes] = useState<any[]>([])
-  const [autoAssigning, setAutoAssigning] = useState(false)
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
   const [isFolioPanelOpen, setIsFolioPanelOpen] = useState(false)
   const [depositRes, setDepositRes] = useState<Reservation | null>(null)
@@ -464,25 +464,6 @@ function ReservationsList() {
       toast.error("Couldn't send the request. Try again.")
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const handleAutoAssign = async () => {
-    setAutoAssigning(true)
-    try {
-      const res = await fetch(`/api/reservations/auto-assign?propertyId=${propertyId}`, { method: "POST" })
-      if (res.ok) {
-        const data = await res.json()
-        toast.success(`Rooms assigned to ${data.assignedCount} of ${data.totalUnassigned} bookings`)
-        fetchData()
-      } else {
-        const data = await res.json().catch(() => null)
-        toast.error(data?.error || "Couldn't auto-assign rooms. Try again.")
-      }
-    } catch {
-      toast.error("Couldn't auto-assign rooms. Try again.")
-    } finally {
-      setAutoAssigning(false)
     }
   }
 
@@ -824,9 +805,7 @@ function ReservationsList() {
         }
         actions={
           <>
-            <Button variant="outline" className="hidden shadow-sm sm:inline-flex" onClick={handleAutoAssign} disabled={autoAssigning}>
-              <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
-            </Button>
+            <AutoAssignButton propertyId={propertyId} onDone={() => fetchData()} className="hidden shadow-sm sm:inline-flex" />
             <Link href={`/e/${slug}/dashboard/reservations/tape-chart`} className="hidden sm:block">
               <Button variant="outline" className="shadow-sm">
                 <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart

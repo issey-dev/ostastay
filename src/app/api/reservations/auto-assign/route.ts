@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
-import { INVENTORY_HOLDING_STATUSES, UNSELLABLE_ROOM_STATUSES } from "@/lib/availability";
 import { logActivity } from "@/lib/activity-log";
+import { planAutoAssign, applyAutoAssign } from "@/lib/auto-assign";
 
+// POST ?propertyId=...           -> the plan only (nothing is written): which room each
+//                                   unassigned booking would get, and which can't be placed.
+// POST ?propertyId=...&apply=1   -> body { assignments: [{ assignmentId, roomId }] } writes the
+//                                   confirmed plan, re-checking every room first.
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
@@ -11,91 +14,29 @@ export async function POST(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
-
-    if (!propertyId) {
-      return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
-    }
+    if (!propertyId) return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
     await assertPropertyAccess(ctx, propertyId);
 
-    // Find all reservations that have at least one room assignment still missing a physical room
-    const unassignedReservations = await prisma.reservation.findMany({
-      where: {
-        propertyId,
-        // Only reservations that still hold inventory need a room — assigning one to
-        // a CHECKED_OUT/NO_SHOW stay would just re-block the room for nothing.
-        status: { in: INVENTORY_HOLDING_STATUSES },
-        assignments: {
-          some: { roomId: null }
-        }
-      },
-      include: {
-        assignments: { where: { roomId: null } }
-      },
-      orderBy: {
-        checkInDate: 'asc'
-      }
-    });
-
-    if (unassignedReservations.length === 0) {
-      return NextResponse.json({ success: true, message: "No unassigned reservations found.", assignedCount: 0 });
+    if (searchParams.get("apply") !== "1") {
+      return NextResponse.json(await planAutoAssign(propertyId));
     }
 
-    let assignedCount = 0;
+    const body = await request.json().catch(() => ({}));
+    const picks = Array.isArray(body.assignments)
+      ? body.assignments.filter((p: { assignmentId?: unknown; roomId?: unknown }) => typeof p?.assignmentId === "string" && typeof p?.roomId === "string")
+      : [];
+    if (picks.length === 0) return NextResponse.json({ error: "Nothing to assign." }, { status: 400 });
 
-    for (const res of unassignedReservations) {
-      for (const assignment of res.assignments) {
-        // Find an available room of the right type with no overlapping assignment
-        const availableRoom = await prisma.room.findFirst({
-          where: {
-            propertyId,
-            roomTypeId: assignment.roomTypeId,
-            // Never auto-assign an out-of-order/out-of-service room.
-            status: { notIn: UNSELLABLE_ROOM_STATUSES },
-            NOT: {
-              RoomAssignment: {
-                some: {
-                  id: { not: assignment.id },
-                  reservation: {
-                    status: { in: INVENTORY_HOLDING_STATUSES }
-                  },
-                  AND: [
-                    { startDate: { lt: assignment.endDate } },
-                    { endDate: { gt: assignment.startDate } }
-                  ]
-                }
-              }
-            }
-          },
-          orderBy: {
-            roomNumber: 'asc'
-          }
-        });
-
-        if (availableRoom) {
-          await prisma.roomAssignment.update({
-            where: { id: assignment.id },
-            data: { roomId: availableRoom.id }
-          });
-          assignedCount++;
-        }
-      }
-    }
-
-    if (assignedCount > 0) {
+    const { applied, skipped } = await applyAutoAssign(propertyId, picks);
+    if (applied.length > 0) {
       await logActivity({
         ctx,
         module: "RESERVATIONS",
         action: "UPDATE",
-        description: `Auto-assigned rooms to ${assignedCount} reservation${assignedCount > 1 ? "s" : ""}`,
+        description: `Auto-assigned rooms to ${applied.length} booking${applied.length > 1 ? "s" : ""}`,
       });
     }
-
-    return NextResponse.json({
-      success: true,
-      assignedCount,
-      totalUnassigned: unassignedReservations.length
-    });
-
+    return NextResponse.json({ success: true, assignedCount: applied.length, skippedCount: skipped.length });
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

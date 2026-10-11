@@ -1,5 +1,6 @@
 "use client"
 
+import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation"
 import { format } from "date-fns"
@@ -570,8 +571,8 @@ function FrontOfficeDashboardContent() {
         {/* Phone: no card chrome — the guest cards sit straight on the page rather than
             a card inside a card. */}
         <Card className="shadow-elevation-1 max-md:gap-0 max-md:overflow-visible max-md:rounded-none max-md:bg-transparent max-md:py-0 max-md:shadow-none max-md:ring-0">
-          <CardHeader className="border-b px-4 py-3 max-md:border-b-0 max-md:px-0 max-md:pt-0 max-md:pb-3 sm:px-6 sm:py-4">
-            <div className="relative sm:w-64">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 border-b px-4 py-3 max-md:border-b-0 max-md:px-0 max-md:pt-0 max-md:pb-3 sm:px-6 sm:py-4">
+            <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 {...INPUT_SEARCH}
@@ -581,6 +582,7 @@ function FrontOfficeDashboardContent() {
                 className="pl-8"
               />
             </div>
+            {tab === "arrivals" && <AutoAssignButton propertyId={propertyId} onDone={() => fetchSummary(true)} className="shrink-0 shadow-sm" />}
           </CardHeader>
 
           <CardContent className="p-0">
