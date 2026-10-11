@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { segmentForNight } from "@/lib/reservation-assignments";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate } from "@/lib/business-date";
@@ -26,13 +27,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!reservation) return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    const active = reservation.assignments[0];
-    if (!active) return NextResponse.json({ error: "No active room assignment" }, { status: 400 });
-
     const property = await prisma.property.findUnique({ where: { id: reservation.propertyId } });
     if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
 
     const businessDate = resolveBusinessDate(property);
+    // The segment the guest is in tonight (its rate plan prices the move), not the last one.
+    const active = segmentForNight(reservation.assignments, businessDate) ?? reservation.assignments[0];
+    if (!active) return NextResponse.json({ error: "No active room assignment" }, { status: 400 });
     const nextNight = new Date(businessDate.getTime() + DAY_MS);
     const sameType = newRoomTypeId === active.roomTypeId;
 

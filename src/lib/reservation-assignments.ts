@@ -29,3 +29,21 @@ export function detectScheduledRoomMove(assignments: AssignmentLike[]): boolean 
   }
   return false
 }
+
+// The segment a given night belongs to. Routes load assignments newest-first, so
+// `assignments[0]` is the LAST segment — right for "extend the stay", wrong for "where is
+// the guest tonight" once a stay has several segments. Falls back to the newest segment
+// that had started, then to the first one (a night before the stay's first segment).
+export function segmentForNight<T extends { startDate: string | Date; endDate: string | Date }>(assignments: T[], night: Date): T | undefined {
+  const day = (d: string | Date) => {
+    const x = new Date(d)
+    return Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate())
+  }
+  const n = day(night)
+  const sorted = byStart(assignments)
+  return (
+    sorted.find((a) => day(a.startDate) <= n && n < day(a.endDate)) ??
+    [...sorted].reverse().find((a) => day(a.startDate) <= n) ??
+    sorted[0]
+  )
+}

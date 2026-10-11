@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { segmentForNight } from "@/lib/reservation-assignments";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -111,7 +112,8 @@ export async function POST(
       }
     }
 
-    const activeAssignment = reservation.assignments[0];
+    // The segment for tonight (the first one on a normal arrival), not simply the last.
+    const activeAssignment = (businessDate ? segmentForNight(reservation.assignments, businessDate) : undefined) ?? reservation.assignments[0];
     if (!activeAssignment?.roomId) {
       return NextResponse.json({ error: "A room must be assigned before checking in" }, { status: 400 });
     }
