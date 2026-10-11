@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -25,8 +25,11 @@ export type TypeChangeMove = {
   toTypeLabel: string
 }
 
-const schema = z.object({ reason: z.string().trim().min(1, "Enter a reason for the change.") })
-type Values = z.infer<typeof schema>
+// The reason is required for an in-house guest (it is the Front Desk room move, which always
+// records one); for a booking that has not arrived yet it is optional.
+const schemaFor = (inHouse: boolean) =>
+  z.object({ reason: inHouse ? z.string().trim().min(1, "Enter a reason for the change.") : z.string().trim() })
+type Values = { reason: string }
 
 // Dragging a booking onto a room of a DIFFERENT type on the tape chart: a room type change
 // affects the rate, so staff choose between recalculating at the new type and keeping the
@@ -44,6 +47,8 @@ export function TapeChartTypeChangeDialog({
   const [rateInfo, setRateInfo] = useState<{ keepRate: number; newRate: number; remainingNights: number } | null>(null)
   const [rateLoading, setRateLoading] = useState(false)
   const [rateMode, setRateMode] = useState<"keep" | "new">("new")
+  const inHouse = move?.status === "IN_HOUSE"
+  const schema = useMemo(() => schemaFor(inHouse), [inHouse])
   const form = useForm<Values>({ resolver: zodResolver(schema), mode: "onChange", defaultValues: { reason: "" } })
 
   useEffect(() => {
@@ -77,7 +82,7 @@ export function TapeChartTypeChangeDialog({
           : await fetch(`/api/reservations/assignments/${move.assignmentId}/reassign`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ roomId: move.toRoomId, rateMode, reason: values.reason }),
+              body: JSON.stringify({ roomId: move.toRoomId, rateMode, ...(values.reason ? { reason: values.reason } : {}) }),
             })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -146,7 +151,7 @@ export function TapeChartTypeChangeDialog({
 
                 <FormField control={form.control} name="reason" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reason for change <span className="text-destructive">*</span></FormLabel>
+                    <FormLabel>Reason for change {inHouse ? <span className="text-destructive">*</span> : <span className="text-xs font-normal text-muted-foreground">(optional)</span>}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Upgrade, Guest request, A/C broken" {...field} />
                     </FormControl>

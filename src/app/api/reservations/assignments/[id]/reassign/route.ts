@@ -77,8 +77,10 @@ export async function PATCH(
       }
 
       const typeChanged = newRoom.roomTypeId !== assignment.roomTypeId;
-      if (typeChanged && !reason) {
-        return NextResponse.json({ error: "A reason is required to move a booking to a different room type." }, { status: 400 });
+      // A reason is only enforced for in-house guests (their move goes through POST .../room-move,
+      // which requires one); for a booking that has not arrived it is optional.
+      if (typeChanged && !reason && assignment.reservation.status === "IN_HOUSE") {
+        return NextResponse.json({ error: "A reason is required to move an in-house guest to a different room type." }, { status: 400 });
       }
 
       // Pricing basis carried onto the new room type (mirrors POST .../room-move).
@@ -108,7 +110,7 @@ export async function PATCH(
         data: {
           reservationId: assignment.reservationId,
           traceType: "ROOM_REASSIGN",
-          description: `Room assignment changed to Room ${newRoom.roomNumber} (${newRoom.roomType.code}).${typeChanged ? ` Room type changed — ${rateMode === "keep" ? "rate kept" : "rate recalculated"}. Reason: ${reason}` : ""}`,
+          description: `Room assignment changed to Room ${newRoom.roomNumber} (${newRoom.roomType.code}).${typeChanged ? ` Room type changed — ${rateMode === "keep" ? "rate kept" : "rate recalculated"}.${reason ? ` Reason: ${reason}` : ""}` : ""}`,
           actionDate: new Date(),
           isResolved: true
         }
@@ -120,7 +122,7 @@ export async function PATCH(
         action: "UPDATE",
         entityType: "RoomAssignment",
         entityId: id,
-        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})${typeChanged ? `, ${rateMode === "keep" ? "rate kept" : "rate recalculated"} — ${reason}` : ""}`,
+        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})${typeChanged ? `, ${rateMode === "keep" ? "rate kept" : "rate recalculated"}${reason ? ` — ${reason}` : ""}` : ""}`,
       });
 
       return NextResponse.json({ success: true, assignment: updated });
