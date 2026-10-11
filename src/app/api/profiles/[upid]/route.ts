@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { profileLinks } from "@/lib/profile-links";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
@@ -173,15 +174,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    // Check if the profile has any active reservations
-    const reservations = await prisma.reservation.findFirst({
-      where: { primaryGuestId: upid }
-    });
-
-    if (reservations) {
+    // Only a fresh profile can be deleted. Anything linked to it - bookings, folios, group
+    // blocks, registrations - keeps it alive: deactivate it instead.
+    const links = await profileLinks(upid);
+    if (links.total > 0) {
       return NextResponse.json(
-        { error: "Cannot delete profile because there are reservations attached to it." },
-        { status: 400 }
+        { error: `This profile is linked to ${links.description}, so it can't be deleted. Deactivate it instead.`, hasLinks: true },
+        { status: 409 }
       );
     }
 

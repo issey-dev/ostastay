@@ -991,6 +991,10 @@ model Profile {
   enterpriseId      String
   enterprise        Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   profileType       String     @default("GUEST")
+  // A profile with any links (reservations, folios, registrations...) can't be deleted; it is
+  // deactivated instead: hidden from pickers and searches, history untouched, reversible.
+  isActive          Boolean    @default(true)
+  deactivatedAt     DateTime?
   title             String?
   firstName         String
   middleName        String?

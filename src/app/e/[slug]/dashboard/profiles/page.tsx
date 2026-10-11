@@ -2,7 +2,7 @@
 
 import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useUrlState } from "@/lib/use-url-state"
-import { UserPlus, Pencil, Trash2, MoreHorizontal } from "@/components/icons"
+import { UserPlus, UserX, Pencil, Trash2, MoreHorizontal } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -39,6 +39,8 @@ type Profile = {
   greenTaxExempt: boolean
   gender: string | null
   nationality?: string | null
+  isActive?: boolean
+  linkCount?: number
   isCreditAccount?: boolean
   arNumber?: string | null
   commissionRate?: number | null
@@ -120,12 +122,13 @@ function ProfilesDashboard() {
   }, [search, setUrlSearch])
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [deactivating, setDeactivating] = useState<Profile | null>(null)
   const [deletingUpid, setDeletingUpid] = useState<string | null>(null)
 
   const fetchProfiles = useCallback((signal?: AbortSignal) => {
     setLoading(true)
     setLoadError(false)
-    const params = new URLSearchParams({ search: urlSearch, profileType: activeTab })
+    const params = new URLSearchParams({ search: urlSearch, profileType: activeTab, includeInactive: "1" })
     fetch(`/api/profiles?${params}`, { signal })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load profiles")
@@ -192,8 +195,29 @@ function ProfilesDashboard() {
     } else {
       nationalityBadge()
     }
+    if (p.isActive === false) add("inactive", <StatusBadge label="Inactive" tone="neutral" />)
     if (p.classification === "BLACKLISTED") add("bl", <StatusBadge label={label("CLASSIFICATION", p.classification) ?? p.classification} tone="danger" />)
     return out
+  }
+
+  const setActive = async (p: Profile, isActive: boolean) => {
+    try {
+      const res = await fetch(`/api/profiles/${p.upid}/active`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      })
+      if (res.ok) {
+        toast.success(isActive ? "Profile reactivated" : "Profile deactivated")
+        setDeactivating(null)
+        fetchProfiles()
+      } else {
+        const error = await res.json().catch(() => ({}))
+        toast.error(error.error || "Couldn't update the profile")
+      }
+    } catch {
+      toast.error("Couldn't update the profile")
+    }
   }
 
   const handleDelete = async () => {
@@ -241,6 +265,21 @@ function ProfilesDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+      <Dialog open={!!deactivating} onOpenChange={(open) => !open && setDeactivating(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Deactivate profile</DialogTitle>
+            <DialogDescription>
+              {deactivating ? displayName(deactivating) : "This profile"} is linked to bookings or accounts, so it can't be deleted. Deactivating hides it from searches and pickers; its history stays and you can reactivate it any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={() => setDeactivating(null)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={() => deactivating && setActive(deactivating, false)}>Deactivate</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(String(v))} className="w-full flex-col">
         {/* Phones: the directory is a picker, not four tabs scrolling off the edge. */}
@@ -300,7 +339,7 @@ function ProfilesDashboard() {
                 <div
                   key={p.upid}
                   onClick={() => router.push(profileUrl(p))}
-                  className="flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30"
+                  className={`flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30 ${p.isActive === false ? "opacity-70" : ""}`}
                 >
                   <div className="min-w-0">
                     <div className="inline-flex max-w-full items-center gap-1.5 text-lg font-semibold text-foreground">
@@ -330,9 +369,20 @@ function ProfilesDashboard() {
                             <Pencil className="h-4 w-4" /> Edit profile
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={() => askDelete(p)}>
-                            <Trash2 className="h-4 w-4" /> Delete profile
-                          </DropdownMenuItem>
+                          {p.isActive === false && (
+                            <DropdownMenuItem className="cursor-pointer" onClick={() => setActive(p, true)}>
+                              <UserPlus className="h-4 w-4" /> Reactivate profile
+                            </DropdownMenuItem>
+                          )}
+                          {(p.linkCount ?? 0) === 0 ? (
+                            <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={() => askDelete(p)}>
+                              <Trash2 className="h-4 w-4" /> Delete profile
+                            </DropdownMenuItem>
+                          ) : p.isActive !== false ? (
+                            <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={() => setDeactivating(p)}>
+                              <UserX className="h-4 w-4" /> Deactivate profile
+                            </DropdownMenuItem>
+                          ) : null}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
