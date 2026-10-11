@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { useRouter, useParams } from "next/navigation"
+import Link from "next/link"
 import { Users, Building2, Briefcase, UserCog } from "@/components/icons"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -15,11 +16,11 @@ import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { CountryFlag } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
 import { toast } from "@/lib/toast"
-import { ContactLink } from "@/components/ui/contact-link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
-import { ListTable, type ListColumn } from "@/components/ui/list-table"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ErrorState } from "@/components/ui/error-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import { FilterBar } from "@/components/ui/filter-bar"
 
 type Profile = {
@@ -37,6 +38,11 @@ type Profile = {
   photoUrl: string | null
   greenTaxExempt: boolean
   gender: string | null
+  nationality?: string | null
+  isCreditAccount?: boolean
+  arNumber?: string | null
+  commissionRate?: number | null
+  iataNumber?: string | null
   marketingOptIn: boolean
   isIncognito: boolean
   communications: {
@@ -58,15 +64,6 @@ type Profile = {
   totalRevenue: number
   lastStayDate: string | null
 }
-
-// A profile's classification as the app's shared status badge tone.
-const classTone = (classification: string): "danger" | "warning" | "neutral" =>
-  classification === "BLACKLISTED" ? "danger" : classification === "VIP" ? "warning" : "neutral"
-
-// One consistent monochrome treatment for every avatar — the initials themselves are
-// the distinguishing feature, not a per-person hue (the app's palette is monochromatic
-// with color reserved for status/tone, not decorative identity).
-const AVATAR_COLOR = "bg-muted text-foreground ring-1 ring-inset ring-border"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest",
@@ -91,7 +88,7 @@ const PHONE_TABS = [
 function ProfilesDashboard() {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
-  const { label, country } = useSystemCodeLabels()
+  const { label } = useSystemCodeLabels()
   const [profiles, setProfiles] = useState<Profile[]>([])
   // Matching profiles on the server — the API returns the 50 most recently updated and
   // the full count in X-Total-Count, so the footer can say "50 of 312".
@@ -168,95 +165,42 @@ function ProfilesDashboard() {
     setIsDeleteDialogOpen(true)
   }
 
-  const columns: ListColumn<Profile>[] = [
-    {
-      key: "name",
-      header: PROFILE_TYPE_LABELS[activeTab] ?? "Name",
-      primary: true,
-      sortValue: displayName,
-      cell: (p) => (
-        <span className="inline-flex items-center gap-3">
-          <span className={`h-9 w-9 rounded-md flex items-center justify-center font-semibold text-xs shrink-0 ${AVATAR_COLOR}`}>
-            {p.firstName?.charAt(0) || ""}{p.lastName?.charAt(0) || ""}
-          </span>
-          <span className="flex flex-col">
-            <span className="inline-flex items-center gap-1.5">
-              {/* inline-flex blocks the link's own underline — re-apply it on the name. */}
-              <span className="[a:hover_&]:underline">{displayName(p)}</span>
-              {p.vipLevel && <span title="VIP" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
-            </span>
-            {p.addresses?.[0]?.country && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                <CountryFlag value={p.addresses[0].country} />
-                {country(p.addresses[0].country)}
-              </span>
-            )}
-          </span>
+  // Small labelled badges under the name - only what matters for THAT kind of profile:
+  //   guest  - visits, VIP level, nationality;
+  //   company - credit account, bookings;
+  //   travel agent - commission, IATA number, credit account, bookings;
+  //   staff - nationality.
+  // A badge for something that is not set (a "Regular" tag, "active", an empty commission)
+  // is never shown.
+  const profileBadges = (p: Profile) => {
+    const out: { key: string; node: React.ReactNode }[] = []
+    const stays = p.totalStays || 0
+    const add = (key: string, node: React.ReactNode) => out.push({ key, node })
+    const nationalityBadge = () =>
+      p.nationality &&
+      add(
+        "nat",
+        <span className="inline-flex items-center gap-1 rounded-none border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <CountryFlag value={p.nationality} />
+          {label("NATIONALITY", p.nationality) ?? p.nationality}
         </span>
-      ),
-    },
-    {
-      key: "contact",
-      header: "Contact",
-      csv: (p) => [primaryEmail(p.communications), primaryMobile(p.communications)].filter(Boolean).join(" / "),
-      cell: (p) => (
-        <div className="text-sm">
-          {primaryEmail(p.communications) ? <div className="text-foreground">{primaryEmail(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No email</div>}
-          {primaryMobile(p.communications) ? <div className="text-muted-foreground">{primaryMobile(p.communications)}</div> : <div className="text-muted-foreground italic text-xs">No phone</div>}
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      sortValue: (p) => label("CLASSIFICATION", p.classification),
-      cell: (p) => (
-        <div className="flex flex-wrap items-center gap-1">
-          <StatusBadge label={label("CLASSIFICATION", p.classification) ?? p.classification} tone={classTone(p.classification)} />
-          {p.vipLevel && <StatusBadge label={label("VIP_LEVEL", p.vipLevel) ?? p.vipLevel} tone="warning" />}
-        </div>
-      ),
-    },
-    {
-      key: "history",
-      header: "History",
-      sortValue: (p) => p.totalStays || 0,
-      csv: (p) => `${p.totalStays || 0} stays / ${(p.totalRevenue || 0).toFixed(2)}`,
-      cell: (p) => (
-        <div className="flex flex-col text-sm">
-          <span className="text-foreground font-medium">{p.totalStays || 0} {p.totalStays === 1 ? "stay" : "stays"}</span>
-          <span className="text-muted-foreground tabular-nums">${(p.totalRevenue || 0).toFixed(2)}</span>
-        </div>
-      ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">Actions</span>,
-      align: "right",
-      // The row opens the profile — the buttons must not also do that.
-      cell: (p) => (
-        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <Button variant="outline" size="sm" className="h-8" onClick={() => editProfile(p)}>
-            <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-              <MoreHorizontal className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-44">
-              <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(profileUrl(p))}>
-                <Users className="h-4 w-4" /> Open profile
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={() => askDelete(p)}>
-                <Trash2 className="h-4 w-4" /> Delete profile
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
-    },
-  ]
+      )
+
+    if (p.profileType === "GUEST") {
+      add("visits", <StatusBadge label={stays === 0 ? "No stays yet" : `${stays} ${stays === 1 ? "visit" : "visits"}`} tone={stays > 0 ? "info" : "neutral"} />)
+      if (p.vipLevel) add("vip", <StatusBadge label={label("VIP_LEVEL", p.vipLevel) ?? p.vipLevel} tone="warning" />)
+      nationalityBadge()
+    } else if (p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT") {
+      if (p.profileType === "TRAVEL_AGENT" && p.commissionRate != null) add("comm", <StatusBadge label={`${p.commissionRate}% commission`} tone="info" />)
+      if (p.profileType === "TRAVEL_AGENT" && p.iataNumber) add("iata", <StatusBadge label={`IATA ${p.iataNumber}`} tone="neutral" />)
+      if (p.isCreditAccount) add("credit", <StatusBadge label={p.arNumber ? `Credit account ${p.arNumber}` : "Credit account"} tone="success" />)
+      if (stays > 0) add("bookings", <StatusBadge label={`${stays} ${stays === 1 ? "booking" : "bookings"}`} tone="neutral" />)
+    } else {
+      nationalityBadge()
+    }
+    if (p.classification === "BLACKLISTED") add("bl", <StatusBadge label={label("CLASSIFICATION", p.classification) ?? p.classification} tone="danger" />)
+    return out
+  }
 
   const handleDelete = async () => {
     if (!deletingUpid) return
@@ -344,86 +288,70 @@ function ProfilesDashboard() {
         activeCount={urlSearch ? 1 : 0}
         onClear={clearSearch}
       />
-      <ListTable
-        rows={profiles}
-        columns={columns}
-        rowKey={(p) => p.upid}
-        rowHref={profileUrl}
-        total={total}
-        loading={loading}
-        error={loadError}
-        onRetry={() => fetchProfiles()}
-        empty={{ icon: Users, title: "No profiles found" }}
-        exportName={`profiles-${activeTab.toLowerCase()}`}
-        // Capped at the 50 most recently updated — say so quietly, next to "50 of 312".
-        toolbar={total !== undefined && total > profiles.length ? <span>Refine the search to see the rest</span> : undefined}
-        mobile={
-          <MobileCardList className="p-4">
+      {loading ? (
+        <div className="grid gap-3 grid-cols-1">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+      ) : loadError ? (
+        <ErrorState title="Couldn't load profiles" onRetry={() => fetchProfiles()} />
+      ) : profiles.length === 0 ? (
+        <EmptyState icon={Users} title="No profiles found" />
+      ) : (
+        <>
+          <div className="grid gap-3 grid-cols-1">
             {profiles.map((p) => {
-              const open = () => router.push(profileUrl(p))
               const email = primaryEmail(p.communications)
               const mobile = primaryMobile(p.communications)
               return (
-                <MobileCard
+                <div
                   key={p.upid}
-                  onClick={open}
-                  title={
-                    <span className="inline-flex items-center gap-1.5">
-                      {displayName(p)}
-                      {p.vipLevel && <span title="VIP" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
-                    </span>
-                  }
-                  subtitle={
-                    p.addresses?.[0]?.country ? (
-                      <span className="inline-flex items-center gap-1">
-                        <CountryFlag value={p.addresses[0].country} />
-                        {country(p.addresses[0].country)}
-                      </span>
-                    ) : undefined
-                  }
-                  badge={
-                    // "Regular" is the default for nearly everyone - only flag the exceptions.
-                    p.classification !== "REGULAR" ? (
-                      <StatusBadge label={label("CLASSIFICATION", p.classification) ?? p.classification} tone={classTone(p.classification)} />
-                    ) : undefined
-                  }
-                  meta={[
-                    { label: "Stays", value: p.totalStays || 0 },
-                    { label: "Revenue", value: `$${(p.totalRevenue || 0).toFixed(2)}` },
-                  ]}
-                  actions={
-                    <>
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => editProfile(p)}>
-                        <Pencil className="mr-2 h-4 w-4" /> Edit
-                      </Button>
+                  onClick={() => router.push(profileUrl(p))}
+                  className="flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30"
+                >
+                  <div className="min-w-0">
+                    <div className="inline-flex max-w-full items-center gap-1.5 text-lg font-semibold text-foreground">
+                      {/* A real link, so Ctrl/middle-click opens it in a new tab. */}
+                      <Link href={profileUrl(p)} onClick={(e) => e.stopPropagation()} className="truncate hover:underline">{displayName(p)}</Link>
+                      {p.profileType === "GUEST" && p.vipLevel && <span title="VIP" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {(p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT") && [p.firstName, p.lastName].filter(Boolean).join(" ") && (
+                        <span>{[p.firstName, p.lastName].filter(Boolean).join(" ")} · </span>
+                      )}
+                      {email ?? <span className="italic">No email</span>}
+                      {mobile && <span> · {mobile}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between gap-3 border-t border-border pt-3">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                      {profileBadges(p).map((b) => <span key={b.key}>{b.node}</span>)}
+                    </div>
+                    <div className="shrink-0 self-end" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="More actions" />}>
+                        <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-48">
-                          <DropdownMenuItem onClick={open}>
-                            <Users className="h-4 w-4" /> Open profile
+                        <DropdownMenuContent align="end" className="min-w-44">
+                          <DropdownMenuItem className="cursor-pointer" onClick={() => editProfile(p)}>
+                            <Pencil className="h-4 w-4" /> Edit profile
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" onClick={() => askDelete(p)}>
+                          <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={() => askDelete(p)}>
                             <Trash2 className="h-4 w-4" /> Delete profile
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </>
-                  }
-                >
-                  {/* Tapping a contact link dials / mails — it must not also open the profile. */}
-                  <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-                    {email ? <ContactLink type="email" value={email} className="py-0.5" /> : <span className="italic text-xs">No email</span>}
-                    {mobile && <ContactLink type="phone" value={mobile} className="py-0.5" />}
+                    </div>
                   </div>
-                </MobileCard>
+                </div>
               )
             })}
-          </MobileCardList>
-        }
-      />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {total !== undefined && total > profiles.length ? `${profiles.length} of ${total} - refine the search to see the rest` : `${profiles.length} ${profiles.length === 1 ? "result" : "results"}`}
+          </p>
+        </>
+      )}
       </Tabs>
     </div>
   )
