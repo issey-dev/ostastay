@@ -4,9 +4,11 @@ import { Suspense, useEffect, useState, use } from "react"
 import { useUrlState } from "@/lib/use-url-state"
 import { useRouter, useParams } from "next/navigation"
 import { useSmartBack } from "@/lib/use-smart-back"
-import { ArrowLeft, Pencil, ExternalLink, Star, CalendarDays, History as HistoryIcon, UserX, ChevronLeft } from "@/components/icons"
+import { ArrowLeft, Pencil, ExternalLink, CalendarDays, History as HistoryIcon, UserX, ChevronLeft, User, Phone, MapPin, MessageSquare, Wallet, Percent, ShieldCheck, Contact, FileText, Settings2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { GoldStar } from "@/components/ui/gold-star"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,11 +31,11 @@ const PROFILE_TYPE_LABELS: Record<string, string> = {
 }
 const COMM_TYPE_LABELS: Record<string, string> = { EMAIL: "Email", MOBILE: "Mobile", SOCIAL: "Social" }
 const ADDRESS_TYPE_LABELS: Record<string, string> = { HOME: "Home", BUSINESS: "Business", BILLING: "Billing" }
-const classColors: Record<string, string> = {
-  VIP: "bg-foreground text-background border-transparent",
-  REGULAR: "bg-muted text-foreground border-border",
-  BLACKLISTED: "bg-destructive-muted text-destructive border-destructive/30",
-}
+// A profile's classification as the shared status badge tone.
+const classTone = (classification: string): "danger" | "warning" | "neutral" =>
+  classification === "BLACKLISTED" ? "danger" : classification === "VIP" ? "warning" : "neutral"
+
+const humanize = (v: string) => v.toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())
 
 type StayRecord = {
   id: string
@@ -107,12 +109,13 @@ function PhoneToggle({ open, onToggle, label }: { open: boolean; onToggle: () =>
 }
 
 /**
- * One titled group inside a tab's single card — a heading and its content, divided from the
- * next by a rule, instead of a bordered card per group (DESKTOP_PLAN §2.2 "Profiles").
+ * One titled card of a tab: an icon and heading on top (a quiet link such as "Add" on the
+ * right), the content below - the same card layout as the reservation page.
  */
 function Section({
   id,
   title,
+  icon: Icon,
   hint,
   action,
   toggle,
@@ -121,6 +124,7 @@ function Section({
 }: {
   id: string
   title: string
+  icon?: React.ComponentType<{ className?: string }>
   hint?: React.ReactNode
   /** A small link on the heading's right (e.g. "Add"). */
   action?: React.ReactNode
@@ -130,15 +134,22 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="py-5 first:pt-0 last:pb-0">
-      <h2 id={`${id}-title`} className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-        {title}
-        {hint && <InfoHint label={title}>{hint}</InfoHint>}
-        {action && <span className="ml-auto font-normal">{action}</span>}
-        {toggle}
-      </h2>
-      <div className={bodyClassName}>{children}</div>
-    </section>
+    <Card id={id} aria-labelledby={`${id}-title`}>
+      <CardHeader className="pb-3">
+        <CardTitle id={`${id}-title`} className="flex items-center gap-2 text-lg">
+          {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+          {title}
+          {hint && <InfoHint label={title}>{hint}</InfoHint>}
+        </CardTitle>
+        {(action || toggle) && (
+          <CardAction className="flex items-center gap-2 self-center text-sm font-normal">
+            {action}
+            {toggle}
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent className={bodyClassName}>{children}</CardContent>
+    </Card>
   )
 }
 
@@ -306,7 +317,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
           </p>
         </div>
         <div className="text-right shrink-0">
-          <Badge variant="outline">{r.status}</Badge>
+          <StatusBadge label={humanize(r.status)} status={r.status} />
           <p className="text-sm font-semibold mt-1 tabular-nums">${r.revenueTotal.toFixed(2)}</p>
         </div>
       </div>
@@ -327,7 +338,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
     <div className="flex flex-col gap-4 pb-12">
       {/* Header — mirrors the Edit form's sticky header. Breadcrumbs ("Client Relations ›")
           replace the back arrow from md up. */}
-      <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex flex-col gap-3 max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
+      <div className="flex flex-col gap-3">
         <div className="flex items-start gap-4">
           <Button variant="ghost" size="icon" onClick={goBack} title="Back" aria-label="Back" className="shrink-0 md:hidden">
             <ArrowLeft className="h-5 w-5" />
@@ -339,13 +350,12 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
             title={
               <span className="flex min-w-0 flex-wrap items-center gap-2 max-sm:break-words">
                 {displayName || "Unnamed profile"}
-                <Badge variant="outline">{PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType}</Badge>
-                <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[profile.classification] || "bg-muted text-foreground"}`}>
-                  {label("CLASSIFICATION", profile.classification)}
-                </span>
+                <StatusBadge label={PROFILE_TYPE_LABELS[profile.profileType] ?? profile.profileType} tone="neutral" />
+                <StatusBadge label={label("CLASSIFICATION", profile.classification) ?? profile.classification} tone={classTone(profile.classification)} />
                 {profile.vipLevel && (
-                  <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30 inline-flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-none" /> {label("VIP_LEVEL", profile.vipLevel)}
+                  <span className="inline-flex items-center gap-1.5">
+                    <GoldStar className="h-4 w-4" />
+                    <StatusBadge label={label("VIP_LEVEL", profile.vipLevel) ?? profile.vipLevel} tone="warning" />
                   </span>
                 )}
               </span>
@@ -450,10 +460,10 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
 
         {/* ---------------- OVERVIEW ---------------- */}
         <TabsContent value="overview" className="mt-4">
-          <Card>
-            <CardContent className="divide-y divide-border">
+          <div className="flex flex-col gap-4">
               <Section
                 id="personal-info"
+                icon={User}
                 title={isB2B ? "Company details" : "Personal details"}
                 action={missingPersonal ? <AddLink href={editAt("personal-info")}>Add details</AddLink> : undefined}
               >
@@ -483,6 +493,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
 
               <Section
                 id="communications"
+                icon={Phone}
                 title="Contact"
                 hint="Email, mobile and social contact methods — the starred one is primary."
                 action={communications.length > 0 ? <AddLink href={editAt("communications")}>Add</AddLink> : undefined}
@@ -501,7 +512,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                         ) : (
                           <span className="min-w-0 truncate font-medium">{c.value}</span>
                         )}
-                        {c.isPrimary && <Star className="h-3.5 w-3.5 shrink-0 fill-current text-warning" aria-label="Primary" />}
+                        {c.isPrimary && <span title="Primary" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
                       </li>
                     ))}
                   </ul>
@@ -510,6 +521,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
 
               <Section
                 id="address"
+                icon={MapPin}
                 title="Address"
                 hint="Home, business or billing addresses — the starred one is primary."
                 action={addresses.length > 0 ? <AddLink href={editAt("address")}>Add</AddLink> : undefined}
@@ -524,7 +536,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                       <li key={a.id} className="min-w-0 text-sm">
                         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           {ADDRESS_TYPE_LABELS[a.type] ?? a.type}
-                          {a.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning" aria-label="Primary" />}
+                          {a.isPrimary && <span title="Primary"><GoldStar className="h-3.5 w-3.5" /></span>}
                         </p>
                         {a.fullAddress && <p className="font-medium">{a.fullAddress}</p>}
                         {[a.city, a.stateProvince, a.postalCode, a.country].some(Boolean) && (
@@ -543,6 +555,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
               {isIndividual && (
                 <Section
                   id="crm"
+                icon={Settings2}
                   title="Preferences"
                   action={dietary.length + preferences.length > 0 ? <AddLink href={editAt("crm")}>Change</AddLink> : undefined}
                 >
@@ -569,6 +582,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
 
               <Section
                 id="notes"
+                icon={MessageSquare}
                 title="Notes"
                 hint="Feedback, complaints and other notable things about this profile."
                 action={notes.length > 0 ? <AddLink href={editAt("notes")}>Add note</AddLink> : undefined}
@@ -588,46 +602,49 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                   </ul>
                 )}
               </Section>
-            </CardContent>
-          </Card>
+          </div>
         </TabsContent>
 
         {/* ---------------- STAYS ---------------- */}
         <TabsContent value="stays" className="mt-4">
-          <Card>
-            <CardContent className="divide-y divide-border">
-              {historyLoading ? (
-                <InlineLoading lines={4} />
-              ) : (
-                <>
-                  <section className="py-5 first:pt-0">
-                    <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> Upcoming and in house</h2>
-                    {(!stayHistory?.future || stayHistory.future.length === 0) ? (
-                      <EmptyState size="inline" title="No upcoming or in-house stays." />
-                    ) : (
-                      <div className="flex flex-col gap-2">{stayHistory.future.map((r) => renderStayRow(r, false))}</div>
-                    )}
-                  </section>
-                  <section className="py-5 last:pb-0">
-                    <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold"><HistoryIcon className="h-4 w-4" /> Past stays</h2>
-                    {(!stayHistory?.history || stayHistory.history.length === 0) ? (
-                      <EmptyState size="inline" title="No past stays on record." />
-                    ) : (
-                      <div className="flex flex-col gap-2">{stayHistory.history.map((r) => renderStayRow(r, true))}</div>
-                    )}
-                  </section>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          {historyLoading ? (
+            <Card><CardContent><InlineLoading lines={4} /></CardContent></Card>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-4 w-4 text-muted-foreground" /> Upcoming and in house</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(!stayHistory?.future || stayHistory.future.length === 0) ? (
+                    <EmptyState size="inline" title="No upcoming or in-house stays." />
+                  ) : (
+                    <div className="flex flex-col gap-2">{stayHistory.future.map((r) => renderStayRow(r, false))}</div>
+                  )}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg"><HistoryIcon className="h-4 w-4 text-muted-foreground" /> Past stays</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(!stayHistory?.history || stayHistory.history.length === 0) ? (
+                    <EmptyState size="inline" title="No past stays on record." />
+                  ) : (
+                    <div className="flex flex-col gap-2">{stayHistory.history.map((r) => renderStayRow(r, true))}</div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
 
         {/* ---------------- FINANCE ---------------- */}
         <TabsContent value="finance" className="mt-4">
-          <Card>
-            <CardContent className="divide-y divide-border">
+          <div className="flex flex-col gap-4">
               <Section
                 id="billing-finance"
+                icon={Wallet}
                 title="Billing"
                 action={hasBilling ? <AddLink href={editAt("billing-finance")}>Change</AddLink> : undefined}
               >
@@ -641,6 +658,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
               {isB2B && (
                 <Section
                   id="negotiated-rates"
+                icon={Percent}
                   title="Negotiated rates"
                   hint="The negotiated rate plans this account can book with — only on bookings made through this profile."
                   action={rateLinks.length > 0 ? <AddLink href={editAt("negotiated-rates")}>Change</AddLink> : undefined}
@@ -664,6 +682,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
 
               <Section
                 id="marketing-compliance"
+                icon={ShieldCheck}
                 title="Marketing and compliance"
                 hint="Mail list, Green Tax exemption and incognito. Only the ones switched on are listed."
                 action={<AddLink href={editAt("marketing-compliance")}>Change</AddLink>}
@@ -681,17 +700,16 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                   </div>
                 )}
               </Section>
-            </CardContent>
-          </Card>
+          </div>
         </TabsContent>
 
         {/* ---------------- DOCUMENTS ---------------- */}
         <TabsContent value="documents" className="mt-4">
-          <Card>
-            <CardContent className="divide-y divide-border">
+          <div className="flex flex-col gap-4">
               {isIndividual && (
                 <Section
                   id="identification"
+                icon={Contact}
                   title="Identification"
                   hint="Passport or national ID documents — the starred one is primary."
                   action={documents.length > 0 ? <AddLink href={editAt("identification")}>Add ID</AddLink> : undefined}
@@ -711,7 +729,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                           )}
                           {d.expiryDate && <span className="text-muted-foreground">· expires {fmtDate(d.expiryDate)}</span>}
                           {d.isWorkPermit && <Badge variant="outline">Work permit</Badge>}
-                          {d.isPrimary && <Star className="h-3.5 w-3.5 fill-current text-warning" aria-label="Primary" />}
+                          {d.isPrimary && <span title="Primary"><GoldStar className="h-3.5 w-3.5" /></span>}
                         </li>
                       ))}
                     </ul>
@@ -721,6 +739,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
 
               <Section
                 id="attachments"
+                icon={FileText}
                 title="Attachments"
                 hint="Linked files (label and URL) — passport scans, signed contracts and so on."
                 action={attachments.length > 0 ? <AddLink href={editAt("attachments")}>Add</AddLink> : undefined}
@@ -739,8 +758,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                   </ul>
                 )}
               </Section>
-            </CardContent>
-          </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
