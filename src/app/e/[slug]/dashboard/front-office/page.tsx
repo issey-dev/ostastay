@@ -4,7 +4,7 @@ import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation"
 import { format } from "date-fns"
-import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal, Send } from "@/components/icons"
+import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal, Send, LayoutGrid, ListChecks } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -126,6 +126,19 @@ function FrontOfficeDashboardContent() {
   const [noShowRes, setNoShowRes] = useState<any>(null)
   const [eRegRes, setERegRes] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  // Desktop can show the lists as cards (every action visible on the card) instead of the
+  // table; the phone always gets its own cards. The choice is remembered per browser.
+  const [view, setView] = useState<"table" | "card">("table")
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("osta:frontdesk-view")
+      if (saved === "card" || saved === "table") setView(saved)
+    } catch {}
+  }, [])
+  const chooseView = (v: "table" | "card") => {
+    setView(v)
+    try { window.localStorage.setItem("osta:frontdesk-view", v) } catch {}
+  }
   
   // Folio Modal State
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
@@ -443,6 +456,72 @@ function FrontOfficeDashboardContent() {
     </div>
   )
 
+  // Desktop card view: the same facts as the table row, with EVERY action as its own
+  // button on the card (no "..." menu to open). Facts come from the same cells as the table
+  // and the phone card, so the three views can't drift apart.
+  type DeskAction = { key: string; label: string; icon: any; onClick: () => void; tone?: "success" | "warning" | "danger"; disabled?: boolean; title?: string }
+  const DESK_TONE = {
+    success: "bg-success-muted text-success hover:bg-success-muted/70 border border-success/30",
+    warning: "text-warning hover:text-warning hover:bg-warning-muted",
+    danger: "text-destructive hover:text-destructive hover:bg-destructive-muted",
+  }
+  const DeskResCard = ({ res, balance, actions }: { res: any; balance?: number; actions: DeskAction[] }) => (
+    <div
+      className="flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30"
+      onClick={() => router.push(viewUrl(res.id))}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 text-base">{guestCell(res, true)}</div>
+        <div className="shrink-0">{renderStatus(res)}</div>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <div>{stayCell(res)}</div>
+        <div className="text-lg">{roomCell(res)}</div>
+        {balance !== undefined && (
+          <div className={`tabular-nums ${balance > 0.005 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>{money(balance)}</div>
+        )}
+      </div>
+      {hasFrontDeskFlags(res) && <FrontDeskFlags res={res} />}
+      <div className="mt-auto flex flex-wrap gap-1.5 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
+        {actions.map((a) => (
+          <Button
+            key={a.key}
+            size="sm"
+            variant="outline"
+            className={`h-8 ${a.tone ? DESK_TONE[a.tone] : ""}`}
+            disabled={a.disabled}
+            title={a.title}
+            onClick={a.onClick}
+          >
+            <a.icon className="mr-1.5 h-3.5 w-3.5" /> {a.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+  const arrivalActions = (res: any): DeskAction[] => {
+    const unassigned = !res.assignments?.[0]?.room
+    return [
+      ...(canCheckIn(res.status, res.checkInDate, bd) ? [{ key: "in", label: "Check in", icon: Key, tone: "success" as const, onClick: () => setCheckInRes(res) }] : []),
+      ...(unassigned ? [{ key: "assign", label: "Assign room", icon: BedDouble, onClick: () => openAssign(res) }] : []),
+      { key: "reg", label: "Reg card", icon: FileText, title: "Print registration card", onClick: () => openRegCard(res.id) },
+      { key: "ereg", label: "eReg", icon: Send, title: "Send the guest a link to fill in their own registration details", onClick: () => setERegRes(res) },
+      { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) },
+      { key: "noshow", label: "No-show", icon: UserX, tone: "danger" as const, onClick: () => setNoShowRes(res) },
+    ]
+  }
+  const departureActions = (res: any): DeskAction[] => [
+    { key: "out", label: actionLoading === res.id ? "Checking out..." : "Check out", icon: LogOut, disabled: actionLoading === res.id, onClick: () => handleCheckOut(res.id) },
+    { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(res.id) },
+    { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) },
+  ]
+  const inHouseActions = (res: any): DeskAction[] => [
+    { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(res.id) },
+    { key: "move", label: "Move room", icon: ArrowLeftRight, tone: "warning", onClick: () => openRoomMove(res) },
+    { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) },
+  ]
+  const deskGrid = "grid gap-3 pb-1 md:grid-cols-2 2xl:grid-cols-3"
+
   if (loading && !data) {
     return (
       <div className="space-y-6">
@@ -582,6 +661,27 @@ function FrontOfficeDashboardContent() {
                 className="pl-8"
               />
             </div>
+            {/* Desktop-only: the phone always gets its own cards. */}
+            <div className="hidden shrink-0 items-center rounded-md border border-border p-0.5 md:flex">
+              <button
+                type="button"
+                onClick={() => chooseView("table")}
+                aria-pressed={view === "table"}
+                aria-label="Table view"
+                className={`rounded px-2 py-1 ${view === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <ListChecks className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => chooseView("card")}
+                aria-pressed={view === "card"}
+                aria-label="Card view"
+                className={`rounded px-2 py-1 ${view === "card" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
             {tab === "arrivals" && <AutoAssignButton propertyId={propertyId} onDone={() => fetchSummary(true)} className="shrink-0 shadow-sm" />}
           </CardHeader>
 
@@ -629,7 +729,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -698,6 +798,21 @@ function FrontOfficeDashboardContent() {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Desktop card view */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : arrivals.length === 0 ? (
+                  <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
+                ) : (
+                  <div className={deskGrid}>
+                    {arrivals.map((res: any) => (
+                      <DeskResCard key={res.id} res={res} actions={arrivalActions(res)} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             {/* Departures Tab — balance shown, Folio + Check-Out */}
@@ -729,7 +844,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -783,6 +898,21 @@ function FrontOfficeDashboardContent() {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Desktop card view */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : departures.length === 0 ? (
+                  <EmptyState icon={LogOut} title="No departures scheduled for today" />
+                ) : (
+                  <div className={deskGrid}>
+                    {departures.map((res: any) => (
+                      <DeskResCard key={res.id} res={res} balance={res.balance} actions={departureActions(res)} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             {/* In-House Tab — balance shown, Folio + Move Room */}
@@ -814,7 +944,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -868,6 +998,21 @@ function FrontOfficeDashboardContent() {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Desktop card view */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : inHouse.length === 0 ? (
+                  <EmptyState icon={CheckCircle} title="No guests currently in-house" />
+                ) : (
+                  <div className={deskGrid}>
+                    {inHouse.map((res: any) => (
+                      <DeskResCard key={res.id} res={res} balance={res.balance} actions={inHouseActions(res)} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             {/* Room Moves Tab — scheduled moves; Move Room opens the move dialog
@@ -875,13 +1020,13 @@ function FrontOfficeDashboardContent() {
             <TabsContent value="roommoves" className="m-0 border-none outline-none">
               {/* Room moves are their own shape (from/to rooms, not a reservation row),
                   so this card is written out rather than reusing MobileResCard. */}
-              <div className="md:hidden">
+              <div className={view === "card" ? "" : "md:hidden"}>
                 {loadError ? (
                   <ErrorState title="Couldn't load room moves" onRetry={() => fetchSummary()} />
                 ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
                   <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
                 ) : (
-                  <div className="space-y-3 pb-1">
+                  <div className={view === "card" ? "grid gap-3 pb-1 md:grid-cols-2 2xl:grid-cols-3" : "space-y-3 pb-1"}>
                     {data.roomMovesToday.map((mv: any) => {
                       const res = (data?.inHouse ?? []).find((r: any) => r.id === mv.reservationId)
                       const unassigned = !mv.toRoomNumber
@@ -917,7 +1062,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
