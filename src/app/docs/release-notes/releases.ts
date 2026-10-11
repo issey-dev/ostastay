@@ -34,6 +34,8 @@ export const RELEASES: Release[] = [
       "eRegistration now uses the same calendar date picker as the rest of the app for the date of birth, document issue and expiry dates, and children's dates of birth.",
     ],
     fixed: [
+      "Tape Chart: a booking can no longer be dropped on a room that is not free for all of its nights. While dragging, rooms turn green where it fits and red where it does not; dropping on a red room is blocked straight away with the reason and a button to adjust the stay's dates. Only reserved and in-house bookings can be dragged, and an in-house guest can't be dropped on Unassigned.",
+      "Moving an in-house guest to another room now splits the stay on the property's business date. It used the computer's calendar date, which could leave the new room segment starting after check-out on properties whose business date differs from the calendar.",
       "Split stays with different room types or rate plans are now billed correctly night by night: every night is charged at its own segment's rate (the nightly charge used to take the last segment's rate for all nights), and a rate plan's packages, such as breakfast, are only charged on the nights of the segments on that plan.",
       "Checking a guest in, and pricing a mid-stay room move, now use the segment for that night instead of always the last one.",
       "Opening a reservation that has not arrived yet on a wide screen now shows an Edit button in the header; it was missing, and Edit was only reachable from the Reservations list.",
