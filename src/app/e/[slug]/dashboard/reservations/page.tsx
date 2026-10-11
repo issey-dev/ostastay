@@ -953,7 +953,7 @@ function ReservationsList() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 max-md:flex-1">
-                        <div className="font-medium text-foreground inline-flex max-w-full items-center gap-1.5">
+                        <div className="text-base font-semibold text-foreground inline-flex max-w-full items-center gap-1.5">
                           <span className="truncate">{guestName}</span>
                           {(res.primaryGuest?.vipLevel || res.primaryGuest?.classification === "VIP") && (
                             <span title={res.primaryGuest?.vipLevel ? `VIP: ${res.primaryGuest.vipLevel}` : "VIP"} className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>
