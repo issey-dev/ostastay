@@ -166,7 +166,9 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
   const activeReservations = await prisma.reservation.findMany({
     where: {
       propertyId,
-      status: "IN_HOUSE"
+      status: "IN_HOUSE",
+      // A group's Posting Master is in house to receive charges, not to be charged a room.
+      isPostingMaster: false,
     },
     include: STAY_NIGHT_INCLUDE,
   })

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { ensurePostingMaster } from "@/lib/groups/posting-master"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { logActivity } from "@/lib/activity-log"
@@ -94,6 +95,9 @@ export async function POST(request: Request) {
           : undefined,
       }
     })
+
+    // A block that starts Definite gets its Posting Master straight away.
+    if (newGroup.status === "DEFINITE") await ensurePostingMaster(newGroup.id)
 
     await logActivity({
       ctx,

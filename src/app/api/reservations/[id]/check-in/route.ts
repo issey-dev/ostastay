@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkInPostingMaster } from "@/lib/groups/posting-master";
 import { segmentForNight } from "@/lib/reservation-assignments";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -169,6 +170,10 @@ export async function POST(
               }
             })
           ).id;
+
+      // A pickup of a group block arriving brings the block's Posting Master in with it, so
+      // the charges routed to the master land on an in-house folio.
+      if (reservation.groupBlockId) await checkInPostingMaster(tx, reservation.groupBlockId);
 
       // Held nights are charged in the same transaction — a failed posting leaves the
       // guest not checked in rather than checked in with the night unbilled.

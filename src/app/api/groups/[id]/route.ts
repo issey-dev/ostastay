@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { ensurePostingMaster, checkInPostingMaster, syncPostingMasterDates, cancelPostingMaster } from "@/lib/groups/posting-master"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
@@ -131,6 +132,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
     }
 
+    // Cancelling / losing the block takes its Posting Master with it — unless that already
+    // holds charges or has arrived, which has to be dealt with first.
+    if (data.status && GROUP_RELEASING_STATUSES.includes(data.status) && data.status !== group.status) {
+      const blocker = await cancelPostingMaster(id)
+      if (blocker) return NextResponse.json({ error: blocker }, { status: 400 })
+    }
+
     const updated = await prisma.groupBlock.update({
       where: { id },
       data: {
@@ -147,6 +155,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(data.payeeProfileId !== undefined ? { payeeProfileId: data.payeeProfileId || null } : {}),
       },
     })
+
+    // Going Definite creates the Posting Master reservation (same as the master folio by hand).
+    if (data.status === "DEFINITE" && group.status !== "DEFINITE") await ensurePostingMaster(id)
+    // New dates carry over to the Posting Master's stay.
+    if (data.startDate != null || data.endDate != null) await syncPostingMasterDates(id)
 
     // Keep an OPEN, not-yet-finalized master folio in sync with the block's account so
     // the settlement target reflects the current linkage (no effect once it's closed).
