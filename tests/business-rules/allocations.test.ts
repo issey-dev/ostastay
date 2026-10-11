@@ -26,6 +26,12 @@ const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 const { setPropertySettings } = await import("../helpers/property-settings");
 
+// The reservation's whole stay as one segment on `ratePlanId` (what materialize now takes).
+async function stay(reservationId: string, ratePlanId: string) {
+  const r = await prisma.reservation.findUniqueOrThrow({ where: { id: reservationId }, select: { checkInDate: true, checkOutDate: true } });
+  return [{ ratePlanId, startDate: r.checkInDate, endDate: r.checkOutDate }];
+}
+
 async function asUser<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   cookieJar.clear();
   await createSession(userId);
@@ -549,7 +555,7 @@ describe("Allocations: reservation materialization", () => {
     // though a meal plan is selected. The existing MANUAL BF row (from setup) must
     // survive untouched.
     const result = await materializeReservationAllocations({
-      reservationId, propertyId, ratePlanId, mealPlanCode: "HB",
+      reservationId, propertyId, segments: await stay(reservationId, ratePlanId), mealPlanCode: "HB",
     });
     expect(result.error).toBeUndefined();
 
@@ -562,7 +568,7 @@ describe("Allocations: reservation materialization", () => {
     // Explicitly clearing the manual set removes the manual row too; transfer stays
     // (still rate-plan-linked).
     await materializeReservationAllocations({
-      reservationId, propertyId, ratePlanId, mealPlanCode: "HB", manualAllocationIds: [],
+      reservationId, propertyId, segments: await stay(reservationId, ratePlanId), mealPlanCode: "HB", manualAllocationIds: [],
     });
     rows = await prisma.reservationAllocation.findMany({ where: { reservationId } });
     expect(rows).toHaveLength(1);
@@ -602,12 +608,12 @@ describe("Allocations: reservation materialization", () => {
 
     // Meal plan selected: only dinner (meal-plan-linked) attaches — transfer
     // (rate-plan-linked) must NOT attach even though the same rate plan is assigned.
-    await materializeReservationAllocations({ reservationId, propertyId, ratePlanId, mealPlanCode: "HB2" });
+    await materializeReservationAllocations({ reservationId, propertyId, segments: await stay(reservationId, ratePlanId), mealPlanCode: "HB2" });
     let rows = await prisma.reservationAllocation.findMany({ where: { reservationId, source: { not: "MANUAL" } } });
     expect(rows.map((r) => r.allocationId)).toEqual([dinner.id]);
 
     // No meal plan selected: nothing linked attaches, even with the same rate plan.
-    await materializeReservationAllocations({ reservationId, propertyId, ratePlanId, mealPlanCode: "NONE" });
+    await materializeReservationAllocations({ reservationId, propertyId, segments: await stay(reservationId, ratePlanId), mealPlanCode: "NONE" });
     rows = await prisma.reservationAllocation.findMany({ where: { reservationId, source: { not: "MANUAL" } } });
     expect(rows).toHaveLength(0);
   });

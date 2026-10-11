@@ -405,7 +405,7 @@ export async function PUT(
     const allocationResult = await materializeReservationAllocations({
       reservationId: id,
       propertyId: existing.propertyId,
-      ratePlanId: data.assignments[0]?.ratePlanId ?? null,
+      segments: data.assignments.map((a) => ({ ratePlanId: a.ratePlanId, startDate: new Date(a.startDate), endDate: new Date(a.endDate) })),
       mealPlanCode: data.mealPlan || "NONE",
       manualAllocationIds: data.manualAllocationIds,
     });

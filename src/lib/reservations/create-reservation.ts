@@ -442,7 +442,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
   const allocationResult = await materializeReservationAllocations({
     reservationId: newReservation.id,
     propertyId: body.propertyId,
-    ratePlanId: assignmentsInput[0]?.ratePlanId ?? null,
+    segments: assignmentsInput.map((a) => ({ ratePlanId: a.ratePlanId, startDate: new Date(a.startDate), endDate: new Date(a.endDate) })),
     mealPlanCode: body.mealPlan || "NONE",
     manualAllocationIds: Array.isArray(body.manualAllocationIds) ? body.manualAllocationIds : [],
   });

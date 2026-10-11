@@ -2738,6 +2738,11 @@ model ReservationAllocation {
   overrideAdultPrice Float?
   overrideChildPrice Float?
 
+  // Split stay: the nights this RATE_PLAN-sourced allocation covers, as "yyyy-MM-dd/yyyy-MM-dd"
+  // windows (departure-exclusive), comma-separated — the segments whose rate plan links it.
+  // Null = the whole stay (every single-segment booking, meal-plan and manual allocation).
+  appliesTo String?
+
   createdAt DateTime @default(now())
 
   @@unique([reservationId, allocationId])

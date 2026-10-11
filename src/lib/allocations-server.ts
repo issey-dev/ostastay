@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db"
-import { resolveLinkedAllocationIds } from "@/lib/allocations"
+import { resolveLinkedAllocationIds, ratePlanAllocationWindows, serializeWindows } from "@/lib/allocations"
 
 // Materializes a reservation's ReservationAllocation rows — the single write path used
 // by both the reservation POST and PUT routes. RATE_PLAN/MEAL_PLAN-sourced rows are
@@ -10,23 +10,26 @@ import { resolveLinkedAllocationIds } from "@/lib/allocations"
 export async function materializeReservationAllocations(params: {
   reservationId: string
   propertyId: string
-  ratePlanId: string | null
+  // Every room segment's rate plan and dates. A split stay can price each segment on a
+  // different plan, and each plan's linked allocations cover only that segment's nights.
+  segments: Array<{ ratePlanId: string; startDate: Date; endDate: Date }>
   mealPlanCode: string | null
   // undefined = leave existing MANUAL rows untouched; an array = full replacement of
   // the manual set (rows keep their overrides when the allocation stays selected).
   manualAllocationIds?: string[]
 }): Promise<{ error?: string }> {
-  const { reservationId, propertyId, ratePlanId, mealPlanCode } = params
+  const { reservationId, propertyId, segments, mealPlanCode } = params
+  const ratePlanIds = [...new Set(segments.map((s) => s.ratePlanId))]
 
   // Resolve the linked attachment set — exclusively RATE_PLAN or MEAL_PLAN per the
   // property's Allocation Calculation setting (Controls > Revenue). Only active
   // allocations attach — a deactivated allocation stops appearing on new/edited
   // reservations without touching historical ones.
-  const [property, ratePlan, mealPlan] = await Promise.all([
+  const [property, ratePlans, mealPlan] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { allocationCalculationMode: true } }),
-    ratePlanId
-      ? prisma.ratePlan.findUnique({
-          where: { id: ratePlanId },
+    ratePlanIds.length
+      ? prisma.ratePlan.findMany({
+          where: { id: { in: ratePlanIds } },
           include: {
             allocationLinks: { include: { allocation: { select: { id: true, isActive: true } } } },
             parentRatePlan: {
@@ -34,7 +37,7 @@ export async function materializeReservationAllocations(params: {
             },
           },
         })
-      : null,
+      : [],
     mealPlanCode && mealPlanCode !== "NONE"
       ? prisma.mealPlan.findUnique({
           where: { propertyId_code: { propertyId, code: mealPlanCode } },
@@ -48,12 +51,27 @@ export async function materializeReservationAllocations(params: {
   const activeLinks = (links: Array<{ allocationId: string; allocation: { isActive: boolean } }> | undefined) =>
     (links ?? []).filter((l) => l.allocation.isActive).map((l) => ({ allocationId: l.allocationId }))
 
-  const linked = resolveLinkedAllocationIds({
-    mode: property?.allocationCalculationMode === "MEAL_PLAN" ? "MEAL_PLAN" : "RATE_PLAN",
-    ratePlanLinks: activeLinks(ratePlan?.allocationLinks),
-    parentRatePlanLinks: activeLinks(ratePlan?.parentRatePlan?.allocationLinks),
-    mealPlanLinks: activeLinks(mealPlan?.allocationLinks),
+  const mode = property?.allocationCalculationMode === "MEAL_PLAN" ? "MEAL_PLAN" : "RATE_PLAN"
+  const planById = new Map(ratePlans.map((rp) => [rp.id, rp]))
+
+  // What each segment's rate plan links (own links, else its parent's), per segment.
+  const segmentLinks = segments.map((seg) => {
+    const rp = planById.get(seg.ratePlanId)
+    const linkedForSegment = resolveLinkedAllocationIds({
+      mode: "RATE_PLAN",
+      ratePlanLinks: activeLinks(rp?.allocationLinks),
+      parentRatePlanLinks: activeLinks(rp?.parentRatePlan?.allocationLinks),
+      mealPlanLinks: [],
+    }).map((l) => l.allocationId)
+    return { startDate: seg.startDate, endDate: seg.endDate, linkedAllocationIds: linkedForSegment }
   })
+  // Rate-plan mode: the union across segments, each carrying the nights it covers.
+  // Meal-plan mode: the meal plan's links, always the whole stay.
+  const windowsById = mode === "RATE_PLAN" ? ratePlanAllocationWindows(segmentLinks) : new Map<string, null>()
+  const linked =
+    mode === "RATE_PLAN"
+      ? [...windowsById.keys()].map((allocationId) => ({ allocationId, source: "RATE_PLAN" as const }))
+      : resolveLinkedAllocationIds({ mode, ratePlanLinks: [], parentRatePlanLinks: [], mealPlanLinks: activeLinks(mealPlan?.allocationLinks) })
   const linkedIds = new Set(linked.map((l) => l.allocationId))
 
   // Manual set: validate any newly-requested ids belong to this property and are active.
@@ -104,7 +122,10 @@ export async function materializeReservationAllocations(params: {
     const linkedToCreate = linked.filter((l) => !manualAfter.has(l.allocationId))
     if (linkedToCreate.length > 0) {
       await tx.reservationAllocation.createMany({
-        data: linkedToCreate.map((l) => ({ reservationId, allocationId: l.allocationId, source: l.source })),
+        data: linkedToCreate.map((l) => {
+          const windows = windowsById.get(l.allocationId)
+          return { reservationId, allocationId: l.allocationId, source: l.source, appliesTo: windows ? serializeWindows(windows) : null }
+        }),
       })
     }
   })

@@ -3,7 +3,7 @@ import { postCharge } from "@/lib/posting/post-charge"
 import { allocateCheckNo } from "@/lib/document-sequence"
 import type { GenerateRow } from "@/lib/posting/run-generates"
 import { applyRateAdjustment } from "@/lib/derived-rate"
-import { allocationAmountForNight } from "@/lib/allocations"
+import { allocationAmountForNight, parseWindows } from "@/lib/allocations"
 import { nextBusinessDate } from "@/lib/business-date"
 import { GREEN_TAX_GUEST_SELECT, greenTaxPax, reservationGuests } from "@/lib/green-tax-exemption"
 
@@ -85,7 +85,16 @@ export async function postStayNight(
   }: { night: Date; postDate: Date; folioId: string; description?: string; levyNightly?: boolean },
   ctx: StayNightContext
 ): Promise<StayNightResult | null> {
-  const activeAssignment = res.assignments[0]
+  // The segment that covers THIS night. A split stay can price each segment on its own room
+  // type and rate plan, so "the latest segment" (assignments[0], newest start first) is only
+  // right for tonight on the last segment — an earlier night must use its own. A night no
+  // segment covers (shouldn't happen) falls back to the newest segment that had started.
+  const nightMs = Date.UTC(night.getUTCFullYear(), night.getUTCMonth(), night.getUTCDate())
+  const dayMs = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  const activeAssignment =
+    res.assignments.find((a) => dayMs(a.startDate) <= nightMs && nightMs < dayMs(a.endDate)) ??
+    res.assignments.find((a) => dayMs(a.startDate) <= nightMs) ??
+    res.assignments[0]
   if (!activeAssignment) return null
   const { settings, pricesIncludeTaxes, routeTo } = ctx
   // Green Tax is per person: the named guests who are exempt (infant, Maldivian, permit
@@ -157,6 +166,8 @@ export async function postStayNight(
       auditDate: night,
       overrideAdultPrice: ra.overrideAdultPrice,
       overrideChildPrice: ra.overrideChildPrice,
+      // Split stay: a rate-plan package covers only the nights of the segments that carry it.
+      windows: parseWindows(ra.appliesTo),
     })
     if (amount != null && amount > 0) {
       allocationsTonight.push({ reservationAllocation: ra, grossInput: amount })
