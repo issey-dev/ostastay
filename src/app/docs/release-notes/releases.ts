@@ -11,6 +11,8 @@ export type Release = {
   new?: string[]
   improved?: string[]
   fixed?: string[]
+  /** Planned for a later release. Shown last, under "Coming next". */
+  comingNext?: string[]
 }
 
 export const RELEASES: Release[] = [
@@ -48,6 +50,9 @@ export const RELEASES: Release[] = [
       "Opening a reservation that has not arrived yet on a wide screen shows its Edit button in the header again.",
       "Reading a passport or ID on eRegistration is faster and never leaves the guest stuck: Next stays locked while the ID is read, and after 30 seconds the guest is asked to fill in their details manually and can carry on.",
       "On the eRegistration form, the Next button no longer flickers in and out when you move the pointer over or off the form.",
+    ],
+    comingNext: [
+      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
     ],
   },
   {
