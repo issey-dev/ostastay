@@ -22,6 +22,7 @@ export const RELEASES: Release[] = [
       "Phone and mobile fields now have a country-code dropdown (flag, country and dialling code, searchable) next to a number-only box. You pick the country once and type just the number. It is on guest profiles and their contacts, the quick-create guest on a reservation, eRegistration, outlets, spa therapists and transport providers. Numbers already saved keep working and show as they were.",
     ],
     improved: [
+      "Editing a reservation: every segment of a split stay now has its own Room type and Rate plan selectors, and a new segment starts from the previous one's room type and rate plan. Each segment is priced on its own room type and rate plan.",
       "Auto-Assign now shows you its plan before doing anything: a window lists each booking and the room it would get, and the bookings that could not be placed (with the reason). Nothing is saved until you press Assign. It is on the Reservations list and now also on the Front Desk Arrivals tab.",
       "Reservations card view: the names of accompanying guests show lightly under the main guest, a star marks VIP guests and a small repeat mark with a number shows returning guests (and how many previous stays), and small labelled badges under the dates show what is filled in on the booking: Transportation, Traces, Deposit, Registration, Special request, Split stay and more.",
       "In Traces & messages, each trace now has a checkbox to mark it done (the text is crossed off), instead of an unclear round icon.",
@@ -31,6 +32,8 @@ export const RELEASES: Release[] = [
       "eRegistration now uses the same calendar date picker as the rest of the app for the date of birth, document issue and expiry dates, and children's dates of birth.",
     ],
     fixed: [
+      "Split stays with different room types or rate plans are now billed correctly night by night: every night is charged at its own segment's rate (the nightly charge used to take the last segment's rate for all nights), and a rate plan's packages, such as breakfast, are only charged on the nights of the segments on that plan.",
+      "Checking a guest in, and pricing a mid-stay room move, now use the segment for that night instead of always the last one.",
       "Opening a reservation that has not arrived yet on a wide screen now shows an Edit button in the header; it was missing, and Edit was only reachable from the Reservations list.",
       "Reading a passport or ID on eRegistration is faster, and never leaves the guest stuck: Next stays locked while the ID is read, and if it can't be read within 30 seconds the guest is asked to fill in their details manually and can carry on.",
       "On the eRegistration form, the Next button no longer flickers in and out when you move the pointer over or off the form.",

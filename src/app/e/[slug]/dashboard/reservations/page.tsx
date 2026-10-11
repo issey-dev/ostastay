@@ -87,6 +87,7 @@ type Reservation = {
   }[]
   specialRequests?: { id: string, code: string }[]
   traces?: { id: string, alertOnOpen: boolean }[]
+  transports?: { id: string, direction: string }[]
   guestRegistrations?: { id: string }[]
   eRegistrationSlots?: { status: string }[]
   folios?: { id: string, payments?: { amount: number, isRefund: boolean }[] }[]
@@ -181,6 +182,10 @@ const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
   if (pkgs > 0) out.push({ key: "pkg", label: n(pkgs, "Package"), title: (res.allocations ?? []).map(a => a.allocation.code).join(", "), tone: "muted" })
   const transfers = res.transportBookings ?? []
   if (transfers.length > 0) out.push({ key: "transfer", label: "Transportation", title: getReservationFlags(res).find(f => f.key === "transfer")?.title ?? "Transfers", tone: transfers.some(t => t.status === "DRAFT") ? "warning" : "info" })
+  else if ((res.transports?.length ?? 0) > 0) {
+    const legs = res.transports!.map(t => (t.direction === "DEPARTURE" || t.direction === "DROPOFF" ? "drop-off" : "pickup")).join(", ")
+    out.push({ key: "transport", label: "Transportation", title: `Transport details added (${legs})`, tone: "info" })
+  }
   const traces = res.traces?.length ?? 0
   if (traces > 0) out.push({ key: "traces", label: n(traces, "Trace"), title: `${traces} open trace${traces > 1 ? "s" : ""}${res.traces?.some(t => t.alertOnOpen) ? " (alerts on open)" : ""}`, tone: res.traces?.some(t => t.alertOnOpen) ? "warning" : "muted" })
   const deposit = getDepositTotal(res)

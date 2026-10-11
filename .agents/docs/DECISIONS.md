@@ -3249,6 +3249,14 @@ further questions, so the plan's recommended defaults apply (change any of them 
   (searchable country-code dropdown + number-only box, default Maldives +960). Storage is unchanged:
   one string, "+960 7771234", so no migration; legacy values without a "+code" show whole in the number
   box. Calling codes live in `src/lib/dial-codes.ts`. Fields that take "phone OR email" stay plain text.
+- **Split stays price per segment** (owner request, 2026-10-11): each segment carries its own room
+  type and rate plan (selectors on the segment card; the grid still fills the active segment). Every
+  night posts on the segment that covers it (`postStayNight`). A rate plan's linked allocations apply
+  only to the nights of the segments on that plan: `ReservationAllocation.appliesTo` holds the
+  windows (null = whole stay: single segment, meal-plan and manual allocations), and the quote,
+  Night Audit and the form preview share `ratePlanAllocationWindows` (`src/lib/allocations.ts`).
+  Not yet done: Room Move on an in-house stay that still has a LATER scheduled segment (it replaces
+  the newest segment), and reports that read `assignments[0]`.
 - **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
   "More" menu, last and in red, and keep their confirmations.
 - **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.
