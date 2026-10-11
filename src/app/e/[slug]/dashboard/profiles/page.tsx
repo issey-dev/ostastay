@@ -2,13 +2,15 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useUrlState } from "@/lib/use-url-state"
-import { UserPlus, Pencil, Trash2, Star, MoreHorizontal } from "@/components/icons"
+import { UserPlus, Pencil, Trash2, MoreHorizontal } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { useRouter, useParams } from "next/navigation"
 import { Users, Building2, Briefcase, UserCog } from "@/components/icons"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { GoldStar } from "@/components/ui/gold-star"
 import { primaryEmail, primaryMobile } from "@/lib/profile-communications"
 import { CountryFlag } from "@/components/ui/country-flag"
 import { useSystemCodeLabels } from "@/hooks/use-system-code-labels"
@@ -57,16 +59,14 @@ type Profile = {
   lastStayDate: string | null
 }
 
-const classColors: Record<string, string> = {
-  VIP: "bg-foreground text-background border-transparent",
-  REGULAR: "bg-muted text-foreground border-border",
-  BLACKLISTED: "bg-destructive-muted text-destructive border-destructive/30",
-}
+// A profile's classification as the app's shared status badge tone.
+const classTone = (classification: string): "danger" | "warning" | "neutral" =>
+  classification === "BLACKLISTED" ? "danger" : classification === "VIP" ? "warning" : "neutral"
 
 // One consistent monochrome treatment for every avatar — the initials themselves are
 // the distinguishing feature, not a per-person hue (the app's palette is monochromatic
 // with color reserved for status/tone, not decorative identity).
-const AVATAR_COLOR = "bg-muted text-foreground"
+const AVATAR_COLOR = "bg-muted text-foreground ring-1 ring-inset ring-border"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest",
@@ -171,19 +171,19 @@ function ProfilesDashboard() {
   const columns: ListColumn<Profile>[] = [
     {
       key: "name",
-      header: "Guest",
+      header: PROFILE_TYPE_LABELS[activeTab] ?? "Name",
       primary: true,
       sortValue: displayName,
       cell: (p) => (
         <span className="inline-flex items-center gap-3">
-          <span className={`h-10 w-10 rounded-none flex items-center justify-center font-bold text-sm shrink-0 ${AVATAR_COLOR}`}>
+          <span className={`h-9 w-9 rounded-md flex items-center justify-center font-semibold text-xs shrink-0 ${AVATAR_COLOR}`}>
             {p.firstName?.charAt(0) || ""}{p.lastName?.charAt(0) || ""}
           </span>
           <span className="flex flex-col">
             <span className="inline-flex items-center gap-1.5">
               {/* inline-flex blocks the link's own underline — re-apply it on the name. */}
               <span className="[a:hover_&]:underline">{displayName(p)}</span>
-              {p.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
+              {p.vipLevel && <span title="VIP" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
             </span>
             {p.addresses?.[0]?.country && (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
@@ -211,15 +211,9 @@ function ProfilesDashboard() {
       header: "Status",
       sortValue: (p) => label("CLASSIFICATION", p.classification),
       cell: (p) => (
-        <div className="flex flex-col gap-1 items-start">
-          <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || "bg-muted text-foreground"}`}>
-            {label("CLASSIFICATION", p.classification)}
-          </span>
-          {p.vipLevel && (
-            <span className="px-2 py-1 rounded-none text-[10px] uppercase font-bold border bg-warning-muted text-warning border-warning/30">
-              {label("VIP_LEVEL", p.vipLevel)}
-            </span>
-          )}
+        <div className="flex flex-wrap items-center gap-1">
+          <StatusBadge label={label("CLASSIFICATION", p.classification) ?? p.classification} tone={classTone(p.classification)} />
+          {p.vipLevel && <StatusBadge label={label("VIP_LEVEL", p.vipLevel) ?? p.vipLevel} tone="warning" />}
         </div>
       ),
     },
@@ -230,8 +224,8 @@ function ProfilesDashboard() {
       csv: (p) => `${p.totalStays || 0} stays / ${(p.totalRevenue || 0).toFixed(2)}`,
       cell: (p) => (
         <div className="flex flex-col text-sm">
-          <span className="text-foreground font-medium">{p.totalStays || 0} Stays</span>
-          <span className="text-muted-foreground">${(p.totalRevenue || 0).toFixed(2)}</span>
+          <span className="text-foreground font-medium">{p.totalStays || 0} {p.totalStays === 1 ? "stay" : "stays"}</span>
+          <span className="text-muted-foreground tabular-nums">${(p.totalRevenue || 0).toFixed(2)}</span>
         </div>
       ),
     },
@@ -241,13 +235,24 @@ function ProfilesDashboard() {
       align: "right",
       // The row opens the profile — the buttons must not also do that.
       cell: (p) => (
-        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" className="text-primary" onClick={() => editProfile(p)}>
-            <Pencil className="mr-2 h-4 w-4" /> Edit
+        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => editProfile(p)}>
+            <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
           </Button>
-          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => askDelete(p)}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44">
+              <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(profileUrl(p))}>
+                <Users className="h-4 w-4" /> Open profile
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={() => askDelete(p)}>
+                <Trash2 className="h-4 w-4" /> Delete profile
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -324,31 +329,12 @@ function ProfilesDashboard() {
             </SelectContent>
           </Select>
         </div>
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b rounded-none h-auto p-0 bg-transparent mb-6 max-md:hidden">
-          <TabsTrigger
-            value="GUEST"
-            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
-          >
-            <Users className="w-4 h-4 mr-2" /> Guests
-          </TabsTrigger>
-          <TabsTrigger
-            value="COMPANY"
-            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
-          >
-            <Building2 className="w-4 h-4 mr-2" /> Corporate accounts
-          </TabsTrigger>
-          <TabsTrigger
-            value="TRAVEL_AGENT"
-            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
-          >
-            <Briefcase className="w-4 h-4 mr-2" /> Travel agents
-          </TabsTrigger>
-          <TabsTrigger
-            value="STAFF"
-            className="data-active:text-primary dark:data-active:text-primary shrink-0 rounded-none px-3 py-2 font-medium text-muted-foreground sm:px-6 sm:py-3"
-          >
-            <UserCog className="w-4 h-4 mr-2" /> Staff
-          </TabsTrigger>
+        <TabsList className="mb-3 h-auto w-fit max-md:hidden data-horizontal:h-auto">
+          {PHONE_TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value} className="gap-1.5 px-3">
+              <t.icon className="h-4 w-4" /> {t.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
       {/* The tab already names the directory — no second heading here. */}
@@ -384,7 +370,7 @@ function ProfilesDashboard() {
                   title={
                     <span className="inline-flex items-center gap-1.5">
                       {displayName(p)}
-                      {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                      {p.vipLevel && <span title="VIP" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
                     </span>
                   }
                   subtitle={
@@ -396,11 +382,9 @@ function ProfilesDashboard() {
                     ) : undefined
                   }
                   badge={
-                    // "Regular" is the default for nearly everyone — only flag the exceptions.
+                    // "Regular" is the default for nearly everyone - only flag the exceptions.
                     p.classification !== "REGULAR" ? (
-                      <span className={`px-2 py-1 rounded-none text-[10px] uppercase font-bold border ${classColors[p.classification] || 'bg-muted text-foreground'}`}>
-                        {label("CLASSIFICATION", p.classification)}
-                      </span>
+                      <StatusBadge label={label("CLASSIFICATION", p.classification) ?? p.classification} tone={classTone(p.classification)} />
                     ) : undefined
                   }
                   meta={[
