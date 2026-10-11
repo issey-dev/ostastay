@@ -29,7 +29,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { allocationStayTotal, type AllocationLike } from "@/lib/allocations"
+import { allocationStayTotal, ratePlanAllocationWindows, type AllocationLike, type DateWindow } from "@/lib/allocations"
 import { GuestPickerModal, type GuestProfile } from "@/components/reservations/guest-picker-modal"
 import { bookingFormSchema, emptyBookingValues, emptySegment, type BookingFormValues, type SegmentValues } from "@/components/reservations/booking-form-schema"
 import { LookToBookGrid, type GridData } from "@/components/reservations/look-to-book-grid"
@@ -311,20 +311,28 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   }, [propertyId, JSON.stringify(form.assignments), form.adults, form.children, form.infants, form.primaryGuestId, JSON.stringify(form.accompanyingGuestIds), form.mealPlan, JSON.stringify(form.manualAllocationIds)])
 
   // ── Allocation preview (mirrors src/lib/allocations-server.ts) ────────────
-  const selectedRatePlanForAlloc = ratePlans.find(rp => rp.id === form.assignments[0]?.ratePlanId)
-  const parentPlanForAlloc = selectedRatePlanForAlloc?.parentRatePlanId
-    ? ratePlans.find(rp => rp.id === selectedRatePlanForAlloc.parentRatePlanId)
-    : null
-  const ratePlanAllocLinks: Array<{ allocation: { id: string } }> =
-    (selectedRatePlanForAlloc?.allocationLinks?.length
-      ? selectedRatePlanForAlloc.allocationLinks
-      : parentPlanForAlloc?.allocationLinks) ?? []
-  const mealPlanAllocLinks: Array<{ allocation: { id: string } }> =
-    mealPlans.find(mp => mp.code === form.mealPlan)?.allocationLinks ?? []
-  const linksForMode = currentProperty?.allocationCalculationMode === "MEAL_PLAN" ? mealPlanAllocLinks : ratePlanAllocLinks
+  // A rate plan's linked allocations cover only the nights of the segments priced on that
+  // plan (each segment of a split stay can have its own); meal-plan ones cover the stay.
+  const activeAllocLinks = (links: Array<{ allocation: { id: string } }> | undefined) =>
+    (links ?? []).filter(l => allocations.some(a => a.id === l.allocation.id && a.isActive)).map(l => l.allocation.id)
+  const mealPlanAllocIds = activeAllocLinks(mealPlans.find(mp => mp.code === form.mealPlan)?.allocationLinks)
+  const segmentAllocLinks = form.assignments.map(a => {
+    const rp = ratePlans.find(r => r.id === a.ratePlanId)
+    const parent = rp?.parentRatePlanId ? ratePlans.find(r => r.id === rp.parentRatePlanId) : null
+    const own = activeAllocLinks(rp?.allocationLinks)
+    return {
+      startDate: a.startDate ? new Date(a.startDate) : new Date(NaN),
+      endDate: a.endDate ? new Date(a.endDate) : new Date(NaN),
+      linkedAllocationIds: own.length > 0 ? own : activeAllocLinks(parent?.allocationLinks),
+    }
+  })
+  const allocWindowsById =
+    currentProperty?.allocationCalculationMode === "MEAL_PLAN"
+      ? new Map<string, DateWindow[] | null>()
+      : ratePlanAllocationWindows(segmentAllocLinks.filter(s => !Number.isNaN(s.startDate.getTime()) && !Number.isNaN(s.endDate.getTime())))
   const autoAllocationIds = [
-    ...new Set(linksForMode.map(l => l.allocation.id)),
-  ].filter(id => allocations.some(a => a.id === id && a.isActive))
+    ...new Set(currentProperty?.allocationCalculationMode === "MEAL_PLAN" ? mealPlanAllocIds : [...allocWindowsById.keys()]),
+  ]
 
   const stayDatesForAlloc = (() => {
     const dates = form.assignments
@@ -347,6 +355,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     return allocationStayTotal({
       allocation: like, adults: form.adults, children: form.children,
       checkInDate: stayDatesForAlloc.checkIn, checkOutDate: stayDatesForAlloc.checkOut,
+      windows: allocWindowsById.get(a.id) ?? null,
     })
   }
 
@@ -816,7 +825,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       <span className="flex-1 text-muted-foreground">
                         {rt && rp
                           ? <>{rt.name} ({rt.code}) · {rp.name}</>
-                          : <span className="italic"><span className="max-md:hidden">Pick a room &amp; rate from the grid above</span><span className="md:hidden">Pick a room &amp; rate above</span></span>}
+                          : <span className="italic">Pick a room type and rate plan</span>}
                       </span>
                       {form.assignments.length > 1 && (
                         <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-destructive hover:bg-destructive-muted hover:text-destructive" onClick={(e) => {
@@ -829,6 +838,31 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           <Trash2 className="h-3 w-3 mr-1" /> Remove
                         </Button>
                       )}
+                    </div>
+                    {/* Room type and rate plan for THIS segment — the grid above fills the same two
+                        fields for the active segment; these let a split stay's segments differ
+                        without hunting for the right cell. */}
+                    <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:gap-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="grid content-start gap-2">
+                        <Label>Room type <span className="text-destructive">*</span></Label>
+                        <SearchableSelect
+                          value={assignment.roomTypeId}
+                          onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { roomTypeId: v, roomId: "none" }) }}
+                          placeholder="Select room type"
+                          options={roomTypes.map(r => ({ value: r.id, label: `${r.name} (${r.code})` }))}
+                        />
+                      </div>
+                      <div className="grid content-start gap-2">
+                        <Label>Rate plan <span className="text-destructive">*</span></Label>
+                        <SearchableSelect
+                          value={assignment.ratePlanId}
+                          onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { ratePlanId: v }) }}
+                          placeholder="Select rate plan"
+                          options={ratePlans
+                            .filter(rp => rp.id === assignment.ratePlanId || !rp.isNegotiated || (form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)))
+                            .map(rp => ({ value: rp.id, label: `${rp.name} (${rp.code})` }))}
+                        />
+                      </div>
                     </div>
                     {(segErr?.roomTypeId?.message || segErr?.ratePlanId?.message) && (
                       <FieldError message={segErr.roomTypeId?.message || segErr.ratePlanId?.message} />
@@ -940,7 +974,9 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => {
                 const current = formCtl.getValues("assignments");
                 const lastAssignment = current[current.length - 1];
-                setAssignments([...current, { ...emptySegment(), startDate: lastAssignment.endDate || "" }]);
+                // Starts as a copy of the previous segment's room type and rate plan (no room yet),
+                // so it quotes straight away; change either in the segment's own selectors.
+                setAssignments([...current, { ...emptySegment(), roomTypeId: lastAssignment.roomTypeId, ratePlanId: lastAssignment.ratePlanId, startDate: lastAssignment.endDate || "" }]);
                 setActiveSegmentIndex(current.length);
               }}>
                 <Plus className="h-4 w-4 mr-2" /> Add segment (split stay)
