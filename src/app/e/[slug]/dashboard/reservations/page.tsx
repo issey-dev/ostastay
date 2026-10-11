@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -194,6 +194,15 @@ const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
   const tasks = getActiveTasks(res).length
   if (tasks > 0) out.push({ key: "task", label: n(tasks, "Housekeeping request"), title: `${tasks} active housekeeping request${tasks > 1 ? "s" : ""}`, tone: "destructive" })
   return out
+}
+
+// A solid five-point gold star (the icon set only has an outlined one).
+function GoldStar({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="#E5A914" stroke="#C48B00" strokeWidth="1" strokeLinejoin="round">
+      <path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.6 6.1 20.7l1.2-6.6L2.5 9.5l6.6-.9L12 2.5z" />
+    </svg>
+  )
 }
 
 function CardBadges({ res }: { res: Reservation }) {
@@ -947,12 +956,12 @@ function ReservationsList() {
                         <div className="font-medium text-foreground inline-flex max-w-full items-center gap-1.5">
                           <span className="truncate">{guestName}</span>
                           {(res.primaryGuest?.vipLevel || res.primaryGuest?.classification === "VIP") && (
-                            <span title={res.primaryGuest?.vipLevel ? `VIP: ${res.primaryGuest.vipLevel}` : "VIP"} className="shrink-0"><Star className="h-3.5 w-3.5 text-warning fill-none" /></span>
+                            <span title={res.primaryGuest?.vipLevel ? `VIP: ${res.primaryGuest.vipLevel}` : "VIP"} className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>
                           )}
                           {(res.primaryGuest?.totalStays ?? 0) > 0 && (
                             <span
                               title={`Repeat guest, ${res.primaryGuest!.totalStays} previous stay${res.primaryGuest!.totalStays === 1 ? "" : "s"}`}
-                              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-normal text-muted-foreground"
+                              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-primary"
                             >
                               <RotateCcw className="h-3 w-3" />{res.primaryGuest!.totalStays}
                             </span>
@@ -1082,7 +1091,7 @@ function ReservationsList() {
                             >
                               {guestName}
                             </Link>
-                            {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
+                            {res.primaryGuest?.vipLevel && <GoldStar className="h-4 w-4 shrink-0" />}
                           </div>
                           <div className="text-xs font-mono text-muted-foreground truncate">
                             {res.confirmationNo}
