@@ -956,11 +956,17 @@ function ReservationsList() {
                           {res.externalRef && <span className="text-muted-foreground/70"> · ch:{res.externalRef}</span>}
                         </div>
                       </div>
-                      <StatusBadge
-                        label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
-                        status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
-                        className="shrink-0"
-                      />
+                      <span className="shrink-0 whitespace-nowrap text-right">
+                        {first ? (
+                          <>
+                            <span className="text-lg font-semibold text-foreground">{first.room?.roomNumber || 'TBA'}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">{first.roomType?.code}</span>
+                            {extraRooms > 0 && <span className="ml-1 text-xs text-muted-foreground">+{extraRooms}</span>}
+                          </>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No rooms</span>
+                        )}
+                      </span>
                       {/* Phone: the ⋯ menu lives in the header row next to the status. */}
                       {phone.more.length > 0 && (
                         <div className="-my-1 -mr-1 shrink-0 md:hidden" onClick={(e) => e.stopPropagation()}>
@@ -988,10 +994,12 @@ function ReservationsList() {
                         {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
                         <span className="text-muted-foreground"> · {nights}n</span>
                       </span>
-                      <span className="text-muted-foreground">
-                        {first ? `${first.room?.roomNumber || 'TBA'} (${first.roomType?.code})` : 'No rooms'}
-                        {extraRooms > 0 && ` +${extraRooms}`}
-                      </span>
+                      <StatusBadge
+                        label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
+                        status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
+                        className="shrink-0"
+                      />
+
                     </div>
                     <CardBadges res={res} />
                     <div className="mt-3 max-md:hidden" onClick={(e) => e.stopPropagation()}>
