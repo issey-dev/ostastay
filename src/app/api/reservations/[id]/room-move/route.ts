@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { hasRoomConflict } from "@/lib/availability";
 import { logActivity } from "@/lib/activity-log";
+import { resolveBusinessDate } from "@/lib/business-date";
+import { segmentForNight } from "@/lib/reservation-assignments";
 
 export async function POST(
   request: Request,
@@ -39,9 +41,23 @@ export async function POST(
       return NextResponse.json({ error: "Only IN_HOUSE guests can be moved." }, { status: 400 });
     }
 
-    const activeAssignment = currentRes.assignments[0];
+    // "Today" is the property's business date (rolled by Night Audit), never the server's
+    // clock: a move dated by the device calendar split the stay on the wrong day, and on a
+    // property whose date lags the calendar it produced an assignment starting after checkout.
+    const businessDateRow = await prisma.property.findUnique({ where: { id: currentRes.propertyId }, select: { businessDate: true } });
+    const today = resolveBusinessDate(businessDateRow ?? {});
+    if (today.getTime() >= currentRes.checkOutDate.getTime()) {
+      return NextResponse.json({ error: "This guest is due out today or earlier, so there are no nights left to move." }, { status: 400 });
+    }
+
+    const activeAssignment = segmentForNight(currentRes.assignments, today);
     if (!activeAssignment) {
       return NextResponse.json({ error: "No active room assignment found" }, { status: 400 });
+    }
+    // A booked later segment would be overwritten by "from today to checkout" - the stay's
+    // segments are edited on the reservation itself.
+    if (currentRes.assignments.some((a) => a.startDate.getTime() >= activeAssignment.endDate.getTime() && a.id !== activeAssignment.id)) {
+      return NextResponse.json({ error: "This stay has a later room segment booked. Change the rooms in Edit reservation instead." }, { status: 400 });
     }
 
     const oldRoomId = activeAssignment.roomId;
@@ -61,11 +77,9 @@ export async function POST(
 
     // The target room must be free for the remainder of the stay — previously a move
     // could land a guest in a room already assigned to someone else.
-    const now = new Date();
-    const moveStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const roomTaken = await hasRoomConflict({
       roomId: newRoomId,
-      startDate: moveStart,
+      startDate: today,
       endDate: currentRes.checkOutDate,
       excludeReservationId: id,
     });
@@ -116,26 +130,32 @@ export async function POST(
       }
 
       // b. Terminate old assignment and create new assignment
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (activeAssignment.startDate.getTime() >= today.getTime()) {
+        // The guest hasn't spent a night in the old room (moved the day they arrived):
+        // change this segment in place rather than leave an empty one behind.
+        await tx.roomAssignment.update({
+          where: { id: activeAssignment.id },
+          data: { roomId: newRoomId, roomTypeId: newRoomTypeId, chargeRoomTypeId: newChargeRoomTypeId, overrideRate: newOverrideRate },
+        });
+      } else {
+        await tx.roomAssignment.update({
+          where: { id: activeAssignment.id },
+          data: { endDate: today }
+        });
 
-      await tx.roomAssignment.update({
-        where: { id: activeAssignment.id },
-        data: { endDate: today }
-      });
-
-      await tx.roomAssignment.create({
-        data: {
-          reservationId: id,
-          roomId: newRoomId,
-          roomTypeId: newRoomTypeId,
-          chargeRoomTypeId: newChargeRoomTypeId,
-          ratePlanId: activeAssignment.ratePlanId,
-          overrideRate: newOverrideRate,
-          startDate: today,
-          endDate: currentRes.checkOutDate
-        }
-      });
+        await tx.roomAssignment.create({
+          data: {
+            reservationId: id,
+            roomId: newRoomId,
+            roomTypeId: newRoomTypeId,
+            chargeRoomTypeId: newChargeRoomTypeId,
+            ratePlanId: activeAssignment.ratePlanId,
+            overrideRate: newOverrideRate,
+            startDate: today,
+            endDate: currentRes.checkOutDate
+          }
+        });
+      }
 
       const res = await tx.reservation.findUnique({
         where: { id },
