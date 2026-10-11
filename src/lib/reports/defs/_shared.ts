@@ -19,7 +19,13 @@ export function isVip(p: { vipLevel: string | null; classification: string } | n
 }
 
 export function primaryRoom(assignments: { room: { roomNumber: string } | null }[]): string {
-  return assignments.map((a) => a.room?.roomNumber).filter(Boolean).join(", ") || "—";
+  // A split stay lists each room once, in stay order.
+  return [...new Set(assignments.map((a) => a.room?.roomNumber).filter(Boolean))].join(", ") || "—";
+}
+
+/** The room type(s) of a stay in order, each once: "Deluxe → Suite" for a split stay. */
+export function roomTypeNames(assignments: { roomType?: { name: string } | null }[]): string {
+  return [...new Set(assignments.map((a) => a.roomType?.name).filter(Boolean))].join(" → ") || "—";
 }
 
 export function titleCase(s: string): string {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { refreshScheduledRoomMove } from "@/lib/reservations/scheduled-move";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { hasRoomConflict } from "@/lib/availability";
@@ -104,6 +105,8 @@ export async function PATCH(
         }
       });
 
+      await refreshScheduledRoomMove(prisma, assignment.reservationId);
+
       // Optional: If the reservation was RESERVED and we assign a room, or if it was IN_HOUSE, we keep it sync
       // Also write a trace log for auditing
       await prisma.reservationTrace.create({
@@ -135,6 +138,7 @@ export async function PATCH(
         }
       });
 
+      await refreshScheduledRoomMove(prisma, assignment.reservationId);
       await prisma.reservationTrace.create({
         data: {
           reservationId: assignment.reservationId,

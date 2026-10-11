@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { refreshScheduledRoomMove } from "@/lib/reservations/scheduled-move";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { hasRoomConflict } from "@/lib/availability";
@@ -54,11 +55,10 @@ export async function POST(
     if (!activeAssignment) {
       return NextResponse.json({ error: "No active room assignment found" }, { status: 400 });
     }
-    // A booked later segment would be overwritten by "from today to checkout" - the stay's
-    // segments are edited on the reservation itself.
-    if (currentRes.assignments.some((a) => a.startDate.getTime() >= activeAssignment.endDate.getTime() && a.id !== activeAssignment.id)) {
-      return NextResponse.json({ error: "This stay has a later room segment booked. Change the rooms in Edit reservation instead." }, { status: 400 });
-    }
+    // Later booked segments stay as they are: the move only changes the guest's current segment,
+    // from today to where that segment ends (the stay's check-out when it is the last one).
+    const hasLaterSegment = currentRes.assignments.some((a) => a.id !== activeAssignment.id && a.startDate.getTime() >= activeAssignment.endDate.getTime());
+    const segmentEnd = hasLaterSegment ? activeAssignment.endDate : currentRes.checkOutDate;
 
     const oldRoomId = activeAssignment.roomId;
     const oldRoomNumber = activeAssignment.room?.roomNumber || "Unassigned";
@@ -152,7 +152,7 @@ export async function POST(
             ratePlanId: activeAssignment.ratePlanId,
             overrideRate: newOverrideRate,
             startDate: today,
-            endDate: currentRes.checkOutDate
+            endDate: segmentEnd
           }
         });
       }
@@ -164,6 +164,8 @@ export async function POST(
           assignments: { include: { roomType: true, room: true, ratePlan: true } }
         }
       });
+
+      await refreshScheduledRoomMove(tx, id);
 
       // c. Create Trace/Audit Log
       const rateNote = sameType

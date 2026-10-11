@@ -56,7 +56,9 @@ export async function GET(request: Request) {
 
     const headers = ['Guest', 'Confirmation #', 'Room Type', 'Room', 'Departure', 'Balance Due'];
     const rows = reservations.map(r => {
-      const assignment = r.assignments[0];
+      // A split stay lists every room type and room, in stay order.
+      const roomTypes = [...new Set(r.assignments.map((a) => a.roomType.name))].join(' → ') || '—';
+      const roomNumbers = [...new Set(r.assignments.map((a) => a.room?.roomNumber).filter(Boolean))].join(', ') || '—';
       // Sum across ALL folios, excluding voided charges and netting refunds —
       // the same math as the folio panel, via the shared helper.
       const balance = r.folios
@@ -65,8 +67,8 @@ export async function GET(request: Request) {
       return [
         `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
         r.confirmationNo,
-        assignment?.roomType.name ?? '—',
-        assignment?.room?.roomNumber ?? '—',
+        roomTypes,
+        roomNumbers,
         format(r.checkOutDate, 'PPpp'),
         `$${balance}`
       ];

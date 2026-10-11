@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { computeFolioBalance } from "@/lib/debtor-accounts";
 import { dayRange, rangeBounds } from "@/lib/reports/params";
-import { guestName, nights, isVip, primaryRoom, propertyOrThrow, guestSelect, assignmentInclude } from "@/lib/reports/defs/_shared";
+import { guestName, nights, isVip, primaryRoom, propertyOrThrow, guestSelect, assignmentInclude, roomTypeNames } from "@/lib/reports/defs/_shared";
 import type { ReportDef, ReportResult } from "@/lib/reports/types";
 
 // ─── Arrival Report ─────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ const arrival: ReportDef = {
         conf: r.confirmationNo,
         guest: guestName(r.primaryGuest),
         vip: isVip(r.primaryGuest) ? "VIP" : "",
-        roomType: r.assignments[0]?.roomType?.name ?? "—",
+        roomType: roomTypeNames(r.assignments),
         room: primaryRoom(r.assignments),
         nights: nights(r.checkInDate, r.checkOutDate),
         pax: `${r.adults}/${r.children}`,
