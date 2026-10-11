@@ -20,6 +20,9 @@ export interface SearchableSelectOption {
   icon?: React.ReactNode
   /** Extra text the search matches besides the label (e.g. a country's name and codes). */
   keywords?: string
+  /** Shown instead of `label` on the closed field (the list still shows `label`) — e.g. a
+   *  phone picker lists "Maldives +960" but closes to just "+960". */
+  triggerLabel?: string
 }
 
 /** Lists longer than this get a search box; shorter ones are a plain pick-list. */
@@ -123,7 +126,7 @@ export function SearchableSelect({
     >
       <span className="flex min-w-0 items-center gap-2">
         {selectedOption?.icon}
-        <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+        <span className="truncate">{selectedOption ? (selectedOption.triggerLabel ?? selectedOption.label) : placeholder}</span>
       </span>
       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
     </Button>

@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -9,7 +10,7 @@ import { Star, Search, UserPlus } from "@/components/icons"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { InlineLoading } from "@/components/ui/inline-loading"
 import { EmptyState } from "@/components/ui/empty-state"
-import { INPUT_EMAIL, INPUT_PHONE, INPUT_SEARCH } from "@/lib/input-presets"
+import { INPUT_EMAIL, INPUT_SEARCH } from "@/lib/input-presets"
 
 export type GuestProfile = {
   upid: string
@@ -195,7 +196,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Phone</Label>
-                  <Input {...INPUT_PHONE} value={quickCreate.phone} onChange={e => setQuickCreate(p => ({ ...p, phone: e.target.value }))} />
+                  <PhoneInput value={quickCreate.phone} onChange={v => setQuickCreate(p => ({ ...p, phone: v }))} />
                 </div>
               </div>
               <div className="flex justify-end gap-2">

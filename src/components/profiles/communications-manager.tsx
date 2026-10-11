@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
@@ -132,14 +133,23 @@ export function CommunicationsManager({ upid }: { upid: string }) {
             {Object.entries(TYPE_LABELS).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Input
-          {...TYPE_INPUT[newType]}
-          aria-label={TYPE_LABELS[newType]}
-          placeholder={TYPE_PLACEHOLDERS[newType]}
-          value={newValue}
-          onChange={(e) => setNewValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } }}
-        />
+        {newType === "MOBILE" ? (
+          <PhoneInput
+            className="min-w-0 flex-1"
+            value={newValue}
+            onChange={setNewValue}
+            placeholder="Mobile number"
+          />
+        ) : (
+          <Input
+            {...TYPE_INPUT[newType]}
+            aria-label={TYPE_LABELS[newType]}
+            placeholder={TYPE_PLACEHOLDERS[newType]}
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } }}
+          />
+        )}
         <Button type="button" variant="outline" onClick={handleAdd} disabled={saving || !newValue.trim()} aria-label="Add contact">
           <Plus className="h-4 w-4" />
           <span className="sm:hidden">Add</span>

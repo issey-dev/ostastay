@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState, type ReactNode } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, type FieldValues, type UseFormReturn } from "react-hook-form"
@@ -150,6 +151,24 @@ function ActiveSwitch({ form, label = "Active" }: { form: UseFormReturn<any>; la
             <Switch checked={field.value} onCheckedChange={field.onChange} />
           </FormControl>
           <FormLabel className="!mt-0 cursor-pointer font-normal">{label}</FormLabel>
+        </FormItem>
+      )}
+    />
+  )
+}
+
+function PhoneField({ form, name, label }: { form: UseFormReturn<any>; name: string; label: string }) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />
+          </FormControl>
+          <FormMessage />
         </FormItem>
       )}
     />
@@ -490,7 +509,7 @@ export function ProviderDialog({ open, onOpenChange, propertyId, editing, onSave
         <TextField form={form} name="name" label="Name *" placeholder="Own speedboats" />
         <SelectField form={form} name="kind" label="Type *" options={opts(PROVIDER_KINDS, PROVIDER_KIND_LABELS)} />
         <TextField form={form} name="contactName" label="Contact" />
-        <TextField form={form} name="phone" label="Phone" type="tel" />
+        <PhoneField form={form} name="phone" label="Phone" />
       </div>
       <TextField form={form} name="email" label="Email" type="email" />
       <FormField

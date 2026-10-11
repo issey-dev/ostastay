@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -264,7 +265,7 @@ export function ManifestFormDialog({
                   <FormItem>
                     <FormLabel>Their contact</FormLabel>
                     <FormControl>
-                      <Input type="tel" {...field} />
+                      <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />
                     </FormControl>
                   </FormItem>
                 )}

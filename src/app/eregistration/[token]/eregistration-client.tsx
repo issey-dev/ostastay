@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { createPortal } from "react-dom"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
@@ -22,7 +23,7 @@ import {
   Loader2, CheckCircle2, AlertTriangle, Users, ArrowLeft, FileText, Plus, Trash2, Sparkles,
   Contact, ChevronLeft, ChevronRight,
 } from "@/components/icons"
-import { INPUT_EMAIL, INPUT_PHONE } from "@/lib/input-presets"
+import { INPUT_EMAIL } from "@/lib/input-presets"
 import { cn } from "@/lib/utils"
 import { toast } from "@/lib/toast"
 
@@ -716,7 +717,7 @@ function SlotFormView({
                   )} />
                   <FormField control={form.control} name="mobile" render={({ field }) => (
                     <FormItem><FormLabel>Mobile</FormLabel><FormControl>
-                      <Input {...INPUT_PHONE} {...field} enterKeyHint="next" />
+                      <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                 </div>

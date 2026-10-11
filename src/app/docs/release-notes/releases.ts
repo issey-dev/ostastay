@@ -17,7 +17,10 @@ export const RELEASES: Release[] = [
   {
     version: "8.8.0",
     date: "2026-10-11",
-    highlights: "Smoother eRegistration on phones.",
+    highlights: "Smoother eRegistration on phones, and phone numbers now have a country-code picker.",
+    new: [
+      "Phone and mobile fields now have a country-code dropdown (flag, country and dialling code, searchable) next to a number-only box. You pick the country once and type just the number. It is on guest profiles and their contacts, the quick-create guest on a reservation, eRegistration, outlets, spa therapists and transport providers. Numbers already saved keep working and show as they were.",
+    ],
     improved: [
       "eRegistration now uses the same calendar date picker as the rest of the app for the date of birth, document issue and expiry dates, and children's dates of birth.",
     ],

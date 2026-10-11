@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { NationalitySelect } from "@/components/ui/nationality-select"
 import { useRouter, useParams } from "next/navigation"
@@ -35,7 +36,7 @@ import { InfoHint } from "@/components/ui/info-hint"
 import { PageHeader } from "@/components/ui/page-header"
 import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
 import { MobileActionBar } from "@/components/ui/mobile"
-import { INPUT_EMAIL, INPUT_MONEY, INPUT_PHONE } from "@/lib/input-presets"
+import { INPUT_EMAIL, INPUT_MONEY } from "@/lib/input-presets"
 
 const profileFormSchema = z.object({
   profileType: z.string(),
@@ -446,7 +447,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormItem>
                           <FormLabel>Mobile / Phone</FormLabel>
                           <FormControl>
-                            <Input {...INPUT_PHONE} placeholder="+1 234 567 8900" {...field} value={field.value || ""} />
+                            <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

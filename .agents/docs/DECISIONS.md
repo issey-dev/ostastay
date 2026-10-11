@@ -3245,6 +3245,10 @@ further questions, so the plan's recommended defaults apply (change any of them 
 - **eRegistration dates** (guest-facing page): uses `@/components/ui/date-picker` like everywhere
   else (owner, 2026-10-11 — reverses the earlier native-input exception; the DatePicker opens in a
   drawer on phones and has year/month dropdowns).
+- **Phone numbers** (owner, 2026-10-11): every phone/mobile field uses `@/components/ui/phone-input`
+  (searchable country-code dropdown + number-only box, default Maldives +960). Storage is unchanged:
+  one string, "+960 7771234", so no migration; legacy values without a "+code" show whole in the number
+  box. Calling codes live in `src/lib/dial-codes.ts`. Fields that take "phone OR email" stay plain text.
 - **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
   "More" menu, last and in red, and keep their confirmations.
 - **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.

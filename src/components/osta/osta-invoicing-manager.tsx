@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -174,7 +175,7 @@ export function OstaInvoicingManager() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" value={form.invoicePhone} onChange={set("invoicePhone")} placeholder="+960 …" />
+            <PhoneInput id="phone" value={form.invoicePhone} onChange={(v) => setForm((p) => ({ ...p, invoicePhone: v }))} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
