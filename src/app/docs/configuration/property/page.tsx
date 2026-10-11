@@ -47,6 +47,7 @@ export default function PropertySetup() {
           ["System charge codes", "Accommodation (1000), cancellation and no-show fees, service charge (7000), GST (8000), Green Tax (8500), commission, deposit, payment and adjustment codes, already wired to post their taxes."],
           ["Posting defaults", "Room charges post to 1000, Green Tax to 8500, commission to 9100."],
           ["Tax rates", "Maldives defaults: GST 17%, service charge 10%, Green Tax 12 per adult and 6 per child per night. Prices include taxes."],
+          ["Room features", "A starter set of bed types, views and amenities to describe rooms with. Rename, delete or add to it."],
           ["Fee rules", "A cancellation and a no-show fee, both switched off at zero."],
           ["Night audit", "Manual (not scheduled), no-shows marked at the arrival night's audit."],
           ["Documents", "Registration card and eRegistration on (72-hour links), detailed folios."],
@@ -54,7 +55,7 @@ export default function PropertySetup() {
       />
       <p>
         <strong>Everything else starts empty:</strong> room types and rooms, prices, revenue charge codes (food, beverage, transport
-        and so on), payment methods, outlets, meal plans, allocations, lists, and the wording on documents.
+        and so on), payment methods, outlets, meal plans, allocations, the other lists (reservation lists such as special requests), and the wording on documents.
       </p>
 
       <H2>The setup steps</H2>

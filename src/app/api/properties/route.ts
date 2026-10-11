@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity-log";
 import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
 import { isValidCurrency, isValidTimeZone, normalizeCurrency } from "@/lib/properties/property-input";
 import { PROFILE_MESSAGES } from "@/lib/properties/profile-schema";
+import { ensureDefaultRoomFeatures } from "@/lib/properties/default-room-features";
 
 export async function GET() {
   try {
@@ -115,6 +116,8 @@ export async function POST(request: Request) {
     // charge code. Seeded inactive at zero — the wiring is provisioned, the policy stays
     // the owner's (Hub › the property › Finance).
     await ensureFeeRules(prisma, { propertyId: newProperty.id });
+    // ...and the generic bed types, room views and amenities rooms are tagged with.
+    await ensureDefaultRoomFeatures(prisma, { enterpriseId, propertyId: newProperty.id });
 
     await logActivity({
       ctx,

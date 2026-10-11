@@ -21,10 +21,15 @@ export default function Rooms() {
 
       <H2>1. Room features</H2>
       <p>
-        In the <strong>Room features</strong> card, fill the three tabs: <strong>Bed type</strong> (King bed, Twin beds),{" "}
-        <strong>View</strong> (Ocean view, Garden view) and <strong>Amenities</strong> (Private pool, Minibar, Wi-Fi). For each, type a{" "}
+        In the <strong>Room features</strong> card, review the three tabs: <strong>Bed type</strong> (King bed, Twin beds),{" "}
+        <strong>View</strong> (Ocean view, Garden view) and <strong>Amenities</strong> (Private pool, Minibar, Wi-Fi). To add your own, type a{" "}
         <strong>Code (internal)</strong> and a <strong>Display value</strong> and choose <strong>Add</strong>. The code can&apos;t be
         changed later; the display value can. Features appear on room types and are shown to your website.
+      </p>
+      <p>
+        You don&apos;t start from an empty list: every new property comes with a starter set of common bed types (Single, Twin,
+        Queen, King and more), views (Ocean, Garden, City and more) and amenities (Air conditioning, Wi-Fi, Minibar, Balcony and
+        more). Rename the ones you want worded differently, switch off the ones you don&apos;t use, and add your own on top.
       </p>
 
       <H2>2. Room types</H2>
