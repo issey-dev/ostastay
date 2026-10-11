@@ -2,6 +2,12 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Default room features (2026-10-11, 8.7.2) — DONE
+- [x] 48 generic bed types / views / amenities (owner-approved list) in `src/lib/properties/default-room-features.ts`; `ensureDefaultRoomFeatures` runs on both property-creation routes (additive, skips codes a property already has).
+- [x] Existing properties (prod included) are backfilled by migration `20261011090000_default_room_features` on `migrate deploy` — same additive rule. The SQL list is generated from the TS list: if you change the defaults, add a NEW migration (never edit this one); the `npm run features:backfill` script is a manual fallback / dry-run report.
+- [x] Docs: starter list mentioned on `/docs/configuration/property/rooms`; configuration PDF rebuilt, `docs:check` clean.
+- [x] `tests/business-rules/default-room-features.test.ts` (idempotent, never overwrites a renamed/deactivated code, per-property).
+
 ## Daily Reports rework (2026-10-10, 8.7.0 / 8.7.1) — DONE, follow-ups open
 
 See [REPORTS_REWORK_PLAN.md](REPORTS_REWORK_PLAN.md) ("What shipped" / "Left open").

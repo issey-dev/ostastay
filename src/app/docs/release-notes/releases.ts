@@ -15,6 +15,18 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.7.2",
+    date: "2026-10-11",
+    highlights: "Every property now starts with a ready-made list of bed types, room views and room amenities.",
+    new: [
+      "New properties come with a starter set of room features: common bed types (Single, Twin, Queen, King and more), views (Ocean, Garden, City and more) and amenities (Air conditioning, Wi-Fi, Minibar, Balcony and more).",
+    ],
+    improved: [
+      "Existing properties are topped up with the same starter set. Nothing you have already set up is changed: features you renamed or switched off stay exactly as you left them, and only the ones you don't have yet are added at the end of each list.",
+      "The Rooms & inventory guide explains the starter set.",
+    ],
+  },
+  {
     version: "8.7.1",
     date: "2026-10-10",
     highlights: "Reports link through to their reservations, downloads are recorded in the Activity log, and the Reports page is easier to browse on a phone.",

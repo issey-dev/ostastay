@@ -4,6 +4,7 @@ import { goLiveDate } from "@/lib/business-date";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "@/lib/posting/ensure-charge-tree";
+import { ensureDefaultRoomFeatures } from "@/lib/properties/default-room-features";
 
 // Osta-side property onboarding — the platform admin creates a property FOR a customer
 // enterprise (app-owner requirement, 2026-08-03: enterprise, properties, and the initial
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
     // Its own chart of accounts (per property since 2026-09-23) and fee-rule wiring.
     await ensureChargeTree(prisma, { propertyId: property.id }, await chartModulesFor(prisma, enterpriseId, body));
     await ensureFeeRules(prisma, { propertyId: property.id });
+    await ensureDefaultRoomFeatures(prisma, { enterpriseId, propertyId: property.id });
 
     const description = `Created property "${property.name}" (${property.code}) — onboarded by Osta platform admin`;
     await logActivity({ ctx, module: "CONTROLS", action: "CREATE", entityType: "Property", entityId: property.id, description });
