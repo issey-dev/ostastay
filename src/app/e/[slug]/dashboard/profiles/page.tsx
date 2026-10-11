@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useUrlState } from "@/lib/use-url-state"
 import { UserPlus, Pencil, Trash2, MoreHorizontal } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -178,13 +178,7 @@ function ProfilesDashboard() {
     const add = (key: string, node: React.ReactNode) => out.push({ key, node })
     const nationalityBadge = () =>
       p.nationality &&
-      add(
-        "nat",
-        <span className="inline-flex items-center gap-1 rounded-none border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          <CountryFlag value={p.nationality} />
-          {label("NATIONALITY", p.nationality) ?? p.nationality}
-        </span>
-      )
+      add("nat", <StatusBadge icon={<CountryFlag value={p.nationality} />} label={label("NATIONALITY", p.nationality) ?? p.nationality} tone="neutral" />)
 
     if (p.profileType === "GUEST") {
       add("visits", <StatusBadge label={stays === 0 ? "No stays yet" : `${stays} ${stays === 1 ? "visit" : "visits"}`} tone={stays > 0 ? "info" : "neutral"} />)
@@ -324,7 +318,7 @@ function ProfilesDashboard() {
                   </div>
                   <div className="flex items-end justify-between gap-3 border-t border-border pt-3">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                      {profileBadges(p).map((b) => <span key={b.key}>{b.node}</span>)}
+                      {profileBadges(p).map((b) => <Fragment key={b.key}>{b.node}</Fragment>)}
                     </div>
                     <div className="shrink-0 self-end" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>

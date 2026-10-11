@@ -10,6 +10,8 @@ type StatusBadgeProps = {
   /** Leading colored dot — for the handful of places (e.g. Property status) that need a
    * stronger at-a-glance signal than the pill's own background/text color. */
   dot?: boolean
+  /** A small leading icon (e.g. a country flag), sized and aligned with the label. */
+  icon?: React.ReactNode
   className?: string
 }
 
@@ -24,7 +26,7 @@ const DOT_CLASSES: Record<StatusTone, string> = {
 // The canonical status indicator — replaces ad hoc getStatusColor()-style helpers.
 // Color always comes from the shared status-tone map (src/lib/status-tone.ts), never
 // a locally chosen palette class.
-export function StatusBadge({ label, tone, status, dot, className }: StatusBadgeProps) {
+export function StatusBadge({ label, tone, status, dot, icon, className }: StatusBadgeProps) {
   const resolvedTone = tone ?? (status ? statusTone(status) : "neutral")
   return (
     <span
@@ -36,6 +38,7 @@ export function StatusBadge({ label, tone, status, dot, className }: StatusBadge
       )}
     >
       {dot && <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-none", DOT_CLASSES[resolvedTone])} />}
+      {icon && <span className="mr-1 inline-flex shrink-0 items-center">{icon}</span>}
       {label}
     </span>
   )
