@@ -1,11 +1,12 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
 import { conflictPrompt, conflictFlags } from "@/lib/conflict-prompt"
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useForm, type Resolver, type Path, type PathValue } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus, Trash2, Star, ArrowLeft, Save, ChevronDown } from "@/components/icons"
+import { Plus, Trash2, ArrowLeft, Save, ChevronDown } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { InfoHint } from "@/components/ui/info-hint"
 import { PageHeader } from "@/components/ui/page-header"
@@ -1003,7 +1004,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                         return prof ? (
                           <span className="inline-flex items-center gap-1.5 truncate">
                             {prof.firstName} {prof.lastName || ''}
-                            {prof.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                            {prof.vipLevel && <GoldStar className="h-3.5 w-3.5 shrink-0" />}
                           </span>
                         ) : <span className="text-muted-foreground">No guest selected</span>
                       })()}
@@ -1124,7 +1125,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                         <div key={gid} className="flex justify-between items-center bg-card px-3 py-2 rounded border text-sm shadow-sm">
                           <span className="inline-flex items-center gap-1.5">
                             {name}
-                            {prof.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                            {prof.vipLevel && <GoldStar className="h-3.5 w-3.5 shrink-0" />}
                           </span>
                           <Button
                             type="button" variant="ghost" size="sm"

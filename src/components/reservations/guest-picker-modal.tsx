@@ -1,12 +1,13 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Star, Search, UserPlus } from "@/components/icons"
+import { Search, UserPlus } from "@/components/icons"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { InlineLoading } from "@/components/ui/inline-loading"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -164,7 +165,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
                   >
                     <span className="inline-flex items-center gap-1.5 font-medium">
                       {p.firstName} {p.lastName || ""}
-                      {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                      {p.vipLevel && <GoldStar className="h-3.5 w-3.5 shrink-0" />}
                     </span>
                     {email && <span className="text-xs text-muted-foreground max-sm:break-all">{email}</span>}
                   </button>

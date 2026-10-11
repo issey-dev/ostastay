@@ -1,10 +1,11 @@
 "use client"
 
+import { StarToggle } from "@/components/ui/gold-star"
 import { useEffect, useState } from "react"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
 import { NationalitySelect } from "@/components/ui/nationality-select"
-import { Plus, Star, Trash2 } from "@/components/icons"
+import { Plus, Trash2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -123,7 +124,7 @@ export function AddressManager({ upid }: { upid: string }) {
                 onClick={() => !r.isPrimary && handleSetPrimary(r.id)}
                 className={cn("shrink-0 mt-0.5 pointer-coarse:grid pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:place-items-center pointer-coarse:mt-0", r.isPrimary ? "text-warning" : "text-muted-foreground hover:text-foreground")}
               >
-                <Star className={cn("h-4 w-4", r.isPrimary && "fill-current")} />
+                <StarToggle active={r.isPrimary} className="h-4 w-4" />
               </button>
               <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => handleDelete(r.id)} aria-label="Delete address">
                 <Trash2 className="h-3.5 w-3.5" />

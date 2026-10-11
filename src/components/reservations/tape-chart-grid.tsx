@@ -1,12 +1,13 @@
 "use client";
 
+import { GoldStar } from "@/components/ui/gold-star";
 import { useBusinessToday } from "@/hooks/use-business-today";
 import { toDateKey, parseDateKey } from "@/lib/date-only"
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
-import { Loader2, Calendar, User, DoorOpen, Star, Key, ExternalLink, ChevronLeft, ChevronRight } from "@/components/icons";
+import { Loader2, Calendar, User, DoorOpen, Key, ExternalLink, ChevronLeft, ChevronRight } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -365,7 +366,7 @@ export function TapeChartGrid() {
                   <div className="flex items-center text-xs text-muted-foreground"><User className="w-3 h-3 mr-1" /> Guest</div>
                   <div className="font-medium inline-flex items-center gap-1.5">
                     {selectedReservation.primaryGuest.firstName} {selectedReservation.primaryGuest.lastName}
-                    {selectedReservation.primaryGuest.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                    {selectedReservation.primaryGuest.vipLevel && <GoldStar className="h-3.5 w-3.5 shrink-0" />}
                   </div>
                 </div>
                 <div className="space-y-1">

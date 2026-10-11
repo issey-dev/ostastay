@@ -1,12 +1,13 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
 import { useEffect, useState, useRef, use, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useSmartBack } from "@/lib/use-smart-back"
 import { format } from "date-fns"
 import {
-  ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Star, Key, LogOut,
+  ArrowLeft, Pencil, ReceiptText, MessageSquare, FileText, Key, LogOut,
   Wallet, BedDouble, Users, CalendarDays, Building2, ArrowLeftRight, XCircle, UserRound, Info, Bell, RotateCcw,
   ChevronDown, Plus,
 } from "@/components/icons"
@@ -667,7 +668,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
             </Link>
             {isVip(guest) && (
               <Badge variant="outline" className="bg-warning-muted text-warning border-warning/40 gap-1">
-                <Star className="w-3 h-3 fill-current" /> VIP{guest?.vipLevel ? ` · ${guest.vipLevel}` : ""}
+                <GoldStar className="w-3 h-3" /> VIP{guest?.vipLevel ? ` · ${guest.vipLevel}` : ""}
               </Badge>
             )}
             {nationalityLabel && (
@@ -700,7 +701,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                   >
                     <UserRound className="w-3 h-3 text-muted-foreground" />
                     {profileName(ag.profile)}
-                    {isVip(ag.profile) && <Star className="w-3 h-3 text-warning fill-current" />}
+                    {isVip(ag.profile) && <GoldStar className="w-3 h-3" />}
                     {regLabel(ag.profile?.upid) && (
                       <span className="font-mono text-muted-foreground/80" title="Green Tax registration number (assigned at End of Day)">
                         {regLabel(ag.profile?.upid)}

@@ -295,7 +295,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
   // The personal details a front desk usually wants and a profile often lacks.
   const missingPersonal = isIndividual && (!profile.gender || !profile.dateOfBirth || !profile.nationality || !profile.preferredLanguage)
 
-  const renderStayRow = (r: StayRecord, showBreakdown: boolean) => (
+  const renderStayRow = (r: StayRecord) => (
     <div key={r.id} className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -321,16 +321,6 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
           <p className="text-sm font-semibold mt-1 tabular-nums">${r.revenueTotal.toFixed(2)}</p>
         </div>
       </div>
-      {showBreakdown && r.revenueBreakdown.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-border text-xs text-muted-foreground space-y-0.5">
-          {r.revenueBreakdown.map((b) => (
-            <div key={b.code} className="flex justify-between">
-              <span>{b.code} — {b.description}</span>
-              <span className="tabular-nums">${b.amount.toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 
@@ -619,7 +609,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                   {(!stayHistory?.future || stayHistory.future.length === 0) ? (
                     <EmptyState size="inline" title="No upcoming or in-house stays." />
                   ) : (
-                    <div className="flex flex-col gap-2">{stayHistory.future.map((r) => renderStayRow(r, false))}</div>
+                    <div className="flex flex-col gap-2">{stayHistory.future.map((r) => renderStayRow(r))}</div>
                   )}
                 </CardContent>
               </Card>
@@ -631,7 +621,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                   {(!stayHistory?.history || stayHistory.history.length === 0) ? (
                     <EmptyState size="inline" title="No past stays on record." />
                   ) : (
-                    <div className="flex flex-col gap-2">{stayHistory.history.map((r) => renderStayRow(r, true))}</div>
+                    <div className="flex flex-col gap-2">{stayHistory.history.map((r) => renderStayRow(r))}</div>
                   )}
                 </CardContent>
               </Card>
