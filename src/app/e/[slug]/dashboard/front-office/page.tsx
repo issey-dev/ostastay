@@ -488,14 +488,17 @@ function FrontOfficeDashboardContent() {
     )
   // The card shows the two buttons the desk reaches for in that tab; everything else sits
   // behind the "..." menu.
-  const DeskActionBar = ({ actions, more }: { actions: DeskAction[]; more: DeskAction[] }) => (
-    <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
+  const DeskActionBar = ({ actions, more, bare = false }: { actions: DeskAction[]; more: DeskAction[]; bare?: boolean }) => (
+    <div
+      className={bare ? "flex items-center justify-end gap-1.5" : "mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-3"}
+      onClick={(e) => e.stopPropagation()}
+    >
       {actions.map((a) => (
         <Button key={a.key} size="sm" variant="outline" className={`h-8 ${a.tone ? DESK_TONE[a.tone] : ""}`} disabled={a.disabled} title={a.title} onClick={a.onClick}>
           <a.icon className="mr-1.5 h-3.5 w-3.5" /> {a.label}
         </Button>
       ))}
-      <span className="ml-auto"><MoreMenu items={more} /></span>
+      <span className={bare ? "" : "ml-auto"}><MoreMenu items={more} /></span>
     </div>
   )
   const DeskResCard = ({ res, balance, actions, more }: { res: any; balance?: number; actions: DeskAction[]; more: DeskAction[] }) => (
@@ -623,16 +626,16 @@ function FrontOfficeDashboardContent() {
           icon={LogIn}
         />
         <StatTile
-          label="Departures"
-          value={`${data?.departuresSummary?.checkedOut ?? 0} / ${data?.departuresSummary?.expected ?? 0}`}
-          footnote={`checked out · ${Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out`}
-          icon={LogOut}
-        />
-        <StatTile
           label="In-House"
           value={`${data?.inHouseSummary?.rooms ?? 0} rooms`}
           footnote={`${data?.inHouseSummary?.adults ?? 0} Adt · ${data?.inHouseSummary?.children ?? 0} Chd · ${data?.inHouseSummary?.infants ?? 0} Inf`}
           icon={Users}
+        />
+        <StatTile
+          label="Departures"
+          value={`${data?.departuresSummary?.checkedOut ?? 0} / ${data?.departuresSummary?.expected ?? 0}`}
+          footnote={`checked out · ${Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out`}
+          icon={LogOut}
         />
         <StatTile
           label="Room status"
@@ -663,10 +666,6 @@ function FrontOfficeDashboardContent() {
             <span className="hidden md:inline">Arrivals ({arrivals.length})</span>
             <span className="text-xs md:hidden">Arrivals<PhoneCount n={arrivals.length} /></span>
           </TabsTrigger>
-          <TabsTrigger value="departures" className="max-md:px-0.5">
-            <span className="hidden md:inline">Departures ({departures.length})</span>
-            <span className="text-xs md:hidden">Departs<PhoneCount n={departures.length} /></span>
-          </TabsTrigger>
           <TabsTrigger value="inhouse" className="max-md:px-0.5">
             <span className="hidden md:inline">In-House ({inHouse.length})</span>
             <span className="text-xs md:hidden">In-house<PhoneCount n={inHouse.length} /></span>
@@ -674,6 +673,10 @@ function FrontOfficeDashboardContent() {
           <TabsTrigger value="roommoves" className="max-md:px-0.5">
             <span className="hidden md:inline">Room moves ({data?.roomMovesToday?.length})</span>
             <span className="text-xs md:hidden">Moves<PhoneCount n={data?.roomMovesToday?.length ?? 0} /></span>
+          </TabsTrigger>
+          <TabsTrigger value="departures" className="max-md:px-0.5">
+            <span className="hidden md:inline">Departures ({departures.length})</span>
+            <span className="text-xs md:hidden">Departs<PhoneCount n={departures.length} /></span>
           </TabsTrigger>
         </TabsList>
 
@@ -785,43 +788,7 @@ function FrontOfficeDashboardContent() {
                           <TableCell className="align-middle">{roomCell(res)}</TableCell>
                           <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
                           <TableCell className="align-middle">{renderStatus(res)}</TableCell>
-                          <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-1.5">
-                              {unassigned && (
-                                <Button size="sm" variant="outline" className="h-8" onClick={() => openAssign(res)}>
-                                  <BedDouble className="h-3.5 w-3.5 mr-1.5" /> Assign
-                                </Button>
-                              )}
-                              <Button size="sm" variant="outline" className="h-8" onClick={() => openRegCard(res.id)} title="Print registration card">
-                                <FileText className="h-3.5 w-3.5 mr-1.5" /> Reg card
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8" onClick={() => setERegRes(res)} title="Send the guest a link to fill in their own registration details">
-                                <Send className="h-3.5 w-3.5 mr-1.5" /> eReg
-                              </Button>
-                              {canCheckIn(res.status, res.checkInDate, bd) && (
-                                <Button size="sm" variant="outline" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
-                                  <Key className="h-3.5 w-3.5 mr-1.5" /> Check in
-                                </Button>
-                              )}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-44">
-                                  <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
-                                    <FileText className="h-4 w-4 mr-2" /> View details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
-                                    <MessageSquare className="h-4 w-4 mr-2" /> Traces
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => setNoShowRes(res)}>
-                                    <UserX className="h-4 w-4 mr-2" /> Mark no-show
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
+                          <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}><DeskActionBar bare {...arrivalActions(res)} /></TableCell>
                         </TableRow>
                       )
                     })}
@@ -900,29 +867,7 @@ function FrontOfficeDashboardContent() {
                         <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
                         <TableCell className={`align-middle text-right tabular-nums ${res.balance > 0.005 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>{money(res.balance)}</TableCell>
                         <TableCell className="align-middle">{renderStatus(res)}</TableCell>
-                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="outline" className="h-8" onClick={() => openFolio(res.id)}>
-                              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-8" disabled={actionLoading === res.id} onClick={() => handleCheckOut(res.id)}>
-                              <LogOut className="h-3.5 w-3.5 mr-1.5" /> {actionLoading === res.id ? "Checking out…" : "Check out"}
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-44">
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
-                                  <FileText className="h-4 w-4 mr-2" /> View details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
-                                  <MessageSquare className="h-4 w-4 mr-2" /> Traces
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
+                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}><DeskActionBar bare {...departureActions(res)} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1000,29 +945,7 @@ function FrontOfficeDashboardContent() {
                         <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
                         <TableCell className={`align-middle text-right tabular-nums ${res.balance > 0.005 ? "font-semibold" : "text-muted-foreground"}`}>{money(res.balance)}</TableCell>
                         <TableCell className="align-middle">{renderStatus(res)}</TableCell>
-                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="outline" className="h-8" onClick={() => openFolio(res.id)}>
-                              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Move
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-44">
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
-                                  <FileText className="h-4 w-4 mr-2" /> View details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
-                                  <MessageSquare className="h-4 w-4 mr-2" /> Traces
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
+                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}><DeskActionBar bare {...inHouseActions(res)} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1174,9 +1097,14 @@ function FrontOfficeDashboardContent() {
                           </TableCell>
                           <TableCell className="align-middle text-muted-foreground">{mv.toRoomTypeName}</TableCell>
                           <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                            <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" disabled={!res} onClick={() => res && openRoomMove(res)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move room"}
-                            </Button>
+                            <DeskActionBar
+                              bare
+                              actions={[
+                                { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(mv.reservationId, guestDisplayName(mv.primaryGuest)) },
+                                { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(mv.reservationId) },
+                              ]}
+                              more={res ? [{ key: "move", label: unassigned ? "Assign / Move room" : "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }] : []}
+                            />
                           </TableCell>
                         </TableRow>
                       )
