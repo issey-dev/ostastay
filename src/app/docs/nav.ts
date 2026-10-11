@@ -122,6 +122,8 @@ export const DOC_AREAS: DocArea[] = [
         title: "Operations",
         links: [
           { href: "/docs/operations", title: "Overview", summary: "Day-to-day guides for property staff." },
+          { href: "/docs/operations/desk", title: "Front Desk, Reservations and Tape Chart", summary: "For front office and reservations: the daily screens and badges, moving guests between rooms and split stays." },
+          { href: "/docs/operations/groups-and-clients", title: "Group blocks and Client Relations", summary: "For reservations and sales: the group's Posting Master, profiles, deactivating and eRegistration." },
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk", summary: "For front office and spa staff: finding and handling online bookings." },
           { href: "/docs/operations/transportation", title: "Transportation", summary: "For front office, airport reps and dispatch: transfers, departures, charges and the daily report." },
           { href: "/docs/operations/daily-reports", title: "Daily Reports", summary: "For managers, front office and finance: reading a report on screen and downloading it as PDF, Excel, delimited text or CSV." },

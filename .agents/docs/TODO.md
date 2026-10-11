@@ -3032,3 +3032,12 @@ numbered list, not a real remaining scope.** Two genuinely open items:
   reservations report defs, arrival/departure PDFs) and so show only one segment.
 - Rate plans with a negotiated (agent-only) plan are filtered in the form but not re-checked on the
   server for a segment's plan.
+
+## 8.8.0 follow-ups (2026-10-11)
+
+- Client Relations is cards only, so the old table's CSV export and column sort are gone; add an
+  export button if finance still needs the list.
+- The Posting Master's own check-out (settling the master folio / City Ledger invoice) is the normal
+  reservation check-out; nothing closes it automatically when the last pickup checks out.
+- Tape Chart: the fit check only sees the visible window on screen; a clash beyond it is caught by
+  the server and shown with the same prompt.

@@ -3257,6 +3257,21 @@ further questions, so the plan's recommended defaults apply (change any of them 
   Night Audit and the form preview share `ratePlanAllocationWindows` (`src/lib/allocations.ts`).
   Not yet done: Room Move on an in-house stay that still has a LATER scheduled segment (it replaces
   the newest segment), and reports that read `assignments[0]`.
+- **Profiles: delete only when fresh, otherwise deactivate** (owner, 2026-10-11): anything that points
+  at a profile (bookings as guest / travel agent / accompanying guest, folios and group blocks it
+  pays, registrations, eRegistration slots, negotiated rates, spa preferences - `src/lib/profile-links.ts`)
+  blocks deletion; `Profile.isActive` hides it from every picker and search (`/api/profiles` hides
+  inactive unless `includeInactive=1`, which Client Relations passes) and keeps all history. A guest with
+  a RESERVED / IN_HOUSE booking can't be deactivated.
+- **Group block Posting Master** (owner, 2026-10-11): each block has a PM reservation (`isPostingMaster`,
+  `GroupBlock.postingMasterReservationId`) in a pseudo "PM" room per block; its folio is the block's
+  master folio. Created at Definite (or by "Create master folio"), auto checked in with the first pickup,
+  skipped by Night Audit. It is not a pickup (no groupBlockId). See `src/lib/groups/posting-master.ts`.
+- **Front Desk / list views** (owner, 2026-10-11): Front Desk tabs run Arrivals, In-House, Room moves,
+  Departures; each row/card shows two buttons (Arrivals: Check in, Register; In-house and Room moves:
+  Traces, Folio; Departures: Check out, Folio) and a "..." menu for the rest. Client Relations is one card
+  per row with badges relevant to the profile type. VIP and "primary" markers are the solid
+  `GoldStar` / `StarToggle` (`src/components/ui/gold-star.tsx`), never the outlined icon.
 - **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
   "More" menu, last and in red, and keep their confirmations.
 - **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.
