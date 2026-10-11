@@ -2,7 +2,7 @@
 
 import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useUrlState } from "@/lib/use-url-state"
-import { UserPlus, UserX, Pencil, Trash2, MoreHorizontal } from "@/components/icons"
+import { UserPlus, UserX, Pencil, Trash2, MoreHorizontal, Download } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -123,6 +123,8 @@ function ProfilesDashboard() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deactivating, setDeactivating] = useState<Profile | null>(null)
+  // The list is the 50 most recently updated matches; sorting reorders those on screen.
+  const [sortBy, setSortBy] = useState<"recent" | "name" | "visits">("recent")
   const [deletingUpid, setDeletingUpid] = useState<string | null>(null)
 
   const fetchProfiles = useCallback((signal?: AbortSignal) => {
@@ -175,6 +177,40 @@ function ProfilesDashboard() {
   //   staff - nationality.
   // A badge for something that is not set (a "Regular" tag, "active", an empty commission)
   // is never shown.
+  const sorted = [...profiles].sort((a, b) =>
+    sortBy === "name"
+      ? displayName(a).localeCompare(displayName(b))
+      : sortBy === "visits"
+        ? (b.totalStays || 0) - (a.totalStays || 0) || displayName(a).localeCompare(displayName(b))
+        : 0
+  )
+
+  const exportCsv = () => {
+    const esc = (v: unknown) => {
+      const t = v == null ? "" : String(v)
+      return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+    }
+    const header = ["Name", "Type", "Email", "Phone", "Nationality", "Visits", "Revenue", "VIP level", "Classification", "Status"]
+    const rows = sorted.map((p) => [
+      displayName(p),
+      PROFILE_TYPE_LABELS[p.profileType] ?? p.profileType,
+      primaryEmail(p.communications) ?? "",
+      primaryMobile(p.communications) ?? "",
+      p.nationality ? (label("NATIONALITY", p.nationality) ?? p.nationality) : "",
+      p.totalStays || 0,
+      (p.totalRevenue || 0).toFixed(2),
+      p.vipLevel ? (label("VIP_LEVEL", p.vipLevel) ?? p.vipLevel) : "",
+      label("CLASSIFICATION", p.classification) ?? p.classification,
+      p.isActive === false ? "Inactive" : "Active",
+    ])
+    const blob = new Blob([[header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = `profiles-${activeTab.toLowerCase()}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   const profileBadges = (p: Profile) => {
     const out: { key: string; node: React.ReactNode }[] = []
     const stays = p.totalStays || 0
@@ -331,8 +367,23 @@ function ProfilesDashboard() {
         <EmptyState icon={Users} title="No profiles found" />
       ) : (
         <>
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <Select value={sortBy} onValueChange={(v) => v && setSortBy(v as typeof sortBy)}>
+              <SelectTrigger className="w-44" aria-label="Sort by">
+                <SelectValue>{sortBy === "name" ? "Name A–Z" : sortBy === "visits" ? "Most visits" : "Recently updated"}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Recently updated</SelectItem>
+                <SelectItem value="name">Name A–Z</SelectItem>
+                <SelectItem value="visits">Most visits</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="max-md:hidden" onClick={exportCsv}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
+            </Button>
+          </div>
           <div className="grid gap-3 grid-cols-1">
-            {profiles.map((p) => {
+            {sorted.map((p) => {
               const email = primaryEmail(p.communications)
               const mobile = primaryMobile(p.communications)
               return (

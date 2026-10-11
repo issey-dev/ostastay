@@ -3022,21 +3022,8 @@ numbered list, not a real remaining scope.** Two genuinely open items:
 - Website Booking API quotes still assume every guest pays Green Tax (no profile before
   booking). Night Audit posts per person, so the folio can be lower than the quote.
 
-## Split stays: per-segment room type / rate plan (2026-10-11, DECISIONS)
-
-- **Room Move on an in-house stay that still has a later scheduled segment** (`api/reservations/[id]/
-  room-move`): it ends the NEWEST segment today and re-creates one to checkout, so a booked future
-  segment would be overwritten. It should act on the segment covering tonight (`segmentForNight`) and
-  keep the later ones.
-- Reports that show a single room type / rate for a reservation read `assignments[0]` (front-desk and
-  reservations report defs, arrival/departure PDFs) and so show only one segment.
-- Rate plans with a negotiated (agent-only) plan are filtered in the form but not re-checked on the
-  server for a segment's plan.
-
 ## 8.8.0 follow-ups (2026-10-11)
 
-- Client Relations is cards only, so the old table's CSV export and column sort are gone; add an
-  export button if finance still needs the list.
 - The Posting Master's own check-out (settling the master folio / City Ledger invoice) is the normal
   reservation check-out; nothing closes it automatically when the last pickup checks out.
 - Tape Chart: the fit check only sees the visible window on screen; a clash beyond it is caught by

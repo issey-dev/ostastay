@@ -50,7 +50,7 @@ export default function GroupsAndClients() {
           ["Staff", "Nationality"],
         ]}
       />
-      <p>Click a card to open the profile. The <strong>…</strong> menu edits it.</p>
+      <p>Click a card to open the profile. The <strong>…</strong> menu edits it. A sort (recently updated, name, most visits) and <strong>Export CSV</strong> sit above the list and apply to the profiles shown.</p>
 
       <H2>Deleting or deactivating a profile</H2>
       <p>

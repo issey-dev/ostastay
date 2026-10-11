@@ -3255,8 +3255,9 @@ further questions, so the plan's recommended defaults apply (change any of them 
   only to the nights of the segments on that plan: `ReservationAllocation.appliesTo` holds the
   windows (null = whole stay: single segment, meal-plan and manual allocations), and the quote,
   Night Audit and the form preview share `ratePlanAllocationWindows` (`src/lib/allocations.ts`).
-  Not yet done: Room Move on an in-house stay that still has a LATER scheduled segment (it replaces
-  the newest segment), and reports that read `assignments[0]`.
+  Room Move acts on the segment covering the business date and leaves later segments alone; reports
+  list every room / room type of a stay (`roomTypeNames`, `primaryRoom`); a negotiated rate plan is
+  enforced server-side (`negotiated-access.ts`).
 - **Profiles: delete only when fresh, otherwise deactivate** (owner, 2026-10-11): anything that points
   at a profile (bookings as guest / travel agent / accompanying guest, folios and group blocks it
   pays, registrations, eRegistration slots, negotiated rates, spa preferences - `src/lib/profile-links.ts`)

@@ -61,6 +61,13 @@ export default function DeskGuide() {
         <li>A room of a <strong>different type</strong> affects the rate: choose to recalculate at the new type or keep the current rate. A reason is needed for an in-house guest and optional before arrival.</li>
         <li>An in-house guest moves from the business date onward, the old room is marked dirty, and a guest due out today has nothing left to move. Only reserved and in-house bookings can be dragged.</li>
       </ul>
+      <p>
+        <strong>If the stay has several room segments</strong>, each segment is its own bar and a drag moves only that bar: its dates,
+        the other segments and their rooms stay as they are, and the fit check looks at that segment&apos;s own nights. A different
+        room type changes the rate of that segment only, and the booking&apos;s <strong>Room move</strong> badge updates. An in-house
+        guest can only drag the segment they are in tonight; a move splits that segment from tonight to where it ends and leaves later
+        segments alone. To change dates, or a segment you cannot drag, use <strong>Adjust the dates</strong> (Edit reservation).
+      </p>
 
       <H2>Split stays</H2>
       <p>
