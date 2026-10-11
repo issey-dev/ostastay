@@ -39,6 +39,7 @@ const specialRequests: ReportDef = {
         room: r.assignments.map((a) => a.room?.roomNumber).filter(Boolean).join(", ") || "—",
         guest: guestName(r.primaryGuest),
         request: label.get(sr.code) ?? sr.code,
+        resId: r.id,
         conf: r.confirmationNo,
       }))
     );
@@ -49,7 +50,7 @@ const specialRequests: ReportDef = {
         { key: "room", label: "Room", width: 0.8 },
         { key: "guest", label: "Guest", width: 1.8 },
         { key: "request", label: "Special Request", width: 2 },
-        { key: "conf", label: "Confirmation", width: 1.2 },
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
       ],
       rows,
     };

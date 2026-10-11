@@ -19,11 +19,15 @@ EOD snapshots not merged, recents are `localStorage` only.
 constants (Next only allows HTTP handlers + route config there). Moved to `src/lib/charge-code-include.ts` and
 `src/lib/outlet-options.ts`. Rule: never export helpers/constants from a `route.ts`.
 
+### Added in 8.7.1
+- Row click-through: `ReportColumn.link` (`{ to: "reservation", idKey }`) — rows carry `resId`; the on-screen table renders the cell as a link (files ignore it).
+- Audit trail: every download writes `UserActivityLog` (module `REPORTS`, action `EXPORT`).
+- Phone landing: report groups fold. Docs screenshots + `mobile:audit` capture for `/reports` done; PDF guides rebuilt.
+
 ### Left open
-- Row click-through (`rowLink`, §3.1) — report rows carry confirmation numbers, not ids; needs ids added per report.
 - Native Excel charts (Summary sheet has the numbers only); Windows-1252 maps the common characters only.
-- Docs screenshot for the new page (`npm run docs:demo` then `npm run docs:shots`) and `npm run mobile:audit` baseline for `/reports`.
-- Download audit trail in the activity log.
+- Transportation report rows do not link to the reservation yet.
+- Owner decision: a separate `REPORTS:export` right.
 Trigger: client feedback — Daily Reports feels "old school"; wants more visual components, a
 preview that feels native to the app, and a **Download as** modal (PDF / Excel / Delimited
 text / CSV) instead of the row of format buttons.

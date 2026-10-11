@@ -15,6 +15,19 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.7.1",
+    date: "2026-10-10",
+    highlights: "Reports link through to their reservations, downloads are recorded in the Activity log, and the Reports page is easier to browse on a phone.",
+    new: [
+      "In Daily Reports, a confirmation number (and the reference in the Transaction Journal, and the invoice number in the GST report) is now a link: click it to open that reservation.",
+      "Every report download — PDF, Excel, delimited text or CSV, and the Transportation report from the board — is recorded in the Activity log under Daily Reports: who, which report, which file type and which dates. Reading a report on screen is not recorded.",
+    ],
+    improved: [
+      "On a phone, the report groups on the Daily Reports page start folded, so the list of reports is a handful of lines instead of a long scroll.",
+      "The Daily Reports guide now has screenshots of the report page and the Download as window.",
+    ],
+  },
+  {
     version: "8.7.0",
     date: "2026-10-10",
     highlights: "Daily Reports are redesigned: each report opens on screen with key figures and charts, and files are downloaded from one Download as window.",

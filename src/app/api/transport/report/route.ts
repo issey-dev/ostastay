@@ -6,6 +6,7 @@ import { DATE_KEY } from "@/lib/transport/constants"
 import { addDaysKey } from "@/lib/transport/time"
 import { loadBranding, renderReport } from "@/lib/reports/engine"
 import { consumeRateLimit, rateLimitHeaders } from "@/lib/website-api/rate-limit"
+import { logActivity } from "@/lib/activity-log"
 import { BookingError } from "@/lib/booking-error"
 
 // GET /api/transport/report?propertyId=&from=&to=&format=csv|pdf|xlsx|json — the Daily
@@ -34,6 +35,15 @@ export async function GET(request: Request) {
     const branding = await loadBranding(ctx, propertyId)
     // The board's CSV keeps its original shape (title block, subtotals) for anyone importing it.
     const file = await renderReport(TRANSPORT_REPORTS[0], result, branding, format, { layout: "presentation", encoding: "utf8", lineEnding: "lf" })
+    await logActivity({
+      ctx,
+      module: "REPORTS",
+      action: "EXPORT",
+      description: `Downloaded "Daily Transportation Report" as ${format.toUpperCase()}`,
+      entityType: "Report",
+      entityId: "transport-daily",
+      metadata: { format, propertyId, from, to },
+    })
     return new NextResponse(new Uint8Array(file.body), {
       status: 200,
       headers: {

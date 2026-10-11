@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Callout, DocTitle, H2, Pager, Table } from "../../components"
+import { Callout, DocTitle, H2, Pager, Shot, Table } from "../../components"
 
 export const metadata: Metadata = { title: "Daily Reports" }
 
@@ -24,8 +24,11 @@ export default function DailyReports() {
         <li><strong>Key figures</strong> across the top give the answer at a glance — arrivals, balance due, room revenue, open traces and so on.</li>
         <li><strong>Charts</strong> show how the figures break down: by status, room type, outlet, day or travel agent. Choose <em>View as table</em> under a chart for the same numbers as text.</li>
         <li><strong>Details</strong> is the full list. Click a column heading to sort, type in the search box to narrow it, and use the arrow beside a group name to fold it away. Totals stay in view at the bottom.</li>
+        <li>Where a list shows a confirmation number, click it to open that reservation.</li>
         <li>The address in your browser holds the report and its dates, so you can bookmark it or send the link to a colleague.</li>
       </ul>
+
+      <Shot name="ops-daily-reports" alt="The Availability report: the report list at the side, the date range and filters, three key figures, a chart of rooms sold and available for each night, and the details list grouped by room type." />
 
       <H2>Downloading</H2>
       <p>
@@ -49,6 +52,13 @@ export default function DailyReports() {
       <p>
         <strong>Print</strong> opens the PDF in a new tab so you can print it. On a phone or tablet use <strong>Download as…</strong> from the bar at the
         bottom of the screen.
+      </p>
+
+      <Shot name="ops-daily-reports-download" alt="The Download as window with the four file types and the choices for a PDF." />
+
+      <p>
+        Every download is recorded in the <strong>Activity log</strong> under Daily Reports — who downloaded which report, in which
+        file type and for which dates. Reading a report on screen is not recorded.
       </p>
 
       <H2>On a phone or tablet</H2>

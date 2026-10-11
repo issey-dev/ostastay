@@ -382,31 +382,49 @@ function ReportsContent() {
 // Nothing chosen yet: the whole catalogue as cards, so the reports can be browsed rather than
 // remembered.
 function Landing({ catalog, onSelect }: { catalog: Catalog; onSelect: (key: string) => void }) {
+  // On a phone each group starts folded (a wall of 22 cards is no way to browse); from a
+  // tablet up the groups are always open.
+  const [open, setOpen] = useState<Set<string>>(new Set())
   const groups = catalog.modules.map((m) => ({ ...m, items: catalog.reports.filter((r) => r.module === m.module) })).filter((m) => m.items.length)
   if (groups.length === 0) return <EmptyState icon={FileText} title="No reports available" description="Your role doesn't include any reports yet." />
   return (
-    <div className="space-y-6">
-      {groups.map((g) => (
-        <section key={g.module} aria-label={g.label}>
-          <h2 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">{g.label}</h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {g.items.map((r) => (
+    <div className="space-y-6 max-md:space-y-2">
+      {groups.map((g) => {
+        const expanded = open.has(g.module)
+        return (
+          <section key={g.module} aria-label={g.label}>
+            {/* Phones: a tappable, foldable header. Tablet and up: a plain heading. */}
+            <h2 className="md:hidden">
               <button
-                key={r.key}
                 type="button"
-                onClick={() => onSelect(r.key)}
-                className="group flex flex-col gap-1 rounded-2xl bg-card p-4 text-left shadow-elevation-1 ring-1 ring-foreground/5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                aria-expanded={expanded}
+                onClick={() => setOpen((prev) => { const n = new Set(prev); if (n.has(g.module)) n.delete(g.module); else n.add(g.module); return n })}
+                className="flex min-h-12 w-full items-center justify-between rounded-xl bg-card px-4 text-sm font-semibold text-foreground shadow-elevation-1 ring-1 ring-foreground/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
-                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <FileText className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                  {r.name}
-                </span>
-                <span className="line-clamp-2 text-xs text-muted-foreground">{r.description}</span>
+                <span>{g.label}</span>
+                <span className="text-xs font-normal tabular-nums text-muted-foreground">{g.items.length} {expanded ? "▴" : "▾"}</span>
               </button>
-            ))}
-          </div>
-        </section>
-      ))}
+            </h2>
+            <h2 className="mb-2 hidden text-xs font-semibold tracking-wider text-muted-foreground uppercase md:block">{g.label}</h2>
+            <div className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-3 max-md:mt-2 ${expanded ? "" : "max-md:hidden"}`}>
+              {g.items.map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  onClick={() => onSelect(r.key)}
+                  className="group flex flex-col gap-1 rounded-2xl bg-card p-4 text-left shadow-elevation-1 ring-1 ring-foreground/5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <FileText className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                    {r.name}
+                  </span>
+                  <span className="line-clamp-2 text-xs text-muted-foreground">{r.description}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )
+      })}
     </div>
   )
 }

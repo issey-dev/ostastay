@@ -2,14 +2,17 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Daily Reports rework (2026-10-10, 8.7.0) — BUILT, follow-ups open
+## Daily Reports rework (2026-10-10, 8.7.0 / 8.7.1) — DONE, follow-ups open
 
 See [REPORTS_REWORK_PLAN.md](REPORTS_REWORK_PLAN.md) ("What shipped" / "Left open").
-- [ ] Row click-through from report rows to the reservation/folio (needs ids in each report's rows).
-- [ ] Re-shoot docs screenshot for `/docs/operations/daily-reports`; add `/reports` to the `mobile:audit` baseline.
-- [ ] Log report downloads (who/what/params/format) to the activity log.
-- [ ] Owner call: should downloading need its own right (`REPORTS:export`) apart from viewing? (Not built.)
-- [ ] CSV default is now data-only: if a client script relied on the old title/subtotal rows, they pick "As printed".
+- [x] Row click-through to the reservation (8.7.1): `ReportColumn.link` + a `resId` on the rows. Not yet on the Transportation report (its rows carry no reservation id).
+- [x] Docs screenshots for `/docs/operations/daily-reports` (`ops-daily-reports`, `ops-daily-reports-download`); `/reports` captured with `mobile:audit` (no overflow at 360–1280).
+- [x] Report downloads are logged to the activity log (module REPORTS, action EXPORT) — `/api/reports/generate` and the Transportation board export.
+- [x] PDF guides rebuilt (`docs:pdf`).
+- [ ] Owner call: should downloading need its own right (`REPORTS:export`) apart from viewing? (Not built; today view = download.)
+- [ ] Native Excel charts on the Summary sheet (it carries the numbers only).
+- [ ] Transportation report: link rows to the reservation (needs the reservation id in `BookingView`).
+- [ ] CSV default is data-only: if a client script relied on the old title/subtotal rows, they pick "As printed".
 
 ## Stop-sale override follow-ups (2026-10-10)
 

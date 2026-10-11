@@ -1,6 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, Search, X } from "@/components/icons"
 import { Input } from "@/components/ui/input"
@@ -28,7 +30,22 @@ function compare(a: unknown, b: unknown, col: ReportColumn): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" })
 }
 
+// A cell's text, as a link to its record when the column declares one and the row has an id.
+function CellContent({ row, col, slug }: { row: Row; col: ReportColumn; slug?: string }) {
+  const text = formatCell(row[col.key], col.format)
+  const id = col.link ? row[col.link.idKey] : null
+  if (text && col.link && typeof id === "string" && id && slug) {
+    return (
+      <Link href={`/e/${slug}/dashboard/reservations/${id}`} className="font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        {text}
+      </Link>
+    )
+  }
+  return <>{text || <span className="text-muted-foreground/60">—</span>}</>
+}
+
 export function ReportTable({ result }: { result: ReportResult }) {
+  const { slug } = useParams<{ slug: string }>()
   const cols = result.columns
   const [query, setQuery] = useState("")
   const [sort, setSort] = useState<Sort>(null)
@@ -83,9 +100,9 @@ export function ReportTable({ result }: { result: ReportResult }) {
   const phoneCard = (row: Row, key: string | number) => (
     <MobileCard
       key={key}
-      title={cell(row, cols[0]) || "—"}
-      subtitle={cols[1] ? cell(row, cols[1]) : undefined}
-      meta={cols.slice(2, 6).map((c) => ({ label: c.label, value: cell(row, c) || "—" }))}
+      title={<CellContent row={row} col={cols[0]} slug={slug} />}
+      subtitle={cols[1] ? <CellContent row={row} col={cols[1]} slug={slug} /> : undefined}
+      meta={cols.slice(2, 6).map((c) => ({ label: c.label, value: <CellContent row={row} col={c} slug={slug} /> }))}
     />
   )
 
@@ -170,7 +187,7 @@ export function ReportTable({ result }: { result: ReportResult }) {
                       </button>
                     </th>
                   </tr>
-                  {open && g.shown.map((r, i) => <DataRow key={i} row={r} cols={cols} />)}
+                  {open && g.shown.map((r, i) => <DataRow key={i} row={r} cols={cols} slug={slug} />)}
                   {open && g.subtotals && !q && (
                     <tr className="border-b border-border bg-muted/20 font-medium">
                       {cols.map((c, i) => (
@@ -182,7 +199,7 @@ export function ReportTable({ result }: { result: ReportResult }) {
               )
             })
           ) : (
-            <tbody>{flat!.map((r, i) => <DataRow key={i} row={r} cols={cols} />)}</tbody>
+            <tbody>{flat!.map((r, i) => <DataRow key={i} row={r} cols={cols} slug={slug} />)}</tbody>
           )}
           {!q && <tfoot>{totalsRow}</tfoot>}
         </table>
@@ -215,12 +232,12 @@ export function ReportTable({ result }: { result: ReportResult }) {
   )
 }
 
-function DataRow({ row, cols }: { row: Row; cols: ReportColumn[] }) {
+function DataRow({ row, cols, slug }: { row: Row; cols: ReportColumn[]; slug?: string }) {
   return (
     <tr className="border-b border-border/60 transition-colors hover:bg-muted/40">
       {cols.map((c) => (
         <td key={c.key} className={cn("px-3 py-2 align-top", align(c))}>
-          {formatCell(row[c.key], c.format) || <span className="text-muted-foreground/60">—</span>}
+          <CellContent row={row} col={c} slug={slug} />
         </td>
       ))}
     </tr>
