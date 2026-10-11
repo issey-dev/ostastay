@@ -1,9 +1,11 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
+import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Wand2, Key, LogOut, ReceiptText, Building2, Bell, FileText, Star, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -65,7 +67,7 @@ type Reservation = {
   hasScheduledRoomMove: boolean
   transportBookings?: { direction: string; status: string; serviceDate: string }[]
   primaryGuestId: string
-  primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string, vipLevel: string | null }
+  primaryGuest: { firstName: string, lastName: string, companyName: string, profileType: string, vipLevel: string | null, classification?: string, totalStays?: number }
   travelAgentId: string | null
   travelAgent: { companyName: string, firstName: string, lastName: string } | null
   accompanyingGuests?: { profile: { upid: string, firstName: string, lastName: string, companyName: string, profileType: string } }[]
@@ -83,8 +85,13 @@ type Reservation = {
     ratePlanId: string
     ratePlan: { code: string, name: string }
     overrideRate: number | null
+    chargeRoomTypeId?: string | null
   }[]
   specialRequests?: { id: string, code: string }[]
+  traces?: { id: string, alertOnOpen: boolean }[]
+  transports?: { id: string, direction: string }[]
+  guestRegistrations?: { id: string }[]
+  eRegistrationSlots?: { status: string }[]
   folios?: { id: string, payments?: { amount: number, isRefund: boolean }[] }[]
   allocations?: {
     id: string
@@ -167,6 +174,62 @@ const FLAG_TONE: Record<FlagTone, string> = {
   destructive: "bg-destructive-muted text-destructive ring-destructive/20",
 }
 
+// Labelled mini-badges for the card view: what is filled in on this booking, in words
+// (the table keeps the compact icon strip above). Only what applies shows.
+const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
+  const out: (Flag & { label: string })[] = []
+  const n = (count: number, one: string, many = `${one}s`) => (count > 1 ? `${count} ${many}` : one)
+  if (res.mealPlan && res.mealPlan !== "NONE") out.push({ key: "meal", label: res.mealPlan, title: `Meal plan: ${res.mealPlan}`, tone: "info" })
+  const pkgs = res.allocations?.length ?? 0
+  if (pkgs > 0) out.push({ key: "pkg", label: n(pkgs, "Package"), title: (res.allocations ?? []).map(a => a.allocation.code).join(", "), tone: "muted" })
+  const transfers = res.transportBookings ?? []
+  if (transfers.length > 0) out.push({ key: "transfer", label: "Transportation", title: getReservationFlags(res).find(f => f.key === "transfer")?.title ?? "Transfers", tone: transfers.some(t => t.status === "DRAFT") ? "warning" : "info" })
+  else if ((res.transports?.length ?? 0) > 0) {
+    const legs = res.transports!.map(t => (t.direction === "DEPARTURE" || t.direction === "DROPOFF" ? "drop-off" : "pickup")).join(", ")
+    out.push({ key: "transport", label: "Transportation", title: `Transport details added (${legs})`, tone: "info" })
+  }
+  const traces = res.traces?.length ?? 0
+  if (traces > 0) out.push({ key: "traces", label: n(traces, "Trace"), title: `${traces} open trace${traces > 1 ? "s" : ""}${res.traces?.some(t => t.alertOnOpen) ? " (alerts on open)" : ""}`, tone: res.traces?.some(t => t.alertOnOpen) ? "warning" : "muted" })
+  const deposit = getDepositTotal(res)
+  if (res.status === "RESERVED" && deposit > 0.005) out.push({ key: "deposit", label: "Deposit", title: `Deposit $${deposit.toFixed(2)} collected`, tone: "success" })
+  if ((res.guestRegistrations?.length ?? 0) > 0) out.push({ key: "reg", label: "Registration", title: "Registration card completed", tone: "success" })
+  else if (res.eRegistrationSlots?.some(s => s.status !== "PENDING")) out.push({ key: "ereg", label: "eRegistration", title: "Guest submitted eRegistration — ready to apply", tone: "info" })
+  const requests = res.specialRequests?.length ?? 0
+  if (requests > 0) out.push({ key: "req", label: n(requests, "Special request"), title: (res.specialRequests ?? []).map(r => r.code).join(", "), tone: "muted" })
+  if ((res.assignments?.length ?? 0) > 1) out.push({ key: "split", label: "Split stay", title: `${res.assignments.length} room assignments during the stay`, tone: "warning" })
+  // A rate that is not the rate plan's own: a flat override typed on the booking, or a
+  // room-type change that kept the old room type's rate.
+  const overridden = (res.assignments ?? []).filter(a => a.overrideRate != null)
+  const keptRate = (res.assignments ?? []).some(a => a.chargeRoomTypeId)
+  if (overridden.length > 0 || keptRate) {
+    const amounts = [...new Set(overridden.map(a => `$${Number(a.overrideRate).toFixed(2)}`))].join(", ")
+    out.push({
+      key: "rate", label: "Override rate",
+      title: overridden.length > 0 ? `Flat override rate: ${amounts}${keptRate ? " (billed as a different room type)" : ""}` : "Billed as a different room type (rate kept after a room change)",
+      tone: "warning",
+    })
+  }
+  if (res.hasScheduledRoomMove) out.push({ key: "move", label: "Room move", title: "Scheduled room move during the stay", tone: "warning" })
+  if (res.travelAgent) out.push({ key: "ta", label: "Agent", title: `Travel agent: ${res.travelAgent.companyName || res.travelAgent.firstName}`, tone: "muted" })
+  const tasks = getActiveTasks(res).length
+  if (tasks > 0) out.push({ key: "task", label: n(tasks, "Housekeeping request"), title: `${tasks} active housekeeping request${tasks > 1 ? "s" : ""}`, tone: "destructive" })
+  return out
+}
+
+function CardBadges({ res }: { res: Reservation }) {
+  const badges = getCardBadges(res)
+  if (badges.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1">
+      {badges.map(b => (
+        <span key={b.key} title={b.title} className={`inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium leading-4 ring-1 ring-inset ${FLAG_TONE[b.tone]}`}>
+          {b.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function FlagStrip({ res, className = "" }: { res: Reservation; className?: string }) {
   const flags = getReservationFlags(res)
   if (flags.length === 0) return <span className="text-xs text-muted-foreground/60">—</span>
@@ -244,7 +307,6 @@ function ReservationsList() {
   const [requestingRoomId, setRequestingRoomId] = useState("")
 
   const [housekeepingCodes, setHousekeepingCodes] = useState<any[]>([])
-  const [autoAssigning, setAutoAssigning] = useState(false)
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
   const [isFolioPanelOpen, setIsFolioPanelOpen] = useState(false)
   const [depositRes, setDepositRes] = useState<Reservation | null>(null)
@@ -412,25 +474,6 @@ function ReservationsList() {
       toast.error("Couldn't send the request. Try again.")
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const handleAutoAssign = async () => {
-    setAutoAssigning(true)
-    try {
-      const res = await fetch(`/api/reservations/auto-assign?propertyId=${propertyId}`, { method: "POST" })
-      if (res.ok) {
-        const data = await res.json()
-        toast.success(`Rooms assigned to ${data.assignedCount} of ${data.totalUnassigned} bookings`)
-        fetchData()
-      } else {
-        const data = await res.json().catch(() => null)
-        toast.error(data?.error || "Couldn't auto-assign rooms. Try again.")
-      }
-    } catch {
-      toast.error("Couldn't auto-assign rooms. Try again.")
-    } finally {
-      setAutoAssigning(false)
     }
   }
 
@@ -772,9 +815,7 @@ function ReservationsList() {
         }
         actions={
           <>
-            <Button variant="outline" className="hidden shadow-sm sm:inline-flex" onClick={handleAutoAssign} disabled={autoAssigning}>
-              <Wand2 className="mr-2 h-4 w-4" /> {autoAssigning ? "Assigning..." : "Auto-Assign"}
-            </Button>
+            <AutoAssignButton propertyId={propertyId} onDone={() => fetchData()} className="hidden shadow-sm sm:inline-flex" />
             <Link href={`/e/${slug}/dashboard/reservations/tape-chart`} className="hidden sm:block">
               <Button variant="outline" className="shadow-sm">
                 <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart
@@ -887,7 +928,6 @@ function ReservationsList() {
                 const first = res.assignments?.[0]
                 const extraRooms = (res.assignments?.length ?? 0) > 1 ? (res.assignments!.length - 1) : 0
                 const phone = phoneActions(res)
-                const hasFlags = getReservationFlags(res).length > 0
 
                 return (
                   <div
@@ -902,20 +942,47 @@ function ReservationsList() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 max-md:flex-1">
-                        <div className="font-medium text-foreground inline-flex items-center gap-1.5">
+                        <div className="text-lg font-semibold text-foreground inline-flex max-w-full items-center gap-1.5">
                           <span className="truncate">{guestName}</span>
-                          {res.primaryGuest?.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                          {(res.primaryGuest?.vipLevel || res.primaryGuest?.classification === "VIP") && (
+                            <span title={res.primaryGuest?.vipLevel ? `VIP: ${res.primaryGuest.vipLevel}` : "VIP"} className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>
+                          )}
+                          {(res.primaryGuest?.totalStays ?? 0) > 0 && (
+                            <span
+                              title={`Repeat guest, ${res.primaryGuest!.totalStays} previous stay${res.primaryGuest!.totalStays === 1 ? "" : "s"}`}
+                              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-primary"
+                            >
+                              <RotateCcw className="h-3 w-3" />{res.primaryGuest!.totalStays}
+                            </span>
+                          )}
                         </div>
+                        {(res.accompanyingGuests?.length ?? 0) > 0 && (
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground" title={res.accompanyingGuests!.map(a => `${a.profile.firstName} ${a.profile.lastName || ""}`.trim()).join(", ")}>
+                            with {res.accompanyingGuests!.map(a => `${a.profile.firstName} ${a.profile.lastName || ""}`.trim()).join(", ")}
+                          </div>
+                        )}
                         <div className="text-xs font-mono text-muted-foreground mt-0.5">
                           {res.confirmationNo}
                           {res.externalRef && <span className="text-muted-foreground/70"> · ch:{res.externalRef}</span>}
                         </div>
                       </div>
-                      <StatusBadge
+                      <div className="flex shrink-0 flex-col items-end gap-1.5 whitespace-nowrap text-right"><span>
+                        {first ? (
+                          <>
+                            <span className="text-lg font-semibold text-foreground">{first.room?.roomNumber || 'TBA'}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">{first.roomType?.code}</span>
+                            {extraRooms > 0 && <span className="ml-1 text-xs text-muted-foreground">+{extraRooms}</span>}
+                          </>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No rooms</span>
+                        )}
+                      </span>
+                        <StatusBadge
                         label={reservationStateLabel(deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate))}
                         status={deriveReservationState(res.status, res.checkInDate, res.checkOutDate, currentProperty?.businessDate)}
                         className="shrink-0"
                       />
+                      </div>
                       {/* Phone: the ⋯ menu lives in the header row next to the status. */}
                       {phone.more.length > 0 && (
                         <div className="-my-1 -mr-1 shrink-0 md:hidden" onClick={(e) => e.stopPropagation()}>
@@ -938,20 +1005,19 @@ function ReservationsList() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border max-md:mt-2 max-md:pt-2">
-                      <span className="text-foreground">
-                        {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
-                        <span className="text-muted-foreground"> · {nights}n</span>
-                      </span>
-                      <span className="text-muted-foreground">
-                        {first ? `${first.room?.roomNumber || 'TBA'} (${first.roomType?.code})` : 'No rooms'}
-                        {extraRooms > 0 && ` +${extraRooms}`}
-                      </span>
-                    </div>
-                    {/* No empty "—" flag row on a phone. */}
-                    <div className={cn("mt-2", !hasFlags && "max-md:hidden")}><FlagStrip res={res} /></div>
-                    <div className="mt-3 max-md:hidden" onClick={(e) => e.stopPropagation()}>
-                      {renderRowActions(res)}
+                    {/* Dates and badges on the left; the actions (and the ... menu) at the right, pinned to
+                        the bottom so they stay at the lower end when the badges wrap onto more lines. */}
+                    <div className="flex items-end justify-between gap-3 text-sm mt-3 pt-3 border-t border-border max-md:mt-2 max-md:pt-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-foreground">
+                          {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
+                          <span className="text-muted-foreground"> · {nights}n</span>
+                        </span>
+                        <CardBadges res={res} />
+                      </div>
+                      <div className="shrink-0 self-end max-md:hidden" onClick={(e) => e.stopPropagation()}>
+                        {renderRowActions(res)}
+                      </div>
                     </div>
                     {phone.primary && (
                       <div className="mt-2.5 md:hidden" onClick={(e) => e.stopPropagation()}>
@@ -1026,7 +1092,7 @@ function ReservationsList() {
                             >
                               {guestName}
                             </Link>
-                            {res.primaryGuest?.vipLevel && <Star className="h-4 w-4 text-warning fill-none shrink-0" />}
+                            {res.primaryGuest?.vipLevel && <GoldStar className="h-4 w-4 shrink-0" />}
                           </div>
                           <div className="text-xs font-mono text-muted-foreground truncate">
                             {res.confirmationNo}

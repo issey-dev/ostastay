@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { checkInPostingMaster } from "@/lib/groups/posting-master";
+import { segmentForNight } from "@/lib/reservation-assignments";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -111,7 +113,8 @@ export async function POST(
       }
     }
 
-    const activeAssignment = reservation.assignments[0];
+    // The segment for tonight (the first one on a normal arrival), not simply the last.
+    const activeAssignment = (businessDate ? segmentForNight(reservation.assignments, businessDate) : undefined) ?? reservation.assignments[0];
     if (!activeAssignment?.roomId) {
       return NextResponse.json({ error: "A room must be assigned before checking in" }, { status: 400 });
     }
@@ -167,6 +170,10 @@ export async function POST(
               }
             })
           ).id;
+
+      // A pickup of a group block arriving brings the block's Posting Master in with it, so
+      // the charges routed to the master land on an in-house folio.
+      if (reservation.groupBlockId) await checkInPostingMaster(tx, reservation.groupBlockId);
 
       // Held nights are charged in the same transaction — a failed posting leaves the
       // guest not checked in rather than checked in with the night unbilled.

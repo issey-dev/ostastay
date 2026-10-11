@@ -1,9 +1,11 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
+import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation"
 import { format } from "date-fns"
-import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Star, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal, Send } from "@/components/icons"
+import { LogIn, LogOut, CheckCircle, BedDouble, ReceiptText, MessageSquare, ArrowLeftRight, Search, UserX, Users, Utensils, Bell, Key, FileText, AlertTriangle, MoreHorizontal, Send, LayoutGrid, ListChecks } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -125,6 +127,19 @@ function FrontOfficeDashboardContent() {
   const [noShowRes, setNoShowRes] = useState<any>(null)
   const [eRegRes, setERegRes] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  // Desktop can show the lists as cards (every action visible on the card) instead of the
+  // table; the phone always gets its own cards. The choice is remembered per browser.
+  const [view, setView] = useState<"table" | "card">("table")
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("osta:frontdesk-view")
+      if (saved === "card" || saved === "table") setView(saved)
+    } catch {}
+  }, [])
+  const chooseView = (v: "table" | "card") => {
+    setView(v)
+    try { window.localStorage.setItem("osta:frontdesk-view", v) } catch {}
+  }
   
   // Folio Modal State
   const [folioPanelResId, setFolioPanelResId] = useState<string | null>(null)
@@ -348,7 +363,7 @@ function FrontOfficeDashboardContent() {
         <Link href={viewUrl(res.id)} onClick={(e) => e.stopPropagation()} className="truncate hover:underline">
           {guestDisplayName(res.primaryGuest)}
         </Link>
-        {res.primaryGuest?.vipLevel && <span title="VIP"><Star className="h-4 w-4 text-warning shrink-0" /></span>}
+        {(res.primaryGuest?.vipLevel || res.primaryGuest?.classification === "VIP") && <span title="VIP" className="shrink-0"><GoldStar className="h-4 w-4" /></span>}
         {warn && res.profileIncomplete && (
           <span title="Guest profile incomplete — missing nationality, date of birth, or ID">
             <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
@@ -442,6 +457,104 @@ function FrontOfficeDashboardContent() {
     </div>
   )
 
+  // Desktop card view: the same facts as the table row, with EVERY action as its own
+  // button on the card (no "..." menu to open). Facts come from the same cells as the table
+  // and the phone card, so the three views can't drift apart.
+  type DeskAction = { key: string; label: string; icon: any; onClick: () => void; tone?: "success" | "warning" | "danger"; disabled?: boolean; title?: string }
+  const DESK_TONE = {
+    success: "bg-success-muted text-success hover:bg-success-muted/70 border border-success/30",
+    warning: "text-warning hover:text-warning hover:bg-warning-muted",
+    danger: "text-destructive hover:text-destructive hover:bg-destructive-muted",
+  }
+  const MoreMenu = ({ items }: { items: DeskAction[] }) =>
+    items.length === 0 ? null : (
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="h-8 w-8 px-0" title="More actions" aria-label="More actions" />}>
+          <MoreHorizontal className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          {items.map((a) => (
+            <DropdownMenuItem
+              key={a.key}
+              className={`cursor-pointer ${a.tone === "danger" ? "text-destructive" : ""}`}
+              disabled={a.disabled}
+              onClick={a.onClick}
+            >
+              <a.icon className="mr-2 h-4 w-4" /> {a.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  // The card shows the two buttons the desk reaches for in that tab; everything else sits
+  // behind the "..." menu.
+  const DeskActionBar = ({ actions, more, bare = false }: { actions: DeskAction[]; more: DeskAction[]; bare?: boolean }) => (
+    <div
+      className={bare ? "flex items-center justify-end gap-1.5" : "mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-3"}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {actions.map((a) => (
+        <Button key={a.key} size="sm" variant="outline" className={`h-8 ${a.tone ? DESK_TONE[a.tone] : ""}`} disabled={a.disabled} title={a.title} onClick={a.onClick}>
+          <a.icon className="mr-1.5 h-3.5 w-3.5" /> {a.label}
+        </Button>
+      ))}
+      <span className={bare ? "" : "ml-auto"}><MoreMenu items={more} /></span>
+    </div>
+  )
+  const DeskResCard = ({ res, balance, actions, more }: { res: any; balance?: number; actions: DeskAction[]; more: DeskAction[] }) => (
+    <div
+      className="flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30"
+      onClick={() => router.push(viewUrl(res.id))}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 text-base">{guestCell(res, true)}</div>
+        <div className="shrink-0">{renderStatus(res)}</div>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <div>{stayCell(res)}</div>
+        <div className="text-lg">{roomCell(res)}</div>
+        {balance !== undefined && (
+          <div className={`tabular-nums ${balance > 0.005 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>{money(balance)}</div>
+        )}
+      </div>
+      {hasFrontDeskFlags(res) && <FrontDeskFlags res={res} />}
+      <DeskActionBar actions={actions} more={more} />
+    </div>
+  )
+  const viewAction = (res: any): DeskAction => ({ key: "view", label: "View details", icon: FileText, onClick: () => router.push(viewUrl(res.id)) })
+  const tracesAction = (res: any): DeskAction => ({ key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) })
+  const folioAction = (res: any): DeskAction => ({ key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(res.id) })
+  // Arrivals: Check in / Register. Departures: Check out / Folio. In-house: Traces / Folio.
+  const arrivalActions = (res: any) => {
+    const unassigned = !res.assignments?.[0]?.room
+    const can = canCheckIn(res.status, res.checkInDate, bd)
+    return {
+      actions: [
+        { key: "in", label: "Check in", icon: Key, tone: "success" as const, disabled: !can, title: can ? undefined : "Not available to check in yet", onClick: () => setCheckInRes(res) },
+        { key: "reg", label: "Register", icon: FileText, title: "Print the registration card", onClick: () => openRegCard(res.id) },
+      ] as DeskAction[],
+      more: [
+        ...(unassigned ? [{ key: "assign", label: "Assign room", icon: BedDouble, onClick: () => openAssign(res) }] : []),
+        { key: "ereg", label: "eRegistration link", icon: Send, onClick: () => setERegRes(res) },
+        tracesAction(res),
+        viewAction(res),
+        { key: "noshow", label: "Mark no-show", icon: UserX, tone: "danger" as const, onClick: () => setNoShowRes(res) },
+      ] as DeskAction[],
+    }
+  }
+  const departureActions = (res: any) => ({
+    actions: [
+      { key: "out", label: actionLoading === res.id ? "Checking out..." : "Check out", icon: LogOut, disabled: actionLoading === res.id, onClick: () => handleCheckOut(res.id) },
+      folioAction(res),
+    ] as DeskAction[],
+    more: [tracesAction(res), viewAction(res)] as DeskAction[],
+  })
+  const inHouseActions = (res: any) => ({
+    actions: [tracesAction(res), folioAction(res)] as DeskAction[],
+    more: [{ key: "move", label: "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }, viewAction(res)] as DeskAction[],
+  })
+  const deskGrid = "grid gap-3 pb-1 md:grid-cols-2 2xl:grid-cols-3"
+
   if (loading && !data) {
     return (
       <div className="space-y-6">
@@ -513,16 +626,16 @@ function FrontOfficeDashboardContent() {
           icon={LogIn}
         />
         <StatTile
-          label="Departures"
-          value={`${data?.departuresSummary?.checkedOut ?? 0} / ${data?.departuresSummary?.expected ?? 0}`}
-          footnote={`checked out · ${Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out`}
-          icon={LogOut}
-        />
-        <StatTile
           label="In-House"
           value={`${data?.inHouseSummary?.rooms ?? 0} rooms`}
           footnote={`${data?.inHouseSummary?.adults ?? 0} Adt · ${data?.inHouseSummary?.children ?? 0} Chd · ${data?.inHouseSummary?.infants ?? 0} Inf`}
           icon={Users}
+        />
+        <StatTile
+          label="Departures"
+          value={`${data?.departuresSummary?.checkedOut ?? 0} / ${data?.departuresSummary?.expected ?? 0}`}
+          footnote={`checked out · ${Math.max(0, (data?.departuresSummary?.expected ?? 0) - (data?.departuresSummary?.checkedOut ?? 0))} due out`}
+          icon={LogOut}
         />
         <StatTile
           label="Room status"
@@ -553,10 +666,6 @@ function FrontOfficeDashboardContent() {
             <span className="hidden md:inline">Arrivals ({arrivals.length})</span>
             <span className="text-xs md:hidden">Arrivals<PhoneCount n={arrivals.length} /></span>
           </TabsTrigger>
-          <TabsTrigger value="departures" className="max-md:px-0.5">
-            <span className="hidden md:inline">Departures ({departures.length})</span>
-            <span className="text-xs md:hidden">Departs<PhoneCount n={departures.length} /></span>
-          </TabsTrigger>
           <TabsTrigger value="inhouse" className="max-md:px-0.5">
             <span className="hidden md:inline">In-House ({inHouse.length})</span>
             <span className="text-xs md:hidden">In-house<PhoneCount n={inHouse.length} /></span>
@@ -565,13 +674,17 @@ function FrontOfficeDashboardContent() {
             <span className="hidden md:inline">Room moves ({data?.roomMovesToday?.length})</span>
             <span className="text-xs md:hidden">Moves<PhoneCount n={data?.roomMovesToday?.length ?? 0} /></span>
           </TabsTrigger>
+          <TabsTrigger value="departures" className="max-md:px-0.5">
+            <span className="hidden md:inline">Departures ({departures.length})</span>
+            <span className="text-xs md:hidden">Departs<PhoneCount n={departures.length} /></span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Phone: no card chrome — the guest cards sit straight on the page rather than
             a card inside a card. */}
         <Card className="shadow-elevation-1 max-md:gap-0 max-md:overflow-visible max-md:rounded-none max-md:bg-transparent max-md:py-0 max-md:shadow-none max-md:ring-0">
-          <CardHeader className="border-b px-4 py-3 max-md:border-b-0 max-md:px-0 max-md:pt-0 max-md:pb-3 sm:px-6 sm:py-4">
-            <div className="relative sm:w-64">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 border-b px-4 py-3 max-md:border-b-0 max-md:px-0 max-md:pt-0 max-md:pb-3 sm:px-6 sm:py-4">
+            <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 {...INPUT_SEARCH}
@@ -581,6 +694,28 @@ function FrontOfficeDashboardContent() {
                 className="pl-8"
               />
             </div>
+            {/* Desktop-only: the phone always gets its own cards. */}
+            <div className="hidden shrink-0 items-center rounded-md border border-border p-0.5 md:flex">
+              <button
+                type="button"
+                onClick={() => chooseView("table")}
+                aria-pressed={view === "table"}
+                aria-label="Table view"
+                className={`rounded px-2 py-1 ${view === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <ListChecks className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => chooseView("card")}
+                aria-pressed={view === "card"}
+                aria-label="Card view"
+                className={`rounded px-2 py-1 ${view === "card" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
+            {tab === "arrivals" && <AutoAssignButton propertyId={propertyId} onDone={() => fetchSummary(true)} className="shrink-0 shadow-sm" />}
           </CardHeader>
 
           <CardContent className="p-0">
@@ -627,7 +762,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -653,48 +788,27 @@ function FrontOfficeDashboardContent() {
                           <TableCell className="align-middle">{roomCell(res)}</TableCell>
                           <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
                           <TableCell className="align-middle">{renderStatus(res)}</TableCell>
-                          <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-1.5">
-                              {unassigned && (
-                                <Button size="sm" variant="outline" className="h-8" onClick={() => openAssign(res)}>
-                                  <BedDouble className="h-3.5 w-3.5 mr-1.5" /> Assign
-                                </Button>
-                              )}
-                              <Button size="sm" variant="outline" className="h-8" onClick={() => openRegCard(res.id)} title="Print registration card">
-                                <FileText className="h-3.5 w-3.5 mr-1.5" /> Reg card
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8" onClick={() => setERegRes(res)} title="Send the guest a link to fill in their own registration details">
-                                <Send className="h-3.5 w-3.5 mr-1.5" /> eReg
-                              </Button>
-                              {canCheckIn(res.status, res.checkInDate, bd) && (
-                                <Button size="sm" variant="outline" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
-                                  <Key className="h-3.5 w-3.5 mr-1.5" /> Check in
-                                </Button>
-                              )}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-44">
-                                  <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
-                                    <FileText className="h-4 w-4 mr-2" /> View details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
-                                    <MessageSquare className="h-4 w-4 mr-2" /> Traces
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => setNoShowRes(res)}>
-                                    <UserX className="h-4 w-4 mr-2" /> Mark no-show
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
+                          <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}><DeskActionBar bare {...arrivalActions(res)} /></TableCell>
                         </TableRow>
                       )
                     })}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Desktop card view */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : arrivals.length === 0 ? (
+                  <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
+                ) : (
+                  <div className={deskGrid}>
+                    {arrivals.map((res: any) => (
+                      <DeskResCard key={res.id} res={res} {...arrivalActions(res)} />
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -727,7 +841,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -753,33 +867,26 @@ function FrontOfficeDashboardContent() {
                         <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
                         <TableCell className={`align-middle text-right tabular-nums ${res.balance > 0.005 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>{money(res.balance)}</TableCell>
                         <TableCell className="align-middle">{renderStatus(res)}</TableCell>
-                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="outline" className="h-8" onClick={() => openFolio(res.id)}>
-                              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-8" disabled={actionLoading === res.id} onClick={() => handleCheckOut(res.id)}>
-                              <LogOut className="h-3.5 w-3.5 mr-1.5" /> {actionLoading === res.id ? "Checking out…" : "Check out"}
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-44">
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
-                                  <FileText className="h-4 w-4 mr-2" /> View details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
-                                  <MessageSquare className="h-4 w-4 mr-2" /> Traces
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
+                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}><DeskActionBar bare {...departureActions(res)} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Desktop card view */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : departures.length === 0 ? (
+                  <EmptyState icon={LogOut} title="No departures scheduled for today" />
+                ) : (
+                  <div className={deskGrid}>
+                    {departures.map((res: any) => (
+                      <DeskResCard key={res.id} res={res} balance={res.balance} {...departureActions(res)} />
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -812,7 +919,7 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -838,33 +945,26 @@ function FrontOfficeDashboardContent() {
                         <TableCell className="align-middle"><FrontDeskFlags res={res} /></TableCell>
                         <TableCell className={`align-middle text-right tabular-nums ${res.balance > 0.005 ? "font-semibold" : "text-muted-foreground"}`}>{money(res.balance)}</TableCell>
                         <TableCell className="align-middle">{renderStatus(res)}</TableCell>
-                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="outline" className="h-8" onClick={() => openFolio(res.id)}>
-                              <ReceiptText className="h-3.5 w-3.5 mr-1.5" /> Folio
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" onClick={() => openRoomMove(res)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Move
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="h-8 w-8" title="More actions" aria-label="More actions" />}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-44">
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
-                                  <FileText className="h-4 w-4 mr-2" /> View details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer" onClick={() => openTraces(res.id, guestDisplayName(res.primaryGuest))}>
-                                  <MessageSquare className="h-4 w-4 mr-2" /> Traces
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
+                        <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}><DeskActionBar bare {...inHouseActions(res)} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Desktop card view */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : inHouse.length === 0 ? (
+                  <EmptyState icon={CheckCircle} title="No guests currently in-house" />
+                ) : (
+                  <div className={deskGrid}>
+                    {inHouse.map((res: any) => (
+                      <DeskResCard key={res.id} res={res} balance={res.balance} {...inHouseActions(res)} />
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -915,7 +1015,49 @@ function FrontOfficeDashboardContent() {
                 )}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              {/* Desktop card view: Traces / Folio on the card, Move room behind the menu. */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
+                  <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
+                ) : (
+                  <div className={deskGrid}>
+                    {data.roomMovesToday.map((mv: any) => {
+                      const res = (data?.inHouse ?? []).find((r: any) => r.id === mv.reservationId)
+                      const unassigned = !mv.toRoomNumber
+                      const name = guestDisplayName(mv.primaryGuest)
+                      return (
+                        <div
+                          key={mv.reservationId}
+                          className={`flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 ${res ? "cursor-pointer hover:bg-muted/30" : ""}`}
+                          onClick={() => res && router.push(viewUrl(mv.reservationId))}
+                        >
+                          <div>
+                            <div className="text-base font-medium truncate">{name}</div>
+                            <div className="text-xs font-mono text-muted-foreground truncate">{mv.confirmationNo}</div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <Badge variant="outline">{mv.fromRoomNumber ?? "-"}</Badge>
+                            <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            {unassigned ? <span className="text-xs font-medium text-destructive">Unassigned</span> : <StatusBadge label={mv.toRoomNumber} tone="warning" />}
+                            <span className="text-muted-foreground text-xs">{mv.toRoomTypeName}</span>
+                          </div>
+                          <DeskActionBar
+                            actions={[
+                              { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(mv.reservationId, name) },
+                              { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(mv.reservationId) },
+                            ]}
+                            more={res ? [{ key: "move", label: unassigned ? "Assign / Move room" : "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }] : []}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className={view === "card" ? "hidden" : "hidden md:block overflow-x-auto"}>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -955,9 +1097,14 @@ function FrontOfficeDashboardContent() {
                           </TableCell>
                           <TableCell className="align-middle text-muted-foreground">{mv.toRoomTypeName}</TableCell>
                           <TableCell className="align-middle text-right pr-6" onClick={(e) => e.stopPropagation()}>
-                            <Button size="sm" variant="outline" className="h-8 text-warning hover:text-warning hover:bg-warning-muted" disabled={!res} onClick={() => res && openRoomMove(res)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move room"}
-                            </Button>
+                            <DeskActionBar
+                              bare
+                              actions={[
+                                { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(mv.reservationId, guestDisplayName(mv.primaryGuest)) },
+                                { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(mv.reservationId) },
+                              ]}
+                              more={res ? [{ key: "move", label: unassigned ? "Assign / Move room" : "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }] : []}
+                            />
                           </TableCell>
                         </TableRow>
                       )

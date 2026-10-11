@@ -49,12 +49,14 @@ export async function GET(request: Request) {
 
     const headers = ['Guest', 'Confirmation #', 'Room Type', 'Room', 'Arrival'];
     const rows = reservations.map(r => {
-      const assignment = r.assignments[0];
+      // A split stay lists every room type and room, in stay order.
+      const roomTypes = [...new Set(r.assignments.map((a) => a.roomType.name))].join(' → ') || '—';
+      const roomNumbers = [...new Set(r.assignments.map((a) => a.room?.roomNumber).filter(Boolean))].join(', ') || '—';
       return [
         `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
         r.confirmationNo,
-        assignment?.roomType.name ?? '—',
-        assignment?.room?.roomNumber ?? '—',
+        roomTypes,
+        roomNumbers,
         format(r.checkInDate, 'PPpp')
       ];
     });

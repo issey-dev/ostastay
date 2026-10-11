@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { NationalitySelect } from "@/components/ui/nationality-select"
 import { useRouter, useParams } from "next/navigation"
@@ -16,7 +17,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Save, ArrowLeft } from "@/components/icons"
+import { Save, ArrowLeft, User, Phone, MapPin, Contact, Settings2, Percent, FileText, MessageSquare, Wallet, ShieldCheck } from "@/components/icons"
 import { differenceInYears } from "date-fns"
 import { useProperty } from "@/components/providers/property-provider"
 import { toast } from "@/lib/toast"
@@ -35,7 +36,7 @@ import { InfoHint } from "@/components/ui/info-hint"
 import { PageHeader } from "@/components/ui/page-header"
 import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
 import { MobileActionBar } from "@/components/ui/mobile"
-import { INPUT_EMAIL, INPUT_MONEY, INPUT_PHONE } from "@/lib/input-presets"
+import { INPUT_EMAIL, INPUT_MONEY } from "@/lib/input-presets"
 
 const profileFormSchema = z.object({
   profileType: z.string(),
@@ -272,9 +273,9 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 pb-12">
-        {/* Sticky Header. Breadcrumbs ("Client Relations › New") replace the back arrow from
+        {/* Header. Breadcrumbs ("Client Relations › New") replace the back arrow from
             md up; the debtors page renders its own breadcrumb and tab title around this form. */}
-        <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md pb-4 pt-2 border-b border-border flex items-start gap-4 max-md:static max-md:bg-transparent max-md:backdrop-blur-none">
+        <div className="flex items-start gap-4">
           <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Back" className="shrink-0 md:hidden">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -308,7 +309,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Personal Information */}
             <Card id="personal-info">
               <CardHeader>
-                <CardTitle>{isB2B ? "Company details" : "Personal information"}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg"><User className="h-4 w-4 text-muted-foreground" />{isB2B ? "Company details" : "Personal information"}</CardTitle>
                 <CardDescription>
                   {isB2B ? "Primary identification details for this entity." : "Primary identification details for this profile."}
                 </CardDescription>
@@ -416,7 +417,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Communications */}
             <Card id="communications">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg"><Phone className="h-4 w-4 text-muted-foreground" />
             Communications
             <InfoHint label="Communications">Email, mobile, and social contact methods — one may be marked primary.</InfoHint>
           </CardTitle>
@@ -446,7 +447,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         <FormItem>
                           <FormLabel>Mobile / Phone</FormLabel>
                           <FormControl>
-                            <Input {...INPUT_PHONE} placeholder="+1 234 567 8900" {...field} value={field.value || ""} />
+                            <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -463,7 +464,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Address */}
             <Card id="address">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg"><MapPin className="h-4 w-4 text-muted-foreground" />
             Address
             <InfoHint label="Address">Home, business, or billing addresses — one may be marked primary.</InfoHint>
           </CardTitle>
@@ -550,7 +551,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {isIndividual && (
               <Card id="identification" className="scroll-mt-32">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-lg"><Contact className="h-4 w-4 text-muted-foreground" />
             Identification
             <InfoHint label="Identification">Passport or national ID documents — one may be marked primary.</InfoHint>
           </CardTitle>
@@ -604,7 +605,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {isIndividual && (
             <Card id="crm">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg"><Settings2 className="h-4 w-4 text-muted-foreground" />
             CRM
             <InfoHint label="CRM">Stay history summary, guest preferences, and VIP status.</InfoHint>
           </CardTitle>
@@ -694,7 +695,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {isB2B && (
               <Card id="negotiated-rates">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-lg"><Percent className="h-4 w-4 text-muted-foreground" />
             Negotiated rates
             <InfoHint label="Negotiated rates">Which negotiated rate plans this account can book with — restricted to bookings made through this profile.</InfoHint>
           </CardTitle>
@@ -712,7 +713,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Attachments */}
             <Card id="attachments">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg"><FileText className="h-4 w-4 text-muted-foreground" />
             Attachments
             <InfoHint label="Attachments">Linked files (label + URL) — passport scans, signed contracts, etc.</InfoHint>
           </CardTitle>
@@ -729,7 +730,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Notes */}
             <Card id="notes">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-lg"><MessageSquare className="h-4 w-4 text-muted-foreground" />
             Notes
             <InfoHint label="Notes">Feedback, complaints, and other notable things about this profile.</InfoHint>
           </CardTitle>
@@ -749,9 +750,9 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
           <div className="flex flex-col gap-6">
 
             {/* Section: Profile Status */}
-            <Card id="profile-status" className="bg-muted/50">
+            <Card id="profile-status">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Profile settings</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg"><Settings2 className="h-4 w-4 text-muted-foreground" />Profile settings</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -801,7 +802,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Finance & Billing (AR — unchanged) */}
             <Card id="billing-finance">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Finance & billing</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg"><Wallet className="h-4 w-4 text-muted-foreground" />Finance & billing</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -915,7 +916,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
             {/* Section: Marketing / Compliance */}
             <Card id="marketing-compliance">
               <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Marketing & compliance</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-4 w-4 text-muted-foreground" />Marketing & compliance</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField

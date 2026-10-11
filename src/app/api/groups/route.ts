@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { ensurePostingMaster } from "@/lib/groups/posting-master"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { logActivity } from "@/lib/activity-log"
@@ -19,12 +20,24 @@ export async function GET(request: Request) {
       where: { propertyId },
       include: {
         reservations: true,
-        masterFolios: true
+        masterFolios: true,
+        // For the list's badges: rooms held per type and the account the master bill goes to.
+        roomHolds: { include: { roomType: { select: { code: true, name: true } } } },
+        payeeProfile: { select: { upid: true, firstName: true, lastName: true, companyName: true } },
       },
       orderBy: { startDate: 'asc' }
     })
 
-    return NextResponse.json(groups)
+    // Where each block's Posting Master reservation is (awaiting arrival / in house / out).
+    const pmIds = groups.map((g) => g.postingMasterReservationId).filter((x): x is string => !!x)
+    const pms = pmIds.length
+      ? await prisma.reservation.findMany({ where: { id: { in: pmIds } }, select: { id: true, status: true } })
+      : []
+    const pmStatus = new Map(pms.map((r) => [r.id, r.status]))
+
+    return NextResponse.json(
+      groups.map((g) => ({ ...g, postingMasterStatus: g.postingMasterReservationId ? pmStatus.get(g.postingMasterReservationId) ?? null : null }))
+    )
   } catch (error) {
     const { status, body } = toErrorResponse(error)
     return NextResponse.json(body, { status })
@@ -94,6 +107,9 @@ export async function POST(request: Request) {
           : undefined,
       }
     })
+
+    // A block that starts Definite gets its Posting Master straight away.
+    if (newGroup.status === "DEFINITE") await ensurePostingMaster(newGroup.id)
 
     await logActivity({
       ctx,

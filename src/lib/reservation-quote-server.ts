@@ -7,6 +7,8 @@ import {
   allocationAmountForNight,
   allocationStayBreakdown,
   resolveLinkedAllocationIds,
+  ratePlanAllocationWindows,
+  type DateWindow,
   type AllocationLike,
   type AllocationStayBreakdown,
   type AllocationCalculationMode,
@@ -202,8 +204,10 @@ export async function computeReservationQuote(
     });
   }
 
-  // ── Attached allocations (reservation-wide, not per-segment) ─────────────────
-  const primaryRatePlan = ratePlanById.get(assignments[0].ratePlanId);
+  // ── Attached allocations ─────────────────────────────────────────────────────
+  // Meal-plan and manual ones cover the whole stay. A rate plan's linked allocations cover
+  // only the nights of the segments priced on that plan (each segment can have its own), the
+  // same rule materializeReservationAllocations stores and Night Audit posts by.
   const mealPlan = mealPlanCode
     ? await prisma.mealPlan.findUnique({
         where: { propertyId_code: { propertyId, code: mealPlanCode } },
@@ -216,12 +220,24 @@ export async function computeReservationQuote(
   ) => (links ?? []).filter((l) => l.allocation.isActive).map((l) => ({ allocationId: l.allocationId }));
 
   const mode: AllocationCalculationMode = property.allocationCalculationMode === "MEAL_PLAN" ? "MEAL_PLAN" : "RATE_PLAN";
-  const linked = resolveLinkedAllocationIds({
-    mode,
-    ratePlanLinks: activeLinks(primaryRatePlan?.allocationLinks),
-    parentRatePlanLinks: activeLinks(primaryRatePlan?.parentRatePlan?.allocationLinks),
-    mealPlanLinks: activeLinks(mealPlan?.allocationLinks),
-  });
+  const windowsByAllocation = new Map<string, DateWindow[] | null>();
+  let linked: Array<{ allocationId: string; source: "RATE_PLAN" | "MEAL_PLAN" }>;
+  if (mode === "RATE_PLAN") {
+    const perSegment = assignments.map((a) => {
+      const rp = ratePlanById.get(a.ratePlanId);
+      const ids = resolveLinkedAllocationIds({
+        mode: "RATE_PLAN",
+        ratePlanLinks: activeLinks(rp?.allocationLinks),
+        parentRatePlanLinks: activeLinks(rp?.parentRatePlan?.allocationLinks),
+        mealPlanLinks: [],
+      }).map((l) => l.allocationId);
+      return { startDate: a.startDate, endDate: a.endDate, linkedAllocationIds: ids };
+    });
+    for (const [id, windows] of ratePlanAllocationWindows(perSegment)) windowsByAllocation.set(id, windows);
+    linked = [...windowsByAllocation.keys()].map((allocationId) => ({ allocationId, source: "RATE_PLAN" as const }));
+  } else {
+    linked = resolveLinkedAllocationIds({ mode, ratePlanLinks: [], parentRatePlanLinks: [], mealPlanLinks: activeLinks(mealPlan?.allocationLinks) });
+  }
   const linkedIds = new Set(linked.map((l) => l.allocationId));
   const manualIds = requestedManualIds.filter((id) => !linkedIds.has(id));
 
@@ -304,6 +320,7 @@ export async function computeReservationQuote(
         allocation: like, adults, children,
         checkInDate: new Date(overallStart), checkOutDate: new Date(overallEnd),
         auditDate: night,
+        windows: windowsByAllocation.get(allocationId) ?? null,
       });
       if (amount != null && amount > 0) {
         allocationsTonight.push({ allocationId, amount, mode: alloc.mode, chargeCodeId: alloc.chargeCodeId });
@@ -441,6 +458,7 @@ export async function computeReservationQuote(
         },
         adults, children,
         checkInDate: new Date(overallStart), checkOutDate: new Date(overallEnd),
+        windows: windowsByAllocation.get(allocationId) ?? null,
       });
       return {
         allocationId, code: alloc.code, name: alloc.name, source,

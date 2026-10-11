@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -178,6 +179,13 @@ export async function PUT(
         { status: 400 }
       );
     }
+
+    const negotiated = await negotiatedPlanError({
+      ratePlanIds: data.assignments.map((a) => a.ratePlanId),
+      travelAgentId: data.travelAgentId,
+      alreadyOnBooking: existing.assignments.map((a) => a.ratePlanId),
+    });
+    if (negotiated) return NextResponse.json({ error: negotiated }, { status: 400 });
 
     const primaryGuest = await prisma.profile.findUnique({ where: { upid: data.primaryGuestId } });
     if (!primaryGuest || primaryGuest.enterpriseId !== ctx.enterpriseId) {
@@ -405,7 +413,7 @@ export async function PUT(
     const allocationResult = await materializeReservationAllocations({
       reservationId: id,
       propertyId: existing.propertyId,
-      ratePlanId: data.assignments[0]?.ratePlanId ?? null,
+      segments: data.assignments.map((a) => ({ ratePlanId: a.ratePlanId, startDate: new Date(a.startDate), endDate: new Date(a.endDate) })),
       mealPlanCode: data.mealPlan || "NONE",
       manualAllocationIds: data.manualAllocationIds,
     });

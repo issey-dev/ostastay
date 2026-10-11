@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PROFILE_LINK_COUNTS, sumLinks } from "@/lib/profile-links";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
@@ -20,9 +21,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search"); // Used for global search
     const profileType = searchParams.get("profileType");
+    // Deactivated profiles are hidden from every picker and search; Client Relations asks for them.
+    const includeInactive = searchParams.get("includeInactive") === "1";
 
     const where = {
       enterpriseId: ctx.enterpriseId,
+      ...(includeInactive ? {} : { isActive: true }),
       profileType: profileType ? profileType : undefined,
       OR: search ? [
         { firstName: { contains: search, mode: "insensitive" as const } },
@@ -41,13 +45,18 @@ export async function GET(request: Request) {
         include: {
           communications: true,
           addresses: true,
+          _count: { select: PROFILE_LINK_COUNTS },
         },
         orderBy: { updatedAt: 'desc' },
         take: 50 // Limit results for dashboard
       }),
       prisma.profile.count({ where }),
     ]);
-    return NextResponse.json(profiles, { headers: { "X-Total-Count": String(total) } });
+    // linkCount tells the list whether a profile can still be deleted (0) or only deactivated.
+    return NextResponse.json(
+      profiles.map(({ _count, ...p }) => ({ ...p, linkCount: sumLinks(_count) })),
+      { headers: { "X-Total-Count": String(total) } }
+    );
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

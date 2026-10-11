@@ -115,6 +115,12 @@ export async function GET(request: Request) {
           },
         },
         specialRequests: true,
+        // Only counted/flagged by the list's card badges (open traces, registration done).
+        traces: { where: { isResolved: false }, select: { id: true, alertOnOpen: true } },
+        guestRegistrations: { select: { id: true } },
+        eRegistrationSlots: { select: { status: true } },
+        // The older "simple" transport card (flight / transport no.), used when the module is off.
+        transports: { select: { id: true, direction: true } },
         // The list's transfer flag (Transportation module) — just enough to describe it.
         transportBookings: {
           where: { status: { not: "CANCELLED" } },

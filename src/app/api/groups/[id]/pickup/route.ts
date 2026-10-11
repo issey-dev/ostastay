@@ -279,7 +279,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const allocationResult = await materializeReservationAllocations({
       reservationId: result.id,
       propertyId: group.propertyId,
-      ratePlanId: ratePlan.id,
+      segments: [{ ratePlanId: ratePlan.id, startDate: new Date(checkInDate), endDate: new Date(checkOutDate) }],
       mealPlanCode: mealPlanCode || "NONE",
       manualAllocationIds: [],
     })

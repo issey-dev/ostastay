@@ -3242,9 +3242,37 @@ further questions, so the plan's recommended defaults apply (change any of them 
 - **Hub on phones:** quick-action pages are adapted (sessions, support access, key revoke, business
   date, inbound bookings, people status); every other setup page shows a "best on a larger screen"
   notice but stays readable.
-- **eRegistration date of birth** (guest-facing page): a native date input is allowed there as an
-  exception to the "always use `@/components/ui/date-picker`" rule — a calendar popover is slow
-  for birth dates on a phone. Staff screens keep the DatePicker (which opens in a drawer on phones).
+- **eRegistration dates** (guest-facing page): uses `@/components/ui/date-picker` like everywhere
+  else (owner, 2026-10-11 — reverses the earlier native-input exception; the DatePicker opens in a
+  drawer on phones and has year/month dropdowns).
+- **Phone numbers** (owner, 2026-10-11): every phone/mobile field uses `@/components/ui/phone-input`
+  (searchable country-code dropdown + number-only box, default Maldives +960). Storage is unchanged:
+  one string, "+960 7771234", so no migration; legacy values without a "+code" show whole in the number
+  box. Calling codes live in `src/lib/dial-codes.ts`. Fields that take "phone OR email" stay plain text.
+- **Split stays price per segment** (owner request, 2026-10-11): each segment carries its own room
+  type and rate plan (selectors on the segment card; the grid still fills the active segment). Every
+  night posts on the segment that covers it (`postStayNight`). A rate plan's linked allocations apply
+  only to the nights of the segments on that plan: `ReservationAllocation.appliesTo` holds the
+  windows (null = whole stay: single segment, meal-plan and manual allocations), and the quote,
+  Night Audit and the form preview share `ratePlanAllocationWindows` (`src/lib/allocations.ts`).
+  Room Move acts on the segment covering the business date and leaves later segments alone; reports
+  list every room / room type of a stay (`roomTypeNames`, `primaryRoom`); a negotiated rate plan is
+  enforced server-side (`negotiated-access.ts`).
+- **Profiles: delete only when fresh, otherwise deactivate** (owner, 2026-10-11): anything that points
+  at a profile (bookings as guest / travel agent / accompanying guest, folios and group blocks it
+  pays, registrations, eRegistration slots, negotiated rates, spa preferences - `src/lib/profile-links.ts`)
+  blocks deletion; `Profile.isActive` hides it from every picker and search (`/api/profiles` hides
+  inactive unless `includeInactive=1`, which Client Relations passes) and keeps all history. A guest with
+  a RESERVED / IN_HOUSE booking can't be deactivated.
+- **Group block Posting Master** (owner, 2026-10-11): each block has a PM reservation (`isPostingMaster`,
+  `GroupBlock.postingMasterReservationId`) in a pseudo "PM" room per block; its folio is the block's
+  master folio. Created at Definite (or by "Create master folio"), auto checked in with the first pickup,
+  skipped by Night Audit. It is not a pickup (no groupBlockId). See `src/lib/groups/posting-master.ts`.
+- **Front Desk / list views** (owner, 2026-10-11): Front Desk tabs run Arrivals, In-House, Room moves,
+  Departures; each row/card shows two buttons (Arrivals: Check in, Register; In-house and Room moves:
+  Traces, Folio; Departures: Check out, Folio) and a "..." menu for the rest. Client Relations is one card
+  per row with badges relevant to the profile type. VIP and "primary" markers are the solid
+  `GoldStar` / `StarToggle` (`src/components/ui/gold-star.tsx`), never the outlined icon.
 - **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
   "More" menu, last and in red, and keep their confirmations.
 - **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.

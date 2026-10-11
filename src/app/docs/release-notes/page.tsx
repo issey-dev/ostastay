@@ -33,6 +33,7 @@ export default function ReleaseNotes() {
           <Group title="New" items={r.new} />
           <Group title="Improved" items={r.improved} />
           <Group title="Fixed" items={r.fixed} />
+          <Group title="Coming next" items={r.comingNext} />
         </section>
       ))}
 

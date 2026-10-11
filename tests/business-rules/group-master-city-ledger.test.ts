@@ -43,6 +43,8 @@ describe("Group block City-Ledger master bill → debtor invoice", () => {
       },
     });
     propertyId = property.id;
+    // The Posting Master reservation behind the master folio is priced on a rate plan.
+    await prisma.ratePlan.create({ data: { propertyId, code: "BAR", name: "Best Available Rate", priority: 1 } });
 
     // A credit-account travel agent the block can settle to.
     const account = await prisma.profile.create({

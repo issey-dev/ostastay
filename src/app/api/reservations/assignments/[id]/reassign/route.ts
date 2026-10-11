@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { refreshScheduledRoomMove } from "@/lib/reservations/scheduled-move";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { hasRoomConflict } from "@/lib/availability";
@@ -15,6 +16,11 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const { roomId } = body; // Could be null/string
+    // Moving to a room of a DIFFERENT type changes what the guest should pay, so it needs an
+    // explicit rate choice and a reason (same rules as the Front Desk room move): "new"
+    // reprices at the new room type, "keep" bills as the current one.
+    const rateMode: "keep" | "new" = body.rateMode === "keep" ? "keep" : "new";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
     // Find the assignment
     const assignment = await prisma.roomAssignment.findUnique({
@@ -28,6 +34,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Room assignment not found" }, { status: 404 });
     }
     await assertPropertyAccess(ctx, assignment.reservation.propertyId);
+
+    // Only a booking that still holds a room can have it changed, and a guest in the house
+    // is never left without one (an in-house change of room goes through the room move).
+    if (!["RESERVED", "IN_HOUSE"].includes(assignment.reservation.status)) {
+      return NextResponse.json({ error: "Only reserved or in-house bookings can change room." }, { status: 400 });
+    }
+    if (!roomId && assignment.reservation.status === "IN_HOUSE") {
+      return NextResponse.json({ error: "An in-house guest can't be left without a room." }, { status: 400 });
+    }
+    if (roomId && roomId === assignment.roomId) {
+      return NextResponse.json({ success: true, assignment, unchanged: true });
+    }
 
     if (roomId) {
       // Find the new room
@@ -59,14 +77,35 @@ export async function PATCH(
         return NextResponse.json({ error: "The selected room is already occupied during this period." }, { status: 400 });
       }
 
+      const typeChanged = newRoom.roomTypeId !== assignment.roomTypeId;
+      // A reason is only enforced for in-house guests (their move goes through POST .../room-move,
+      // which requires one); for a booking that has not arrived it is optional.
+      if (typeChanged && !reason && assignment.reservation.status === "IN_HOUSE") {
+        return NextResponse.json({ error: "A reason is required to move an in-house guest to a different room type." }, { status: 400 });
+      }
+
+      // Pricing basis carried onto the new room type (mirrors POST .../room-move).
+      let pricing: { chargeRoomTypeId: string | null; overrideRate: number | null } | null = null;
+      if (typeChanged) {
+        if (rateMode === "keep") {
+          const billedAs = assignment.chargeRoomTypeId ?? assignment.roomTypeId;
+          pricing = { chargeRoomTypeId: billedAs === newRoom.roomTypeId ? null : billedAs, overrideRate: assignment.overrideRate ?? null };
+        } else {
+          pricing = { chargeRoomTypeId: null, overrideRate: null };
+        }
+      }
+
       // Update the assignment
       const updated = await prisma.roomAssignment.update({
         where: { id },
         data: {
           roomId: roomId,
-          roomTypeId: newRoom.roomTypeId
+          roomTypeId: newRoom.roomTypeId,
+          ...(pricing ?? {}),
         }
       });
+
+      await refreshScheduledRoomMove(prisma, assignment.reservationId);
 
       // Optional: If the reservation was RESERVED and we assign a room, or if it was IN_HOUSE, we keep it sync
       // Also write a trace log for auditing
@@ -74,7 +113,7 @@ export async function PATCH(
         data: {
           reservationId: assignment.reservationId,
           traceType: "ROOM_REASSIGN",
-          description: `Room assignment changed to Room ${newRoom.roomNumber} (${newRoom.roomType.code}).`,
+          description: `Room assignment changed to Room ${newRoom.roomNumber} (${newRoom.roomType.code}).${typeChanged ? ` Room type changed — ${rateMode === "keep" ? "rate kept" : "rate recalculated"}.${reason ? ` Reason: ${reason}` : ""}` : ""}`,
           actionDate: new Date(),
           isResolved: true
         }
@@ -86,7 +125,7 @@ export async function PATCH(
         action: "UPDATE",
         entityType: "RoomAssignment",
         entityId: id,
-        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})`,
+        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})${typeChanged ? `, ${rateMode === "keep" ? "rate kept" : "rate recalculated"}${reason ? ` — ${reason}` : ""}` : ""}`,
       });
 
       return NextResponse.json({ success: true, assignment: updated });
@@ -99,6 +138,7 @@ export async function PATCH(
         }
       });
 
+      await refreshScheduledRoomMove(prisma, assignment.reservationId);
       await prisma.reservationTrace.create({
         data: {
           reservationId: assignment.reservationId,

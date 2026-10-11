@@ -62,6 +62,79 @@ export function isPostingNight(
   }
 }
 
+// --- Split stays: which nights a rate-plan allocation covers -------------------------
+//
+// A rate plan's linked allocations (e.g. a breakfast package) belong to the NIGHTS that
+// plan prices. On a split stay each segment can carry a different rate plan, so a
+// RATE_PLAN-sourced allocation is stored with the windows it covers and only posts on
+// those nights; its rhythm (arrival / departure night) is anchored to those windows
+// rather than the whole stay. No windows (null) = the whole stay, which is every
+// single-segment booking, every meal-plan and every manual allocation.
+
+/** A run of nights [from, to): `to` is the departure morning, as with a stay's check-out. */
+export type DateWindow = { from: Date; to: Date }
+
+const keyOf = (d: Date) => dayStart(d).toISOString().slice(0, 10)
+
+export function serializeWindows(windows: DateWindow[]): string {
+  return windows.map((w) => `${keyOf(w.from)}/${keyOf(w.to)}`).join(",")
+}
+
+export function parseWindows(raw: string | null | undefined): DateWindow[] | null {
+  if (!raw) return null
+  const out: DateWindow[] = []
+  for (const part of raw.split(",")) {
+    const [a, b] = part.split("/")
+    const from = new Date(`${a}T00:00:00.000Z`)
+    const to = new Date(`${b}T00:00:00.000Z`)
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) continue
+    out.push({ from, to })
+  }
+  return out.length > 0 ? out : null
+}
+
+export function nightInWindows(night: Date, windows: DateWindow[] | null | undefined): boolean {
+  if (!windows) return true
+  const d = dayStart(night)
+  return windows.some((w) => dayStart(w.from) <= d && d < dayStart(w.to))
+}
+
+/** The first arrival and last departure across the windows — the anchors for the rhythm. */
+export function windowAnchors(windows: DateWindow[]): { checkInDate: Date; checkOutDate: Date } {
+  return {
+    checkInDate: new Date(Math.min(...windows.map((w) => dayStart(w.from).getTime()))),
+    checkOutDate: new Date(Math.max(...windows.map((w) => dayStart(w.to).getTime()))),
+  }
+}
+
+/**
+ * For each allocation any segment's rate plan links, the windows (back-to-back segments
+ * merged) it covers. `null` windows = it covers the whole stay.
+ */
+export function ratePlanAllocationWindows(
+  segments: Array<{ startDate: Date; endDate: Date; linkedAllocationIds: string[] }>
+): Map<string, DateWindow[] | null> {
+  const ordered = [...segments].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+  const stayFrom = ordered.length ? dayStart(ordered[0].startDate).getTime() : 0
+  const stayTo = ordered.length ? Math.max(...ordered.map((s) => dayStart(s.endDate).getTime())) : 0
+  const ids = new Set(ordered.flatMap((s) => s.linkedAllocationIds))
+  const out = new Map<string, DateWindow[] | null>()
+  for (const id of ids) {
+    const windows: DateWindow[] = []
+    for (const seg of ordered) {
+      if (!seg.linkedAllocationIds.includes(id)) continue
+      const from = dayStart(seg.startDate)
+      const to = dayStart(seg.endDate)
+      const last = windows[windows.length - 1]
+      if (last && last.to.getTime() === from.getTime()) last.to = to
+      else windows.push({ from, to })
+    }
+    const whole = windows.length === 1 && windows[0].from.getTime() === stayFrom && windows[0].to.getTime() === stayTo
+    out.set(id, whole ? null : windows)
+  }
+  return out
+}
+
 // One night's charge for an allocation: adults × adultPrice + children × childPrice.
 // Infants are NEVER charged (owner-confirmed — consistent with the Green Tax infant
 // exemption). Returns null when the rhythm doesn't post tonight or no rate range
@@ -76,8 +149,12 @@ export function allocationAmountForNight(params: {
   auditDate: Date
   overrideAdultPrice?: number | null
   overrideChildPrice?: number | null
+  /** Split stay: only these nights carry the allocation (see DateWindow). */
+  windows?: DateWindow[] | null
 }): number | null {
-  const { allocation, adults, children, checkInDate, checkOutDate, auditDate } = params
+  const { allocation, adults, children, auditDate, windows } = params
+  if (!nightInWindows(auditDate, windows)) return null
+  const { checkInDate, checkOutDate } = windows ? windowAnchors(windows) : params
   if (!isPostingNight(allocation.postingRhythm, checkInDate, checkOutDate, auditDate)) return null
 
   const range = rateForDate(allocation.rates, auditDate)
@@ -99,6 +176,7 @@ export function allocationStayTotal(params: {
   checkOutDate: Date
   overrideAdultPrice?: number | null
   overrideChildPrice?: number | null
+  windows?: DateWindow[] | null
 }): number {
   const { checkInDate, checkOutDate } = params
   let total = 0
@@ -146,8 +224,11 @@ export function allocationStayBreakdown(params: {
   checkOutDate: Date
   overrideAdultPrice?: number | null
   overrideChildPrice?: number | null
+  windows?: DateWindow[] | null
 }): AllocationStayBreakdown {
-  const { allocation, adults, children, checkInDate, checkOutDate } = params
+  const { allocation, adults, children, windows } = params
+  const { checkInDate: anchorIn, checkOutDate: anchorOut } = windows ? windowAnchors(windows) : params
+  const { checkInDate, checkOutDate } = params
   const night = dayStart(checkInDate)
   const end = dayStart(checkOutDate)
   const totalNights = Math.max(0, Math.round((end.getTime() - night.getTime()) / 86_400_000))
@@ -164,7 +245,7 @@ export function allocationStayBreakdown(params: {
   }
 
   while (night < end) {
-    if (isPostingNight(allocation.postingRhythm, checkInDate, checkOutDate, night)) {
+    if (nightInWindows(night, windows) && isPostingNight(allocation.postingRhythm, anchorIn, anchorOut, night)) {
       const range = rateForDate(allocation.rates, night)
       const adultPrice = params.overrideAdultPrice ?? range?.adultPrice
       const childPrice = params.overrideChildPrice ?? range?.childPrice

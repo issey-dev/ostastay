@@ -3021,3 +3021,20 @@ numbered list, not a real remaining scope.** Two genuinely open items:
   `greenTaxExemptAge`. They differ only if a property changes the age.
 - Website Booking API quotes still assume every guest pays Green Tax (no profile before
   booking). Night Audit posts per person, so the folio can be lower than the quote.
+
+## 8.8.0 follow-ups (2026-10-11)
+
+- The Posting Master's own check-out (settling the master folio / City Ledger invoice) is the normal
+  reservation check-out; nothing closes it automatically when the last pickup checks out.
+- Tape Chart: the fit check only sees the visible window on screen; a clash beyond it is caught by
+  the server and shown with the same prompt.
+
+## Planned: change stay dates from the Tape Chart (2026-10-11)
+
+Drag the start or end edge of a booking's bar to shorten or extend the stay (whole days). A preview
+checks room availability, stop sale, room-type overbooking and group block dates, and returns the
+price of the added/removed nights and the new total (same quote as the booking form); a confirmation
+window shows it and nothing is written until confirmed. Only the outer edges of a multi-segment stay
+can be dragged. Open choices: in-house shorten/extend and the folio credit for removed nights, blocking
+the arrival edge for in-house guests, a reason, and quick buttons on Front Desk / the reservation page.
+Reuse: the End of Day extend-stay route, the reservation save's availability checks, the quote.

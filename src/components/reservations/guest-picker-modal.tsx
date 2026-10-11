@@ -1,15 +1,17 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Star, Search, UserPlus } from "@/components/icons"
+import { Search, UserPlus } from "@/components/icons"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { InlineLoading } from "@/components/ui/inline-loading"
 import { EmptyState } from "@/components/ui/empty-state"
-import { INPUT_EMAIL, INPUT_PHONE, INPUT_SEARCH } from "@/lib/input-presets"
+import { INPUT_EMAIL, INPUT_SEARCH } from "@/lib/input-presets"
 
 export type GuestProfile = {
   upid: string
@@ -163,7 +165,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
                   >
                     <span className="inline-flex items-center gap-1.5 font-medium">
                       {p.firstName} {p.lastName || ""}
-                      {p.vipLevel && <Star className="h-3.5 w-3.5 text-warning fill-none shrink-0" />}
+                      {p.vipLevel && <GoldStar className="h-3.5 w-3.5 shrink-0" />}
                     </span>
                     {email && <span className="text-xs text-muted-foreground max-sm:break-all">{email}</span>}
                   </button>
@@ -195,7 +197,7 @@ export function GuestPickerModal({ isOpen, onClose, enterpriseId, onSelect, excl
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Phone</Label>
-                  <Input {...INPUT_PHONE} value={quickCreate.phone} onChange={e => setQuickCreate(p => ({ ...p, phone: e.target.value }))} />
+                  <PhoneInput value={quickCreate.phone} onChange={v => setQuickCreate(p => ({ ...p, phone: v }))} />
                 </div>
               </div>
               <div className="flex justify-end gap-2">

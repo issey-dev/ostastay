@@ -11,9 +11,50 @@ export type Release = {
   new?: string[]
   improved?: string[]
   fixed?: string[]
+  /** Planned for a later release. Shown last, under "Coming next". */
+  comingNext?: string[]
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "8.8.0",
+    date: "2026-10-11",
+    highlights: "A big step for day-to-day operations: card views and clearer badges on the Front Desk, Reservations, Group Blocks and Client Relations, a Posting Master for every group block, split stays that bill correctly, safer room moves on the Tape Chart, and phone numbers with a country-code picker.",
+    new: [
+      "Group blocks have a Posting Master: a reservation of its own whose folio is the block's master folio. It is created automatically when the block becomes Definite, checked in automatically with the first reservation of the block, follows the block's dates and is cancelled with the block if nothing has been posted to it. Night Audit does not charge it a room.",
+      "Front Desk: a table / card switch on wide screens. Every row and card shows the two buttons you reach for in that tab (Arrivals: Check in and Register; In-house and Room moves: Traces and Folio; Departures: Check out and Folio), with the rest behind a ... menu. The tabs and summary tiles follow the guest's journey: Arrivals, In-house, Room moves, Departures.",
+      "Auto-Assign shows its plan first: a window lists each booking and the room it would get, and the bookings that could not be placed, with the reason. Nothing is saved until you press Assign. It is on the Reservations list and the Front Desk Arrivals tab.",
+      "Reservations card view: names of the guests sharing the room, a gold star for VIPs, a repeat mark with the number of previous stays, and small labelled badges for what is filled in on the booking (Transportation, Traces, Deposit, Registration, Special request, Split stay, Override rate and more).",
+      "Group Blocks: a table / card switch, with badges for the account the block bills, the cutoff date, the rooms held per room type, Overbooked and the Posting Master.",
+      "Client Relations is a list of cards with the name enlarged, the email in small type and badges that matter for each kind of profile (guests: visits, VIP level, nationality; companies: credit account, bookings; travel agents: commission, IATA number, credit account, bookings; staff: nationality).",
+      "Profiles with anything linked to them (bookings, folios, group blocks, registrations) can no longer be deleted; they are deactivated instead, which hides them from searches and pickers, keeps their history and can be undone. Only a brand-new profile can be deleted.",
+      "Phone and mobile fields have a country-code dropdown (flag, country and dialling code, searchable) next to a number-only box, on profiles and their contacts, the quick-create guest, eRegistration, outlets, spa therapists and transport providers. Numbers already saved keep working.",
+      "eRegistration pre-fills each guest from their profile. The lead guest's name is fixed; everything else can be updated by the guest and goes onto the profile when reception applies the registration. Returning and VIP guests get a small sparkle by their name.",
+      "Editing a reservation: every segment of a split stay has its own Room type and Rate plan selectors, and a new segment starts from the previous one.",
+      "Tape Chart: while dragging a booking, rooms turn green where it fits all its nights and red where it does not, and a red room is blocked with the reason and a button to adjust the dates. A room of a different type asks whether to recalculate the rate or keep it, and for a reason (required for an in-house guest, optional before arrival).",
+    ],
+    improved: [
+      "The guest / company / agent profile page and its Edit and New forms follow the reservation page: a plain header, shared badges, solid gold stars, and every group of details in its own titled card. A profile's Stays tab shows one summary line per stay.",
+      "Stars are clean, solid gold stars wherever a guest is VIP or an item is marked primary or favourite.",
+      "The eRegistration form uses the calendar date picker, a searchable country list for the address, and no longer repeats the Address label.",
+      "Traces and messages have a checkbox to mark each one done, instead of an unclear round icon.",
+      "Group blocks no longer show a group eRegistration panel; each booking still has its own eRegistration link.",
+      "Client Relations has a sort (recently updated, name, most visits) and an Export CSV button again.",
+      "Reports (arrival and departure lists, the Front Desk and Reservations reports) show every room and room type of a split stay, not only the first.",
+    ],
+    fixed: [
+      "Split stays with different room types or rate plans bill correctly night by night: each night is charged at its own segment's rate (it used to take the last segment's rate for every night), and a rate plan's packages such as breakfast are charged only on the nights of the segments on that plan. Check-in and pricing a mid-stay room move also use the segment for that night.",
+      "Tape Chart: a booking can no longer be dropped on a room that is not free for all of its nights, only reserved and in-house bookings can be dragged, and an in-house guest can't be dropped on Unassigned.",
+      "Moving an in-house guest to another room splits the stay on the property's business date, not the computer's calendar date (which could leave the new room segment starting after check-out). A later booked room segment is left as it is, and the booking's Room move badge now updates after a move on the Tape Chart or Front Desk.",
+      "A negotiated rate plan can only be booked through the travel agent or company it was set up for; this is now enforced when the booking is saved, not only hidden in the form.",
+      "Opening a reservation that has not arrived yet on a wide screen shows its Edit button in the header again.",
+      "Reading a passport or ID on eRegistration is faster and never leaves the guest stuck: Next stays locked while the ID is read, and after 30 seconds the guest is asked to fill in their details manually and can carry on.",
+      "On the eRegistration form, the Next button no longer flickers in and out when you move the pointer over or off the form.",
+    ],
+    comingNext: [
+      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
+    ],
+  },
   {
     version: "8.7.2",
     date: "2026-10-11",

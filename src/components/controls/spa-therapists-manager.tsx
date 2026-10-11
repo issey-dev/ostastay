@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { todayKey } from "@/lib/date-only"
 import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -367,7 +368,7 @@ export function SpaTherapistsManager({ propertyId }: { propertyId: string }) {
                   <FormField control={form.control} name="phone" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

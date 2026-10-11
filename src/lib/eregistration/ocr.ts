@@ -3,13 +3,66 @@ import { createWorker } from "tesseract.js";
 // Local OCR only — no image ever leaves this server. tesseract.js runs entirely in the
 // Node runtime of the API route via WASM; the one network dependency is its own
 // eng.traineddata fetch on first use, which it caches locally afterward.
-export async function extractText(buffer: Buffer): Promise<string> {
-  const worker = await createWorker("eng");
+// Phone photos are 8-12MP; OCR time grows with pixel count and the MRZ is readable well
+// below that, so shrink to a greyscale ~1600px-wide image first (the single biggest win).
+async function prepareForOcr(buffer: Buffer): Promise<Buffer> {
   try {
-    const { data } = await worker.recognize(buffer);
+    const { default: sharp } = await import("sharp");
+    return await sharp(buffer)
+      .rotate() // honour EXIF orientation
+      .resize({ width: 1600, withoutEnlargement: true })
+      .grayscale()
+      .normalize()
+      .png()
+      .toBuffer();
+  } catch {
+    return buffer; // sharp unavailable or the image is odd: OCR the original
+  }
+}
+
+// One long-lived worker: creating a worker per request re-loads the WASM engine and the
+// language data every time, which is most of the wait on a small server. Requests are
+// queued because a worker handles one image at a time.
+type OcrWorker = Awaited<ReturnType<typeof createWorker>>;
+let workerPromise: Promise<OcrWorker> | null = null;
+let queue: Promise<unknown> = Promise.resolve();
+
+function getWorker(): Promise<OcrWorker> {
+  if (!workerPromise) {
+    workerPromise = createWorker("eng").catch((e) => {
+      workerPromise = null;
+      throw e;
+    });
+  }
+  return workerPromise;
+}
+
+export const OCR_TIMEOUT_MS = 25_000;
+
+export async function extractText(buffer: Buffer): Promise<string> {
+  const image = await prepareForOcr(buffer);
+  const run = async () => {
+    const worker = await getWorker();
+    const { data } = await worker.recognize(image);
     return data.text;
+  };
+  const job = queue.then(run, run);
+  queue = job.catch(() => undefined);
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("OCR timed out")), OCR_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([job, timeout]);
+  } catch (e) {
+    // A stuck worker would block every later scan: drop it so the next one starts fresh.
+    const stale = workerPromise;
+    workerPromise = null;
+    stale?.then((w) => w.terminate()).catch(() => undefined);
+    throw e;
   } finally {
-    await worker.terminate();
+    clearTimeout(timer);
   }
 }
 

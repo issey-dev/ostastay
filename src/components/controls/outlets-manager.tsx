@@ -1,5 +1,6 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Store } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -228,7 +229,7 @@ export function OutletsManager({ propertyId }: { propertyId: string }) {
                     </div>
                     <div className="space-y-2">
                       <Label>Phone</Label>
-                      <Input placeholder="+960 ..." value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+                      <PhoneInput value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
                     </div>
                   </div>
                   <div className="space-y-2">

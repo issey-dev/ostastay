@@ -1,5 +1,7 @@
 "use client"
 
+import { PhoneInput } from "@/components/ui/phone-input"
+import { createPortal } from "react-dom"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import { NationalitySelect } from "@/components/ui/nationality-select"
@@ -9,6 +11,7 @@ import { useForm, type FieldErrors } from "react-hook-form"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +23,7 @@ import {
   Loader2, CheckCircle2, AlertTriangle, Users, ArrowLeft, FileText, Plus, Trash2, Sparkles,
   Contact, ChevronLeft, ChevronRight,
 } from "@/components/icons"
-import { INPUT_EMAIL, INPUT_PHONE } from "@/lib/input-presets"
+import { INPUT_EMAIL } from "@/lib/input-presets"
 import { cn } from "@/lib/utils"
 import { toast } from "@/lib/toast"
 
@@ -84,11 +87,10 @@ const STEPS: { title: string; hint: string; fields: (keyof SlotFormValues)[] }[]
 ]
 const LAST_STEP = STEPS.length - 1
 
-// Native date inputs on this guest page (owner decision 2026-09-25, DECISIONS: a calendar
-// popover is slow for birth dates). Their value is already yyyy-MM-dd, same as DatePicker's.
+// Date fields use the app DatePicker (owner decision 2026-10-11, supersedes the native-input
+// exception of 2026-09-25). Values are yyyy-MM-dd strings, same as before.
 const MIN_DATE = "1900-01-01"
 const MAX_DOC_DATE = "2100-12-31"
-const DATE_INPUT_CLASS = "[&::-webkit-date-and-time-value]:text-left"
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
@@ -295,6 +297,8 @@ function SlotFormView({
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [signature, setSignature] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const [hasPhoto, setHasPhoto] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
@@ -304,6 +308,10 @@ function SlotFormView({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [autofillNote, setAutofillNote] = useState<string | null>(null)
+  // From the saved draft: the lead guest's name is fixed, and a returning/VIP guest gets a
+  // small, quiet nod in the header.
+  const [nameLocked, setNameLocked] = useState(false)
+  const [guestMark, setGuestMark] = useState<"VIP" | "RETURNING" | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), [])
 
@@ -324,6 +332,8 @@ function SlotFormView({
           documentIssueDate: d.documentIssueDate ? new Date(d.documentIssueDate).toISOString().slice(0, 10) : "",
           documentExpiryDate: d.documentExpiryDate ? new Date(d.documentExpiryDate).toISOString().slice(0, 10) : "",
         })
+        setNameLocked(!!d.nameLocked)
+        setGuestMark(d.guestMark === "VIP" || d.guestMark === "RETURNING" ? d.guestMark : null)
         setSignature(d.signatureDataUrl || null)
         setHasPhoto(!!d.hasPhoto)
         if (d.hasPhoto) setPhotoPreviewUrl(`/api/eregistration/${token}/slots/${slot.id}/photo`)
@@ -394,7 +404,12 @@ function SlotFormView({
     try {
       const fd = new FormData()
       fd.append("photo", file)
-      const res = await fetch(`/api/eregistration/${token}/slots/${slot.id}/scan-document`, { method: "POST", body: fd })
+      // Next stays locked while this runs; after 30s give up and let them fill the form in by hand.
+      const res = await fetch(`/api/eregistration/${token}/slots/${slot.id}/scan-document`, {
+        method: "POST",
+        body: fd,
+        signal: AbortSignal.timeout(30_000),
+      })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         toast.error(body.error || "Couldn't read that document — you can still fill the form in manually.")
@@ -408,6 +423,7 @@ function SlotFormView({
       ]
       let filled = 0
       fillable.forEach((key) => {
+        if (nameLocked && (key === "firstName" || key === "lastName")) return
         const value = fields[key]
         if (value && !current[key]) {
           form.setValue(key, value, { shouldDirty: true, shouldValidate: true })
@@ -426,8 +442,12 @@ function SlotFormView({
         )
         toast.success(`Auto-filled ${filled} field${filled === 1 ? "" : "s"} from your document`)
       }
-    } catch {
-      toast.error("Couldn't reach the server to scan that document.")
+    } catch (e) {
+      toast.error(
+        e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")
+          ? "We couldn't read your ID in time — please fill in your details manually and continue."
+          : "Couldn't reach the server to scan that document."
+      )
     } finally {
       setScanning(false)
     }
@@ -502,7 +522,25 @@ function SlotFormView({
         <Button type="button" variant="ghost" size="sm" className="w-fit -ml-2" onClick={onBack}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to guest list
         </Button>
-        <CardTitle>{guestName}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          {guestName}
+          {guestMark && (
+            <button
+              type="button"
+              aria-label={guestMark === "VIP" ? "A note of thanks" : "Welcome back"}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-warning opacity-70 transition hover:opacity-100 focus-visible:opacity-100"
+              onClick={() =>
+                toast.success(
+                  guestMark === "VIP"
+                    ? "Always a pleasure to host you. Thank you for being such a valued guest."
+                    : "Welcome back. It's lovely to see you again."
+                )
+              }
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+          )}
+        </CardTitle>
         <div className="space-y-2 pt-1" aria-live="polite">
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-sm font-semibold">{STEPS[step].title}</p>
@@ -522,7 +560,7 @@ function SlotFormView({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={handleFormSubmit} className="space-y-6" noValidate>
+          <form id="ereg-form" onSubmit={handleFormSubmit} className="space-y-6" noValidate>
             {step === 0 && (
               <div className="space-y-5">
                 {/* Scan first — the photo upload autofills document and personal fields. */}
@@ -629,12 +667,12 @@ function SlotFormView({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FormField control={form.control} name="documentIssueDate" render={({ field }) => (
                       <FormItem><FormLabel>Issue date</FormLabel><FormControl>
-                        <Input type="date" min={MIN_DATE} max={today} className={DATE_INPUT_CLASS} {...field} value={field.value ?? ""} />
+                        <DatePicker minDate={MIN_DATE} maxDate={today} value={field.value} onChange={field.onChange} placeholder="Issue date" />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="documentExpiryDate" render={({ field }) => (
                       <FormItem><FormLabel>Expiry date</FormLabel><FormControl>
-                        <Input type="date" min={MIN_DATE} max={MAX_DOC_DATE} className={DATE_INPUT_CLASS} {...field} value={field.value ?? ""} />
+                        <DatePicker minDate={MIN_DATE} maxDate={MAX_DOC_DATE} value={field.value} onChange={field.onChange} placeholder="Expiry date" />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                   </div>
@@ -650,27 +688,32 @@ function SlotFormView({
                     <AlertDescription>{autofillNote}</AlertDescription>
                   </Alert>
                 )}
+                {nameLocked && (
+                  <p className="text-xs text-muted-foreground">
+                    The lead guest&apos;s name comes from the booking and can&apos;t be changed here. If it isn&apos;t right, please tell reception and they&apos;ll correct it.
+                  </p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField control={form.control} name="firstName" render={({ field }) => (
                     <FormItem><FormLabel>First name</FormLabel><FormControl>
-                      <Input {...field} autoComplete="given-name" autoCapitalize="words" enterKeyHint="next" />
+                      <Input {...field} autoComplete="given-name" autoCapitalize="words" enterKeyHint="next" readOnly={nameLocked} className={nameLocked ? "bg-muted/50 text-muted-foreground" : undefined} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="middleName" render={({ field }) => (
                     <FormItem><FormLabel>Middle name</FormLabel><FormControl>
-                      <Input {...field} autoComplete="additional-name" autoCapitalize="words" enterKeyHint="next" />
+                      <Input {...field} autoComplete="additional-name" autoCapitalize="words" enterKeyHint="next" readOnly={nameLocked} className={nameLocked ? "bg-muted/50 text-muted-foreground" : undefined} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="lastName" render={({ field }) => (
                     <FormItem><FormLabel>Last name</FormLabel><FormControl>
-                      <Input {...field} autoComplete="family-name" autoCapitalize="words" enterKeyHint="next" />
+                      <Input {...field} autoComplete="family-name" autoCapitalize="words" enterKeyHint="next" readOnly={nameLocked} className={nameLocked ? "bg-muted/50 text-muted-foreground" : undefined} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
                     <FormItem><FormLabel>Date of birth</FormLabel><FormControl>
-                      <Input type="date" autoComplete="bday" min={MIN_DATE} max={today} className={DATE_INPUT_CLASS} {...field} />
+                      <DatePicker minDate={MIN_DATE} maxDate={today} value={field.value} onChange={field.onChange} placeholder="Date of birth" />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="nationality" render={({ field }) => (
@@ -704,14 +747,14 @@ function SlotFormView({
                   )} />
                   <FormField control={form.control} name="mobile" render={({ field }) => (
                     <FormItem><FormLabel>Mobile</FormLabel><FormControl>
-                      <Input {...INPUT_PHONE} {...field} enterKeyHint="next" />
+                      <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} name={field.name} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold">Address</h4>
                   <FormField control={form.control} name="addressFull" render={({ field }) => (
-                    <FormItem><FormLabel>Address</FormLabel><FormControl>
+                    <FormItem><FormLabel>Street &amp; building</FormLabel><FormControl>
                       <Textarea rows={2} autoComplete="street-address" {...field} />
                     </FormControl><FormMessage /></FormItem>
                   )} />
@@ -723,7 +766,7 @@ function SlotFormView({
                     )} />
                     <FormField control={form.control} name="addressCountry" render={({ field }) => (
                       <FormItem><FormLabel>Country</FormLabel><FormControl>
-                        <Input {...field} autoComplete="country-name" autoCapitalize="words" enterKeyHint="next" />
+                        <NationalitySelect standardOnly mode="country" value={field.value ?? ""} onValueChange={field.onChange} />
                       </FormControl><FormMessage /></FormItem>
                     )} />
                   </div>
@@ -756,16 +799,8 @@ function SlotFormView({
                           onChange={(e) => updateChild(i, { name: e.target.value })}
                         />
                         <div className="space-y-1 sm:space-y-0">
-                          <Label className="text-xs text-muted-foreground sm:sr-only" htmlFor={`child-dob-${i}`}>Date of birth</Label>
-                          <Input
-                            id={`child-dob-${i}`}
-                            type="date"
-                            min={MIN_DATE}
-                            max={today}
-                            className={DATE_INPUT_CLASS}
-                            value={child.dateOfBirth ?? ""}
-                            onChange={(e) => updateChild(i, { dateOfBirth: e.target.value || null })}
-                          />
+                          <Label className="text-xs text-muted-foreground sm:sr-only">Date of birth</Label>
+                          <DatePicker minDate={MIN_DATE} maxDate={today} value={child.dateOfBirth} onChange={(v) => updateChild(i, { dateOfBirth: v || null })} placeholder="Date of birth" />
                         </div>
                         <Button type="button" variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label="Remove child" onClick={() => removeChild(i)}>
                           <Trash2 className="h-4 w-4" />
@@ -788,6 +823,9 @@ function SlotFormView({
             {submitError && <p className="text-sm text-destructive" role="alert">{submitError}</p>}
 
             {/* Primary action pinned to the bottom of the screen, clear of the iPhone home bar. */}
+            {/* Portalled to body: the Card gets a transform on hover, which would otherwise
+                re-anchor this fixed bar to the card and make it jump in and out. */}
+            {mounted && createPortal(
             <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
               <div className="mx-auto flex max-w-2xl gap-2 px-4">
                 {step > 0 && (
@@ -797,6 +835,7 @@ function SlotFormView({
                 )}
                 <Button
                   type="submit"
+                  form="ereg-form"
                   className="h-11 flex-1 text-base text-white"
                   disabled={submitting || busy}
                   style={{ backgroundColor: brandColor }}
@@ -815,7 +854,8 @@ function SlotFormView({
                   )}
                 </Button>
               </div>
-            </div>
+            </div>,
+            document.body)}
           </form>
         </Form>
       </CardContent>

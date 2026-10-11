@@ -1,5 +1,6 @@
 "use client"
 
+import { StarToggle } from "@/components/ui/gold-star"
 import { useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Clock, FileText, Search, Star } from "@/components/icons"
@@ -76,7 +77,7 @@ export function ReportCatalogue({
           </div>
           <div className="max-h-[calc(100dvh-10rem)] space-y-4 overflow-y-auto rounded-2xl bg-card p-2 shadow-elevation-1 ring-1 ring-foreground/5">
             {sections.favs.length > 0 && (
-              <Section label="Favorites" icon={<Star className="h-3 w-3" />}>
+              <Section label="Favorites" icon={<StarToggle active className="h-3 w-3" />}>
                 {sections.favs.map((r) => (
                   <Item key={`fav-${r.key}`} report={r} active={r.key === selectedKey} starred onSelect={onSelect} onToggleFavorite={onToggleFavorite} />
                 ))}
@@ -174,7 +175,7 @@ function Item({
           starred ? "text-primary opacity-100" : "text-muted-foreground opacity-0 group-hover/item:opacity-100 hover:text-foreground"
         )}
       >
-        <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
+        <StarToggle active={starred} className="h-3.5 w-3.5" />
       </button>
     </li>
   )

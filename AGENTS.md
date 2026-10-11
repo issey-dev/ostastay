@@ -58,6 +58,11 @@ read `.agents/docs/`:
   docs:demo` (the fictional Coral Bay Hotels enterprise) then `npm run docs:shots -- <name>`
   (shot list in `scripts/docs-shots.config.ts`; main content only, never app chrome).
   Rebuild the PDFs with `npm run docs:pdf` and run `npm run docs:check`.
+  **Operations guides** (`src/app/docs/operations`): when you change a day-to-day screen, update
+  its guide in the same PR: `desk` (Front Desk, Reservations list and badges, Tape Chart moves, split
+  stays), `groups-and-clients` (Group blocks and the Posting Master, Client Relations, deactivating a
+  profile, eRegistration), `daily-reports`, `transportation`, `stop-sale`. A new guide is added in
+  `src/app/docs/nav.ts` and the operations overview page, then `npm run docs:pdf -- operations`.
   It also has `/docs/release-notes`: **when you bump `package.json` for a release, add that
   version's entry at the top of `src/app/docs/release-notes/releases.ts`** (New / Improved /
   Fixed, plain language for hotel staff, no file paths, PR numbers or customer names), then

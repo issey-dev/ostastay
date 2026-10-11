@@ -11,7 +11,6 @@ import { PageHeader } from "@/components/ui/page-header"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, parseISO } from "date-fns"
 import { GroupPickupDialog } from "@/components/groups/group-pickup-dialog"
-import { GroupERegistrationPanel } from "@/components/groups/group-eregistration-panel"
 import { GroupScheduleTimeline } from "@/components/groups/group-schedule-timeline"
 import { GroupRoomHoldsEditor, type RoomHold } from "@/components/groups/group-room-holds-editor"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
@@ -319,8 +318,6 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <GroupScheduleTimeline startDate={group.startDate} endDate={group.endDate} pickups={group.reservations ?? []} slug={slug} />
         </div>
       </Card>
-
-      <GroupERegistrationPanel groupId={unwrappedParams.id} />
 
       {/* Pickups */}
       <Card className="shadow-elevation-1 overflow-hidden">

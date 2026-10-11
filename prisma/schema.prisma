@@ -991,6 +991,10 @@ model Profile {
   enterpriseId      String
   enterprise        Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   profileType       String     @default("GUEST")
+  // A profile with any links (reservations, folios, registrations...) can't be deleted; it is
+  // deactivated instead: hidden from pickers and searches, history untouched, reversible.
+  isActive          Boolean    @default(true)
+  deactivatedAt     DateTime?
   title             String?
   firstName         String
   middleName        String?
@@ -1321,6 +1325,10 @@ model Reservation {
   // off per pickup so the guest settles their own folio. Only meaningful when
   // groupBlockId is set and the block has an open master folio (Night Audit routing).
   groupBillToMaster Boolean     @default(true)
+  // The block's Posting Master (PM) reservation: it sits in a pseudo PM room, its folio IS the
+  // block's master folio, and it is not a pickup (it carries no groupBlockId). Excluded from
+  // Night Audit nightly posting and from occupancy. See src/lib/groups/posting-master.ts.
+  isPostingMaster   Boolean     @default(false)
 
   checkInDate           DateTime
   checkOutDate          DateTime
@@ -2381,6 +2389,8 @@ model GroupBlock {
 
   reservations       Reservation[]
   masterFolios       Folio[]
+  // The Posting Master reservation created for this block (see Reservation.isPostingMaster).
+  postingMasterReservationId String? @unique
   // Per-room-type rooms held for the block. totalRoomsHeld is kept in sync as the sum.
   roomHolds          GroupBlockRoom[]
   // A group-scoped eRegistration link: sent to the block's organizer (payeeProfile),
@@ -2737,6 +2747,11 @@ model ReservationAllocation {
   // Nullable per-reservation negotiated price overrides; null = use AllocationRate.
   overrideAdultPrice Float?
   overrideChildPrice Float?
+
+  // Split stay: the nights this RATE_PLAN-sourced allocation covers, as "yyyy-MM-dd/yyyy-MM-dd"
+  // windows (departure-exclusive), comma-separated — the segments whose rate plan links it.
+  // Null = the whole stay (every single-segment booking, meal-plan and manual allocation).
+  appliesTo String?
 
   createdAt DateTime @default(now())
 

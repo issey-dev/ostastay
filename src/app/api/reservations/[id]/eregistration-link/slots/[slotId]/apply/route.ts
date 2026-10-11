@@ -67,7 +67,7 @@ export async function POST(
             ...(slot.email && { communications: { create: [{ type: "EMAIL", value: slot.email, isPrimary: true }] } }),
             ...(slot.mobile && { communications: { create: [{ type: "MOBILE", value: slot.mobile, isPrimary: true }] } }),
             ...(slot.addressFull && {
-              addresses: { create: [{ type: "HOME", fullAddress: slot.addressFull, city: slot.addressCity, country: slot.addressCountry, isPrimary: true }] },
+              addresses: { create: [{ type: "HOME", fullAddress: slot.addressFull, city: slot.addressCity, country: slot.addressCountry ? toCountryCode(slot.addressCountry) : slot.addressCountry, isPrimary: true }] },
             }),
             ...(slot.documentType &&
               slot.documentNumber && {
@@ -99,9 +99,11 @@ export async function POST(
           await tx.profile.update({
             where: { upid: profileUpid },
             data: {
-              ...(slot.firstName && { firstName: slot.firstName }),
-              ...(slot.middleName && { middleName: slot.middleName }),
-              ...(slot.lastName && { lastName: slot.lastName }),
+              // The lead guest's name is the booking's reference point: the guest can't
+              // change it in eRegistration, and it is never overwritten from here.
+              ...(!slot.isPrimary && slot.firstName && { firstName: slot.firstName }),
+              ...(!slot.isPrimary && slot.middleName && { middleName: slot.middleName }),
+              ...(!slot.isPrimary && slot.lastName && { lastName: slot.lastName }),
               ...(slot.dateOfBirth && { dateOfBirth: slot.dateOfBirth }),
               ...(slot.nationality && { nationality: toCountryCode(slot.nationality) }),
               ...(slot.gender && { gender: slot.gender }),
@@ -109,17 +111,31 @@ export async function POST(
           });
         }
         if (fields.includes("contact")) {
-          if (slot.email && !profile.communications.some((c) => c.type === "EMAIL")) {
-            await tx.profileCommunication.create({ data: { upid: profileUpid, type: "EMAIL", value: slot.email, isPrimary: true } });
-          }
-          if (slot.mobile && !profile.communications.some((c) => c.type === "MOBILE")) {
-            await tx.profileCommunication.create({ data: { upid: profileUpid, type: "MOBILE", value: slot.mobile, isPrimary: true } });
+          // The form arrives pre-filled from the profile, so what the guest submits is the
+          // up-to-date value: update the profile's primary entry of that type, or add one.
+          for (const [type, value] of [["EMAIL", slot.email], ["MOBILE", slot.mobile]] as const) {
+            if (!value) continue;
+            const rows = profile.communications.filter((c) => c.type === type);
+            const current = rows.find((c) => c.isPrimary) ?? rows[0];
+            if (!current) {
+              await tx.profileCommunication.create({ data: { upid: profileUpid, type, value, isPrimary: true } });
+            } else if (current.value !== value) {
+              await tx.profileCommunication.update({ where: { id: current.id }, data: { value } });
+            }
           }
         }
-        if (fields.includes("address") && slot.addressFull && profile.addresses.length === 0) {
-          await tx.profileAddress.create({
-            data: { upid: profileUpid, type: "HOME", fullAddress: slot.addressFull, city: slot.addressCity, country: slot.addressCountry, isPrimary: true },
-          });
+        if (fields.includes("address") && slot.addressFull) {
+          const current = profile.addresses.find((a) => a.isPrimary) ?? profile.addresses[0];
+          if (!current) {
+            await tx.profileAddress.create({
+              data: { upid: profileUpid, type: "HOME", fullAddress: slot.addressFull, city: slot.addressCity, country: slot.addressCountry ? toCountryCode(slot.addressCountry) : slot.addressCountry, isPrimary: true },
+            });
+          } else {
+            await tx.profileAddress.update({
+              where: { id: current.id },
+              data: { fullAddress: slot.addressFull, city: slot.addressCity, country: slot.addressCountry ? toCountryCode(slot.addressCountry) : slot.addressCountry },
+            });
+          }
         }
         if (fields.includes("document") && slot.documentType && slot.documentNumber) {
           // Upsert, not create — a returning guest re-submitting the same passport would

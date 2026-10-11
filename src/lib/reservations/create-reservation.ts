@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -215,6 +216,15 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
           endDate: new Date(body.checkOutDate),
         },
       ];
+
+  // A negotiated rate plan is only for the agent / company it was set up for.
+  {
+    const negotiated = await negotiatedPlanError({
+      ratePlanIds: assignmentsInput.map((a) => a.ratePlanId),
+      travelAgentId: body.travelAgentId,
+    });
+    if (negotiated) return fail(400, negotiated);
+  }
 
   // Hard rule: split-stay segments must be back-to-back with no gaps between them.
   if (!assignmentsAreContiguous(assignmentsInput)) {
@@ -442,7 +452,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
   const allocationResult = await materializeReservationAllocations({
     reservationId: newReservation.id,
     propertyId: body.propertyId,
-    ratePlanId: assignmentsInput[0]?.ratePlanId ?? null,
+    segments: assignmentsInput.map((a) => ({ ratePlanId: a.ratePlanId, startDate: new Date(a.startDate), endDate: new Date(a.endDate) })),
     mealPlanCode: body.mealPlan || "NONE",
     manualAllocationIds: Array.isArray(body.manualAllocationIds) ? body.manualAllocationIds : [],
   });

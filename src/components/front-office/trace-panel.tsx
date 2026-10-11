@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageSquare, Clock, Wrench, ConciergeBell, CheckCircle2, Circle, Trash2, Plus, X } from "@/components/icons"
+import { MessageSquare, Clock, Wrench, ConciergeBell, Trash2, Plus, X } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -103,11 +103,15 @@ export function TracePanel({
     // Optimistic UI
     setTraces(traces.map(t => t.id === id ? { ...t, isResolved: !currentStatus } : t))
     try {
-      await fetch(`/api/traces/${id}`, {
+      const res = await fetch(`/api/traces/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isResolved: !currentStatus })
       })
+      if (!res.ok) {
+        toast.error(await apiError(res, "Couldn't update the trace. Try again."))
+        fetchTraces()
+      }
     } catch (e) {
       console.error(e)
       fetchTraces() // Revert on failure
@@ -210,10 +214,14 @@ export function TracePanel({
                 
                 return (
                   <div key={trace.id} className={`flex gap-3 p-4 rounded-lg border bg-card shadow-sm transition-all ${trace.isResolved ? 'opacity-60 bg-muted' : ''}`}>
-                    <button onClick={() => toggleResolve(trace.id, trace.isResolved)} className={`mt-1 flex-shrink-0 transition-colors ${trace.isResolved ? 'text-success' : 'text-muted-foreground hover:text-muted-foreground'}`}>
-                      {trace.isResolved ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                    </button>
-                    
+                    <Checkbox
+                      checked={!!trace.isResolved}
+                      onCheckedChange={() => toggleResolve(trace.id, trace.isResolved)}
+                      aria-label={trace.isResolved ? "Mark as not done" : "Mark as done"}
+                      title={trace.isResolved ? "Mark as not done" : "Mark as done"}
+                      className="mt-1 shrink-0"
+                    />
+
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
