@@ -3,7 +3,7 @@
 import { useBusinessToday } from "@/hooks/use-business-today";
 import { toDateKey, parseDateKey } from "@/lib/date-only"
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
 import { Loader2, Calendar, User, DoorOpen, Star, Key, ExternalLink, ChevronLeft, ChevronRight } from "@/components/icons";
@@ -71,6 +71,7 @@ const LEGEND: { label: string; status: string }[] = [
 
 export function TapeChartGrid() {
   const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
   const { currentProperty } = useProperty();
   const deviceTier = useDeviceTier();
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -88,6 +89,11 @@ export function TapeChartGrid() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [draggedAssignmentId, setDraggedAssignmentId] = useState<string | null>(null);
+  // Which row the pointer is over while dragging (null = the Unassigned row), to tint it
+  // green when the booking fits there and red when it doesn't.
+  const [dragOverRoom, setDragOverRoom] = useState<string | null | undefined>(undefined);
+  // A move that cannot happen, with why and the way out (adjust the stay's dates).
+  const [blocked, setBlocked] = useState<{ title: string; message: string; reservationId: string; canEditDates: boolean } | null>(null);
   // A drop onto a room of a different type waits here for the rate choice and reason.
   const [typeChange, setTypeChange] = useState<TypeChangeMove | null>(null);
   const [isFolioOpen, setIsFolioOpen] = useState(false);
@@ -127,23 +133,106 @@ export function TapeChartGrid() {
     }
   };
 
+  // ── Can this booking move to that room? ──────────────────────────────────────────
+  // Checked against what is on the chart (and again by the server on drop). A booking
+  // moves with its own dates, so the target room has to be free for ALL its nights; an
+  // in-house guest moves from the business date onward (earlier nights stay in the old room).
+  const holding = (status: string) => status === "RESERVED" || status === "IN_HOUSE";
+  const dayKey = (iso: string) => iso.slice(0, 10);
+  const todayKey = business.ready ? toDateKey(business.today) : null;
+  const pretty = (key: string) => format(parseISO(key), "dd MMM");
+  const nightsIn = (from: string, to: string) => Math.max(0, differenceInDays(parseISO(to), parseISO(from)));
+
+  const moveWindow = (res: Reservation) => {
+    const checkIn = dayKey(res.checkInDate);
+    const start = res.status === "IN_HOUSE" && todayKey && todayKey > checkIn ? todayKey : checkIn;
+    return { start, end: dayKey(res.checkOutDate) };
+  };
+
+  // Only bookings that still hold a room can be moved, and an in-house guest only on the
+  // segment they are in now.
+  const canDrag = (res: Reservation) => {
+    if (!holding(res.status)) return false;
+    if (res.status === "IN_HOUSE") {
+      if (!todayKey) return false;
+      return dayKey(res.checkInDate) <= todayKey && todayKey < dayKey(res.checkOutDate);
+    }
+    return true;
+  };
+
+  type Verdict = { ok: true } | { ok: false; title: string; message: string; canEditDates: boolean };
+  const verdictFor = (dragged: Reservation, room: Room | null): Verdict => {
+    if (!room) {
+      return dragged.status === "IN_HOUSE"
+        ? { ok: false, title: "Guest is in the house", message: "An in-house guest can't be left without a room. Drop the booking on another room instead.", canEditDates: false }
+        : { ok: true };
+    }
+    if (dragged.roomId === room.id) return { ok: true };
+    const { start, end } = moveWindow(dragged);
+    if (end <= start) {
+      return { ok: false, title: "Nothing left to move", message: "This guest is due out today, so there are no nights left to move to another room.", canEditDates: false };
+    }
+    const clash = reservations
+      .filter((r) => r.roomId === room.id && r.id !== dragged.id && r.reservationId !== dragged.reservationId && holding(r.status) && dayKey(r.checkInDate) < end && dayKey(r.checkOutDate) > start)
+      .sort((x, y) => dayKey(x.checkInDate).localeCompare(dayKey(y.checkInDate)))[0];
+    if (!clash) return { ok: true };
+    const nights = nightsIn(start, end);
+    const guest = `${clash.primaryGuest.firstName} ${clash.primaryGuest.lastName}`.trim();
+    return {
+      ok: false,
+      title: "It doesn't fit in that room",
+      message: `Room ${room.roomNumber} is booked by ${guest} from ${pretty(dayKey(clash.checkInDate))} to ${pretty(dayKey(clash.checkOutDate))}, but this stay needs it for ${nights} night${nights === 1 ? "" : "s"} (${pretty(start)} - ${pretty(end)}). Adjust the stay's dates first, or choose a room that is free for all ${nights} night${nights === 1 ? "" : "s"}.`,
+      canEditDates: true,
+    };
+  };
+
+  const draggedRes = draggedAssignmentId ? reservations.find((r) => r.id === draggedAssignmentId) ?? null : null;
+  const rowTint = (roomId: string | null) => {
+    if (!draggedRes || dragOverRoom === undefined || dragOverRoom !== roomId) return "";
+    const v = verdictFor(draggedRes, roomId ? rooms.find((r) => r.id === roomId) ?? null : null);
+    return v.ok ? "bg-success-muted/60 ring-2 ring-inset ring-success/50" : "bg-destructive-muted/60 ring-2 ring-inset ring-destructive/50 cursor-not-allowed";
+  };
+
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedAssignmentId(id);
     e.dataTransfer.setData("text/plain", id);
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragEnd = () => {
+    setDraggedAssignmentId(null);
+    setDragOverRoom(undefined);
+  };
+
+  const handleDragOver = (e: React.DragEvent, roomId: string | null) => {
     e.preventDefault();
+    if (dragOverRoom !== roomId) setDragOverRoom(roomId);
+    if (draggedRes) {
+      const v = verdictFor(draggedRes, roomId ? rooms.find((r) => r.id === roomId) ?? null : null);
+      e.dataTransfer.dropEffect = v.ok ? "move" : "none";
+    }
   };
 
   const handleDrop = async (e: React.DragEvent, roomId: string | null) => {
     e.preventDefault();
+    setDragOverRoom(undefined);
     const assignmentId = e.dataTransfer.getData("text/plain") || draggedAssignmentId;
     if (!assignmentId) return;
 
     const dragged = reservations.find((r) => r.id === assignmentId);
     const target = roomId ? rooms.find((r) => r.id === roomId) : null;
+    if (dragged) {
+      if (target && dragged.roomId === target.id) {
+        setDraggedAssignmentId(null);
+        return; // dropped back where it was
+      }
+      const verdict = verdictFor(dragged, target ?? null);
+      if (!verdict.ok) {
+        setBlocked({ title: verdict.title, message: verdict.message, reservationId: dragged.reservationId, canEditDates: verdict.canEditDates });
+        setDraggedAssignmentId(null);
+        return;
+      }
+    }
     if (dragged && target && dragged.roomId !== target.id) {
       // A room of the SAME type is just a move. A different type changes the rate, so it
       // asks which rate to bill and why first (same questions as the Front Desk room move).
@@ -175,8 +264,11 @@ export function TapeChartGrid() {
             body: JSON.stringify({ newRoomId: target.id, newRoomTypeId: target.roomTypeId, reason: "Moved on the tape chart" }),
           });
           const json = await res.json().catch(() => ({}));
-          if (!res.ok) toast.error(json.error || "Failed to move the guest.");
-          else await fetchData(startDate);
+          if (!res.ok) {
+            if (/occupied|booked|fit/i.test(json.error ?? "") && dragged) {
+              setBlocked({ title: "It doesn't fit in that room", message: json.error, reservationId: dragged.reservationId, canEditDates: true });
+            } else toast.error(json.error || "Failed to move the guest.");
+          } else await fetchData(startDate);
         } catch {
           toast.error("An error occurred while moving the guest.");
         } finally {
@@ -199,7 +291,9 @@ export function TapeChartGrid() {
 
       const json = await res.json();
       if (!res.ok) {
-        toast.error(json.error || "Failed to reassign room.");
+        if (/occupied|booked|fit/i.test(json.error ?? "") && dragged) {
+          setBlocked({ title: "It doesn't fit in that room", message: json.error, reservationId: dragged.reservationId, canEditDates: true });
+        } else toast.error(json.error || "Failed to reassign room.");
       } else {
         await fetchData(startDate);
       }
@@ -506,7 +600,7 @@ export function TapeChartGrid() {
           <div 
             className="flex-1 grid relative p-1" 
             style={{ gridTemplateColumns: colTemplate }}
-            onDragOver={handleDragOver}
+            onDragOver={(e) => handleDragOver(e, null)}
             onDrop={(e) => handleDrop(e, null)}
           >
             {/* Grid Lines */}
@@ -523,8 +617,9 @@ export function TapeChartGrid() {
                 <div 
                   key={res.id} 
                   onClick={() => setSelectedReservation(res)}
-                  draggable
+                  draggable={canDrag(res)}
                   onDragStart={(e) => handleDragStart(e, res.id)}
+                  onDragEnd={handleDragEnd}
                   title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}`}
                   className={`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}`}
                   style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
@@ -557,9 +652,9 @@ export function TapeChartGrid() {
 
                 {/* Data Grid for this room */}
                 <div
-                  className="flex-1 grid relative p-1"
+                  className={cn("flex-1 grid relative p-1 transition-colors", rowTint(room.id))}
                   style={{ gridTemplateColumns: colTemplate }}
-                  onDragOver={handleDragOver}
+                  onDragOver={(e) => handleDragOver(e, room.id)}
                   onDrop={(e) => handleDrop(e, room.id)}
                 >
                   {/* Background Grid Lines — clicking an empty cell opens a booking
@@ -585,8 +680,9 @@ export function TapeChartGrid() {
                       <div 
                         key={res.id} 
                         onClick={() => setSelectedReservation(res)}
-                        draggable
+                        draggable={canDrag(res)}
                         onDragStart={(e) => handleDragStart(e, res.id)}
+                        onDragEnd={handleDragEnd}
                         title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}`}
                         className={`absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}`}
                         style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
@@ -615,6 +711,22 @@ export function TapeChartGrid() {
     </div>
 
     {detailsModal}
+    <Dialog open={!!blocked} onOpenChange={(open) => !open && setBlocked(null)}>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle>{blocked?.title}</DialogTitle>
+          <DialogDescription>{blocked?.message}</DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => setBlocked(null)}>Close</Button>
+          {blocked?.canEditDates && (
+            <Button onClick={() => { const id = blocked.reservationId; setBlocked(null); router.push(`/e/${slug}/dashboard/reservations/${id}/edit`); }}>
+              Adjust the dates
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
     <TapeChartTypeChangeDialog move={typeChange} onClose={() => setTypeChange(null)} onDone={() => fetchData(startDate)} />
     </>
   );

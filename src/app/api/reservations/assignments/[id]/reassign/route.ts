@@ -34,6 +34,18 @@ export async function PATCH(
     }
     await assertPropertyAccess(ctx, assignment.reservation.propertyId);
 
+    // Only a booking that still holds a room can have it changed, and a guest in the house
+    // is never left without one (an in-house change of room goes through the room move).
+    if (!["RESERVED", "IN_HOUSE"].includes(assignment.reservation.status)) {
+      return NextResponse.json({ error: "Only reserved or in-house bookings can change room." }, { status: 400 });
+    }
+    if (!roomId && assignment.reservation.status === "IN_HOUSE") {
+      return NextResponse.json({ error: "An in-house guest can't be left without a room." }, { status: 400 });
+    }
+    if (roomId && roomId === assignment.roomId) {
+      return NextResponse.json({ success: true, assignment, unchanged: true });
+    }
+
     if (roomId) {
       // Find the new room
       const newRoom = await prisma.room.findUnique({
