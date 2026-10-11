@@ -22,6 +22,7 @@ export const RELEASES: Release[] = [
       "Phone and mobile fields now have a country-code dropdown (flag, country and dialling code, searchable) next to a number-only box. You pick the country once and type just the number. It is on guest profiles and their contacts, the quick-create guest on a reservation, eRegistration, outlets, spa therapists and transport providers. Numbers already saved keep working and show as they were.",
     ],
     improved: [
+      "Reservations card view: the names of accompanying guests show lightly under the main guest, a star marks VIP guests and a small repeat mark with a number shows returning guests (and how many previous stays), and small labelled badges under the dates show what is filled in on the booking: Transportation, Traces, Deposit, Registration, Special request, Split stay and more.",
       "In Traces & messages, each trace now has a checkbox to mark it done (the text is crossed off), instead of an unclear round icon.",
       "eRegistration now pre-fills each guest from their guest profile (name, date of birth, nationality, contact details, address and ID). The lead guest's name is fixed (reception corrects it on the profile if it is wrong), while every other detail, for the lead and for accompanying guests, can be updated, and the changes go onto the profile when reception applies the registration.",
       "Returning and VIP guests get a small, quiet sparkle by their name on the eRegistration form; tapping it shows a short thank-you.",
