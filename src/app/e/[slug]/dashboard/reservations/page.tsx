@@ -1,5 +1,6 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
 import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
@@ -200,15 +201,6 @@ const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
   const tasks = getActiveTasks(res).length
   if (tasks > 0) out.push({ key: "task", label: n(tasks, "Housekeeping request"), title: `${tasks} active housekeeping request${tasks > 1 ? "s" : ""}`, tone: "destructive" })
   return out
-}
-
-// A solid five-point gold star (the icon set only has an outlined one).
-function GoldStar({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="#E5A914" stroke="#C48B00" strokeWidth="1" strokeLinejoin="round">
-      <path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.6 6.1 20.7l1.2-6.6L2.5 9.5l6.6-.9L12 2.5z" />
-    </svg>
-  )
 }
 
 function CardBadges({ res }: { res: Reservation }) {

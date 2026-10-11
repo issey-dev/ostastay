@@ -1,5 +1,6 @@
 "use client"
 
+import { GoldStar } from "@/components/ui/gold-star"
 import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation"
@@ -362,7 +363,7 @@ function FrontOfficeDashboardContent() {
         <Link href={viewUrl(res.id)} onClick={(e) => e.stopPropagation()} className="truncate hover:underline">
           {guestDisplayName(res.primaryGuest)}
         </Link>
-        {res.primaryGuest?.vipLevel && <span title="VIP"><Star className="h-4 w-4 text-warning shrink-0" /></span>}
+        {(res.primaryGuest?.vipLevel || res.primaryGuest?.classification === "VIP") && <span title="VIP" className="shrink-0"><GoldStar className="h-4 w-4" /></span>}
         {warn && res.profileIncomplete && (
           <span title="Guest profile incomplete — missing nationality, date of birth, or ID">
             <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
@@ -465,7 +466,39 @@ function FrontOfficeDashboardContent() {
     warning: "text-warning hover:text-warning hover:bg-warning-muted",
     danger: "text-destructive hover:text-destructive hover:bg-destructive-muted",
   }
-  const DeskResCard = ({ res, balance, actions }: { res: any; balance?: number; actions: DeskAction[] }) => (
+  const MoreMenu = ({ items }: { items: DeskAction[] }) =>
+    items.length === 0 ? null : (
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="h-8 w-8 px-0" title="More actions" aria-label="More actions" />}>
+          <MoreHorizontal className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          {items.map((a) => (
+            <DropdownMenuItem
+              key={a.key}
+              className={`cursor-pointer ${a.tone === "danger" ? "text-destructive" : ""}`}
+              disabled={a.disabled}
+              onClick={a.onClick}
+            >
+              <a.icon className="mr-2 h-4 w-4" /> {a.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  // The card shows the two buttons the desk reaches for in that tab; everything else sits
+  // behind the "..." menu.
+  const DeskActionBar = ({ actions, more }: { actions: DeskAction[]; more: DeskAction[] }) => (
+    <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
+      {actions.map((a) => (
+        <Button key={a.key} size="sm" variant="outline" className={`h-8 ${a.tone ? DESK_TONE[a.tone] : ""}`} disabled={a.disabled} title={a.title} onClick={a.onClick}>
+          <a.icon className="mr-1.5 h-3.5 w-3.5" /> {a.label}
+        </Button>
+      ))}
+      <span className="ml-auto"><MoreMenu items={more} /></span>
+    </div>
+  )
+  const DeskResCard = ({ res, balance, actions, more }: { res: any; balance?: number; actions: DeskAction[]; more: DeskAction[] }) => (
     <div
       className="flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30"
       onClick={() => router.push(viewUrl(res.id))}
@@ -482,44 +515,41 @@ function FrontOfficeDashboardContent() {
         )}
       </div>
       {hasFrontDeskFlags(res) && <FrontDeskFlags res={res} />}
-      <div className="mt-auto flex flex-wrap gap-1.5 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
-        {actions.map((a) => (
-          <Button
-            key={a.key}
-            size="sm"
-            variant="outline"
-            className={`h-8 ${a.tone ? DESK_TONE[a.tone] : ""}`}
-            disabled={a.disabled}
-            title={a.title}
-            onClick={a.onClick}
-          >
-            <a.icon className="mr-1.5 h-3.5 w-3.5" /> {a.label}
-          </Button>
-        ))}
-      </div>
+      <DeskActionBar actions={actions} more={more} />
     </div>
   )
-  const arrivalActions = (res: any): DeskAction[] => {
+  const viewAction = (res: any): DeskAction => ({ key: "view", label: "View details", icon: FileText, onClick: () => router.push(viewUrl(res.id)) })
+  const tracesAction = (res: any): DeskAction => ({ key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) })
+  const folioAction = (res: any): DeskAction => ({ key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(res.id) })
+  // Arrivals: Check in / Register. Departures: Check out / Folio. In-house: Traces / Folio.
+  const arrivalActions = (res: any) => {
     const unassigned = !res.assignments?.[0]?.room
-    return [
-      ...(canCheckIn(res.status, res.checkInDate, bd) ? [{ key: "in", label: "Check in", icon: Key, tone: "success" as const, onClick: () => setCheckInRes(res) }] : []),
-      ...(unassigned ? [{ key: "assign", label: "Assign room", icon: BedDouble, onClick: () => openAssign(res) }] : []),
-      { key: "reg", label: "Reg card", icon: FileText, title: "Print registration card", onClick: () => openRegCard(res.id) },
-      { key: "ereg", label: "eReg", icon: Send, title: "Send the guest a link to fill in their own registration details", onClick: () => setERegRes(res) },
-      { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) },
-      { key: "noshow", label: "No-show", icon: UserX, tone: "danger" as const, onClick: () => setNoShowRes(res) },
-    ]
+    const can = canCheckIn(res.status, res.checkInDate, bd)
+    return {
+      actions: [
+        { key: "in", label: "Check in", icon: Key, tone: "success" as const, disabled: !can, title: can ? undefined : "Not available to check in yet", onClick: () => setCheckInRes(res) },
+        { key: "reg", label: "Register", icon: FileText, title: "Print the registration card", onClick: () => openRegCard(res.id) },
+      ] as DeskAction[],
+      more: [
+        ...(unassigned ? [{ key: "assign", label: "Assign room", icon: BedDouble, onClick: () => openAssign(res) }] : []),
+        { key: "ereg", label: "eRegistration link", icon: Send, onClick: () => setERegRes(res) },
+        tracesAction(res),
+        viewAction(res),
+        { key: "noshow", label: "Mark no-show", icon: UserX, tone: "danger" as const, onClick: () => setNoShowRes(res) },
+      ] as DeskAction[],
+    }
   }
-  const departureActions = (res: any): DeskAction[] => [
-    { key: "out", label: actionLoading === res.id ? "Checking out..." : "Check out", icon: LogOut, disabled: actionLoading === res.id, onClick: () => handleCheckOut(res.id) },
-    { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(res.id) },
-    { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) },
-  ]
-  const inHouseActions = (res: any): DeskAction[] => [
-    { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(res.id) },
-    { key: "move", label: "Move room", icon: ArrowLeftRight, tone: "warning", onClick: () => openRoomMove(res) },
-    { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(res.id, guestDisplayName(res.primaryGuest)) },
-  ]
+  const departureActions = (res: any) => ({
+    actions: [
+      { key: "out", label: actionLoading === res.id ? "Checking out..." : "Check out", icon: LogOut, disabled: actionLoading === res.id, onClick: () => handleCheckOut(res.id) },
+      folioAction(res),
+    ] as DeskAction[],
+    more: [tracesAction(res), viewAction(res)] as DeskAction[],
+  })
+  const inHouseActions = (res: any) => ({
+    actions: [tracesAction(res), folioAction(res)] as DeskAction[],
+    more: [{ key: "move", label: "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }, viewAction(res)] as DeskAction[],
+  })
   const deskGrid = "grid gap-3 pb-1 md:grid-cols-2 2xl:grid-cols-3"
 
   if (loading && !data) {
@@ -808,7 +838,7 @@ function FrontOfficeDashboardContent() {
                 ) : (
                   <div className={deskGrid}>
                     {arrivals.map((res: any) => (
-                      <DeskResCard key={res.id} res={res} actions={arrivalActions(res)} />
+                      <DeskResCard key={res.id} res={res} {...arrivalActions(res)} />
                     ))}
                   </div>
                 )}
@@ -908,7 +938,7 @@ function FrontOfficeDashboardContent() {
                 ) : (
                   <div className={deskGrid}>
                     {departures.map((res: any) => (
-                      <DeskResCard key={res.id} res={res} balance={res.balance} actions={departureActions(res)} />
+                      <DeskResCard key={res.id} res={res} balance={res.balance} {...departureActions(res)} />
                     ))}
                   </div>
                 )}
@@ -1008,7 +1038,7 @@ function FrontOfficeDashboardContent() {
                 ) : (
                   <div className={deskGrid}>
                     {inHouse.map((res: any) => (
-                      <DeskResCard key={res.id} res={res} balance={res.balance} actions={inHouseActions(res)} />
+                      <DeskResCard key={res.id} res={res} balance={res.balance} {...inHouseActions(res)} />
                     ))}
                   </div>
                 )}
@@ -1020,13 +1050,13 @@ function FrontOfficeDashboardContent() {
             <TabsContent value="roommoves" className="m-0 border-none outline-none">
               {/* Room moves are their own shape (from/to rooms, not a reservation row),
                   so this card is written out rather than reusing MobileResCard. */}
-              <div className={view === "card" ? "" : "md:hidden"}>
+              <div className="md:hidden">
                 {loadError ? (
                   <ErrorState title="Couldn't load room moves" onRetry={() => fetchSummary()} />
                 ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
                   <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
                 ) : (
-                  <div className={view === "card" ? "grid gap-3 pb-1 md:grid-cols-2 2xl:grid-cols-3" : "space-y-3 pb-1"}>
+                  <div className="space-y-3 pb-1">
                     {data.roomMovesToday.map((mv: any) => {
                       const res = (data?.inHouse ?? []).find((r: any) => r.id === mv.reservationId)
                       const unassigned = !mv.toRoomNumber
@@ -1055,6 +1085,48 @@ function FrontOfficeDashboardContent() {
                               <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> {unassigned ? "Assign / Move" : "Move room"}
                             </Button>
                           </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop card view: Traces / Folio on the card, Move room behind the menu. */}
+              <div className={view === "card" ? "hidden md:block" : "hidden"}>
+                {loadError ? (
+                  <ErrorState title="Couldn't load this list" onRetry={() => fetchSummary()} />
+                ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
+                  <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
+                ) : (
+                  <div className={deskGrid}>
+                    {data.roomMovesToday.map((mv: any) => {
+                      const res = (data?.inHouse ?? []).find((r: any) => r.id === mv.reservationId)
+                      const unassigned = !mv.toRoomNumber
+                      const name = guestDisplayName(mv.primaryGuest)
+                      return (
+                        <div
+                          key={mv.reservationId}
+                          className={`flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 ${res ? "cursor-pointer hover:bg-muted/30" : ""}`}
+                          onClick={() => res && router.push(viewUrl(mv.reservationId))}
+                        >
+                          <div>
+                            <div className="text-base font-medium truncate">{name}</div>
+                            <div className="text-xs font-mono text-muted-foreground truncate">{mv.confirmationNo}</div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <Badge variant="outline">{mv.fromRoomNumber ?? "-"}</Badge>
+                            <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            {unassigned ? <span className="text-xs font-medium text-destructive">Unassigned</span> : <StatusBadge label={mv.toRoomNumber} tone="warning" />}
+                            <span className="text-muted-foreground text-xs">{mv.toRoomTypeName}</span>
+                          </div>
+                          <DeskActionBar
+                            actions={[
+                              { key: "traces", label: "Traces", icon: MessageSquare, onClick: () => openTraces(mv.reservationId, name) },
+                              { key: "folio", label: "Folio", icon: ReceiptText, onClick: () => openFolio(mv.reservationId) },
+                            ]}
+                            more={res ? [{ key: "move", label: unassigned ? "Assign / Move room" : "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }] : []}
+                          />
                         </div>
                       )
                     })}
