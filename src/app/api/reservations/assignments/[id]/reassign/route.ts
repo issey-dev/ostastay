@@ -15,6 +15,11 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const { roomId } = body; // Could be null/string
+    // Moving to a room of a DIFFERENT type changes what the guest should pay, so it needs an
+    // explicit rate choice and a reason (same rules as the Front Desk room move): "new"
+    // reprices at the new room type, "keep" bills as the current one.
+    const rateMode: "keep" | "new" = body.rateMode === "keep" ? "keep" : "new";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
     // Find the assignment
     const assignment = await prisma.roomAssignment.findUnique({
@@ -59,12 +64,29 @@ export async function PATCH(
         return NextResponse.json({ error: "The selected room is already occupied during this period." }, { status: 400 });
       }
 
+      const typeChanged = newRoom.roomTypeId !== assignment.roomTypeId;
+      if (typeChanged && !reason) {
+        return NextResponse.json({ error: "A reason is required to move a booking to a different room type." }, { status: 400 });
+      }
+
+      // Pricing basis carried onto the new room type (mirrors POST .../room-move).
+      let pricing: { chargeRoomTypeId: string | null; overrideRate: number | null } | null = null;
+      if (typeChanged) {
+        if (rateMode === "keep") {
+          const billedAs = assignment.chargeRoomTypeId ?? assignment.roomTypeId;
+          pricing = { chargeRoomTypeId: billedAs === newRoom.roomTypeId ? null : billedAs, overrideRate: assignment.overrideRate ?? null };
+        } else {
+          pricing = { chargeRoomTypeId: null, overrideRate: null };
+        }
+      }
+
       // Update the assignment
       const updated = await prisma.roomAssignment.update({
         where: { id },
         data: {
           roomId: roomId,
-          roomTypeId: newRoom.roomTypeId
+          roomTypeId: newRoom.roomTypeId,
+          ...(pricing ?? {}),
         }
       });
 
@@ -74,7 +96,7 @@ export async function PATCH(
         data: {
           reservationId: assignment.reservationId,
           traceType: "ROOM_REASSIGN",
-          description: `Room assignment changed to Room ${newRoom.roomNumber} (${newRoom.roomType.code}).`,
+          description: `Room assignment changed to Room ${newRoom.roomNumber} (${newRoom.roomType.code}).${typeChanged ? ` Room type changed — ${rateMode === "keep" ? "rate kept" : "rate recalculated"}. Reason: ${reason}` : ""}`,
           actionDate: new Date(),
           isResolved: true
         }
@@ -86,7 +108,7 @@ export async function PATCH(
         action: "UPDATE",
         entityType: "RoomAssignment",
         entityId: id,
-        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})`,
+        description: `Reassigned reservation to Room ${newRoom.roomNumber} (${newRoom.roomType.code})${typeChanged ? `, ${rateMode === "keep" ? "rate kept" : "rate recalculated"} — ${reason}` : ""}`,
       });
 
       return NextResponse.json({ success: true, assignment: updated });

@@ -22,6 +22,7 @@ import { useDeviceTier } from "@/hooks/use-mobile";
 import { TapeChartMobileList } from "@/components/reservations/tape-chart-mobile-list";
 import { useProperty } from "@/components/providers/property-provider";
 import { toast } from "@/lib/toast";
+import { TapeChartTypeChangeDialog, type TypeChangeMove } from "@/components/reservations/tape-chart-type-change-dialog";
 
 export interface Room {
   id: string;
@@ -87,6 +88,8 @@ export function TapeChartGrid() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [draggedAssignmentId, setDraggedAssignmentId] = useState<string | null>(null);
+  // A drop onto a room of a different type waits here for the rate choice and reason.
+  const [typeChange, setTypeChange] = useState<TypeChangeMove | null>(null);
   const [isFolioOpen, setIsFolioOpen] = useState(false);
   const [quickBook, setQuickBook] = useState<{ roomTypeId: string; roomId: string; checkInDate: string } | null>(null);
   // Check-in goes through the same wizard as the Front Desk (room, ID, registration card,
@@ -138,6 +141,51 @@ export function TapeChartGrid() {
     e.preventDefault();
     const assignmentId = e.dataTransfer.getData("text/plain") || draggedAssignmentId;
     if (!assignmentId) return;
+
+    const dragged = reservations.find((r) => r.id === assignmentId);
+    const target = roomId ? rooms.find((r) => r.id === roomId) : null;
+    if (dragged && target && dragged.roomId !== target.id) {
+      // A room of the SAME type is just a move. A different type changes the rate, so it
+      // asks which rate to bill and why first (same questions as the Front Desk room move).
+      if (dragged.roomType.code !== target.roomType.code) {
+        const from = dragged.roomId ? rooms.find((r) => r.id === dragged.roomId) : null;
+        setTypeChange({
+          assignmentId,
+          reservationId: dragged.reservationId,
+          status: dragged.status,
+          guestName: `${dragged.primaryGuest.firstName} ${dragged.primaryGuest.lastName}`.trim(),
+          fromRoomLabel: from ? `Room ${from.roomNumber}` : "Unassigned",
+          fromTypeLabel: dragged.roomType.name,
+          toRoomId: target.id,
+          toRoomNumber: target.roomNumber,
+          toTypeId: target.roomTypeId,
+          toTypeLabel: target.roomType.name,
+        });
+        setDraggedAssignmentId(null);
+        return;
+      }
+      // An in-house guest moves through the room move (old room to dirty, new segment from
+      // today), as on the Front Desk; the reason is implicit for a same-type move.
+      if (dragged.status === "IN_HOUSE") {
+        try {
+          setIsLoading(true);
+          const res = await fetch(`/api/reservations/${dragged.reservationId}/room-move`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ newRoomId: target.id, newRoomTypeId: target.roomTypeId, reason: "Moved on the tape chart" }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) toast.error(json.error || "Failed to move the guest.");
+          else await fetchData(startDate);
+        } catch {
+          toast.error("An error occurred while moving the guest.");
+        } finally {
+          setIsLoading(false);
+          setDraggedAssignmentId(null);
+        }
+        return;
+      }
+    }
 
     try {
       setIsLoading(true);
@@ -567,6 +615,7 @@ export function TapeChartGrid() {
     </div>
 
     {detailsModal}
+    <TapeChartTypeChangeDialog move={typeChange} onClose={() => setTypeChange(null)} onDone={() => fetchData(startDate)} />
     </>
   );
 }
