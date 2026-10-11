@@ -992,17 +992,20 @@ function ReservationsList() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center justify-between text-sm mt-3 pt-3 border-t border-border max-md:mt-2 max-md:pt-2">
-                      <span className="text-foreground">
-                        {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
-                        <span className="text-muted-foreground"> · {nights}n</span>
-                      </span>
-                      {/* Desktop: the row's actions (and the ... menu) sit here, level with the dates. */}
-                      <div className="max-md:hidden" onClick={(e) => e.stopPropagation()}>
+                    {/* Dates and badges on the left; the actions (and the ... menu) at the right, pinned to
+                        the bottom so they stay at the lower end when the badges wrap onto more lines. */}
+                    <div className="flex items-end justify-between gap-3 text-sm mt-3 pt-3 border-t border-border max-md:mt-2 max-md:pt-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-foreground">
+                          {format(new Date(res.checkInDate), "dd MMM")} → {format(new Date(res.checkOutDate), "dd MMM")}
+                          <span className="text-muted-foreground"> · {nights}n</span>
+                        </span>
+                        <CardBadges res={res} />
+                      </div>
+                      <div className="shrink-0 self-end max-md:hidden" onClick={(e) => e.stopPropagation()}>
                         {renderRowActions(res)}
                       </div>
                     </div>
-                    <CardBadges res={res} />
                     {phone.primary && (
                       <div className="mt-2.5 md:hidden" onClick={(e) => e.stopPropagation()}>
                         <Button
