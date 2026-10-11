@@ -586,7 +586,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
                   convenient"). From lg the primary lives in the summary rail instead. */}
               <ActionBar
                 className="max-md:hidden"
-                primary={phonePrimary && <span className="lg:hidden">{phonePrimary}</span>}
+                // Edit as the primary has no summary-rail twin, so keep it in the header at every width.
+                primary={phonePrimary && <span className={primaryIsEdit ? undefined : "lg:hidden"}>{phonePrimary}</span>}
                 secondary={
                   reservation.status === "IN_HOUSE" && (
                     <Button variant="outline" onClick={() => setIsRoomMoveOpen(true)}>

@@ -30,6 +30,7 @@ export const RELEASES: Release[] = [
       "eRegistration now uses the same calendar date picker as the rest of the app for the date of birth, document issue and expiry dates, and children's dates of birth.",
     ],
     fixed: [
+      "Opening a reservation that has not arrived yet on a wide screen now shows an Edit button in the header; it was missing, and Edit was only reachable from the Reservations list.",
       "Reading a passport or ID on eRegistration is faster, and never leaves the guest stuck: Next stays locked while the ID is read, and if it can't be read within 30 seconds the guest is asked to fill in their details manually and can carry on.",
       "On the eRegistration form, the Next button no longer flickers in and out when you move the pointer over or off the form.",
     ],
