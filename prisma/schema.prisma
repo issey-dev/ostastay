@@ -1609,6 +1609,10 @@ model FolioLineItem {
   // ("1", "2"...); staff may edit it (letters, digits, "-"). Nullable only for rows written
   // outside postCharge — every posting path stamps it.
   checkNo                 String?
+  // Where a charge was keyed in, when that matters later: "FAST_POST" for the Fast Post
+  // module (room postings and walk-in bills), so its History can list exactly what was
+  // posted there. Null for every other posting path.
+  postedVia               String?
 
   createdAt DateTime @default(now())
 
@@ -1627,6 +1631,7 @@ model FolioLineItem {
   @@index([outletId])
   @@index([roomAssignmentId])
   @@index([shiftId])
+  @@index([postedVia, date])
 }
 
 // A standing "routing instruction": charges of a given ChargeCode on a source

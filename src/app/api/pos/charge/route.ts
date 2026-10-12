@@ -161,6 +161,9 @@ export async function POST(request: Request) {
         propertyId: folio.propertyId,
       })
 
+      // Marks the charge as keyed in through Fast Post — what its History lists.
+      await tx.folioLineItem.update({ where: { id: posted.parent.id }, data: { postedVia: "FAST_POST" } })
+
       return {
         lineItem: await tx.folioLineItem.findUniqueOrThrow({
           where: { id: posted.parent.id },
