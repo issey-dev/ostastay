@@ -7,6 +7,7 @@ import { Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, P
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -151,6 +152,11 @@ function CashieringContent() {
   // Currency Exchange State
   const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
+  // Who the exchange is for: a walk-in (optional typed name) or an in-house guest picked
+  // from a list (linked by reservation). The in-house list loads the first time it is needed.
+  const [exchangeFor, setExchangeFor] = useState<"walkin" | "inhouse">("walkin");
+  const [inHouseOptions, setInHouseOptions] = useState<{ value: string; label: string; guestName: string; keywords?: string }[] | null>(null);
+  const [exchangeReservationId, setExchangeReservationId] = useState("");
   const [exchangeForm, setExchangeForm] = useState({
     guestName: "",
     fromCurrency: "USD",
@@ -266,16 +272,39 @@ function CashieringContent() {
     }
   };
 
+  const chooseExchangeFor = (mode: "walkin" | "inhouse") => {
+    setExchangeFor(mode);
+    setExchangeReservationId("");
+    if (mode === "inhouse" && !inHouseOptions) {
+      fetch("/api/cashiering/in-house")
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => setInHouseOptions(Array.isArray(d) ? d : []))
+        .catch(() => setInHouseOptions([]));
+    }
+  };
+
+  const closeExchangeDialog = (open: boolean) => {
+    setIsExchangeModalOpen(open);
+    if (!open) {
+      setExchangeFor("walkin");
+      setExchangeReservationId("");
+    }
+  };
+
   const handleCreateExchange = async () => {
     setIsExchanging(true);
     try {
       const res = await fetch("/api/cashiering/currency-exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(exchangeForm)
+        body: JSON.stringify(
+          exchangeFor === "inhouse"
+            ? { ...exchangeForm, guestName: "", reservationId: exchangeReservationId }
+            : exchangeForm
+        )
       });
       if (res.ok) {
-        setIsExchangeModalOpen(false);
+        closeExchangeDialog(false);
         setExchangeForm({ guestName: "", fromCurrency: defaults.fromCurrency, toCurrency: defaults.toCurrency, rate: "", amountFrom: "", amountTo: "" });
         toast.success("Exchange recorded");
         setTab("exchanges");
@@ -626,7 +655,7 @@ function CashieringContent() {
                           {exchange.amountFrom.toFixed(2)} {exchange.fromCurrency} → {exchange.amountTo.toFixed(2)} {exchange.toCurrency}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
-                          {exchange.guestName || "Walk-in"} · Rate {exchange.rate} · {format(parseISO(exchange.createdAt), "h:mm a")}
+                          {exchange.guestName || "Walk-in"}{exchange.reservation ? ` · Room ${[...new Set((exchange.reservation.assignments ?? []).map((a: any) => a.room?.roomNumber).filter(Boolean))].join(", ") || "TBA"}` : ""} · Rate {exchange.rate} · {format(parseISO(exchange.createdAt), "h:mm a")}
                         </p>
                       </div>
                       <Button
@@ -770,7 +799,7 @@ function CashieringContent() {
       </Dialog>
 
       {/* NEW CURRENCY EXCHANGE MODAL */}
-      <Dialog open={isExchangeModalOpen} onOpenChange={setIsExchangeModalOpen}>
+      <Dialog open={isExchangeModalOpen} onOpenChange={closeExchangeDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record currency exchange</DialogTitle>
@@ -780,12 +809,39 @@ function CashieringContent() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label>Guest name (optional)</Label>
-              <Input
-                placeholder="Walk-in customer"
-                value={exchangeForm.guestName}
-                onChange={(e) => setExchangeForm(p => ({ ...p, guestName: e.target.value }))}
-              />
+              <div className="flex items-center justify-between gap-2">
+                <Label>{exchangeFor === "inhouse" ? "In-house guest" : "Guest name (optional)"}</Label>
+                <div role="group" aria-label="Exchange for" className="flex rounded-lg border border-border p-0.5 text-xs">
+                  {(["walkin", "inhouse"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      aria-pressed={exchangeFor === m}
+                      onClick={() => chooseExchangeFor(m)}
+                      className={`rounded-md px-2.5 py-1 font-medium pointer-coarse:min-h-9 ${exchangeFor === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {m === "walkin" ? "Walk-in" : "In-house guest"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {exchangeFor === "inhouse" ? (
+                <SearchableSelect
+                  searchable
+                  options={inHouseOptions ?? []}
+                  value={exchangeReservationId}
+                  onChange={setExchangeReservationId}
+                  placeholder={inHouseOptions === null ? "Loading…" : "Search room or guest…"}
+                  searchPlaceholder="Room, guest or confirmation no…"
+                  emptyText="No in-house guests."
+                />
+              ) : (
+                <Input
+                  placeholder="Walk-in customer"
+                  value={exchangeForm.guestName}
+                  onChange={(e) => setExchangeForm(p => ({ ...p, guestName: e.target.value }))}
+                />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -860,10 +916,10 @@ function CashieringContent() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsExchangeModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => closeExchangeDialog(false)}>Cancel</Button>
             <Button
               onClick={handleCreateExchange}
-              disabled={isExchanging || !exchangeForm.fromCurrency || !exchangeForm.toCurrency || !exchangeForm.rate || !exchangeForm.amountFrom || !exchangeForm.amountTo}
+              disabled={isExchanging || (exchangeFor === "inhouse" && !exchangeReservationId) || !exchangeForm.fromCurrency || !exchangeForm.toCurrency || !exchangeForm.rate || !exchangeForm.amountFrom || !exchangeForm.amountTo}
             >
               {isExchanging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Save exchange

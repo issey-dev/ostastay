@@ -17,6 +17,17 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.3",
+    date: "2026-10-12",
+    highlights: "Currency exchanges can be recorded for an in-house guest as well as for a walk-in.",
+    new: [
+      "Cashiering, New exchange: choose Walk-in (type a name if you want) or In-house guest, and pick the guest from a searchable list of rooms. The guest's name and room show on the exchange in the shift list and on the printed receipt. Linking a guest does not post anything to their folio.",
+    ],
+    comingNext: [
+      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
+    ],
+  },
+  {
     version: "8.8.2",
     date: "2026-10-12",
     highlights: "Housekeeping and Maintenance get easier to run day to day: assign a room to an attendant straight from the room, a task sheet that shows who is in the room, a maintenance board that only keeps today's resolutions with a report for the history, and a Fast Post History that finally shows what was posted.",
@@ -38,9 +49,6 @@ export const RELEASES: Release[] = [
     fixed: [
       "Fast Post History now shows what was posted. It used to list only closed walk-in bills, so room postings and walk-in bills that were still open never appeared.",
       "The task sheet groups rooms (arrival, due out, dirty, stayover) by the business date, not the computer's calendar date.",
-    ],
-    comingNext: [
-      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
     ],
   },
   {
