@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Receipt } from "@/components/icons"
 import { useProperty } from "@/components/providers/property-provider"
 import { toast } from "@/lib/toast"
+import { AmountBreakdown } from "@/components/pos/amount-breakdown"
+import type { BreakdownLine } from "@/lib/pos/breakdown"
 
 type Row = {
   id: string
@@ -41,6 +43,7 @@ type Posting = {
   checkNumber: string | null
   date: string
   total: number
+  lines: BreakdownLine[]
   isVoid: boolean
   folioClosed: boolean
 }
@@ -152,7 +155,7 @@ export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: 
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                      <p className={`font-semibold ${p.isVoid ? "text-muted-foreground line-through" : "text-foreground"}`}>${p.total.toFixed(2)}</p>
+                      <AmountBreakdown total={p.total} lines={p.lines} className={p.isVoid ? "opacity-60 line-through" : ""} />
                       {p.isVoid && <Badge variant="outline" className="border-destructive/40 text-destructive">Voided</Badge>}
                       {p.reservationId && (
                         <Link

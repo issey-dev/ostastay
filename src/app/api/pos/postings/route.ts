@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { toUtcMidnight } from "@/lib/business-date";
+import { breakdownLines } from "@/lib/pos/breakdown";
 
 // Fast Post History, room side: the charges keyed in through Fast Post onto in-house room
 // folios, for one BUSINESS date (?date=yyyy-mm-dd; without it the latest 200). Walk-in bills
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         ...(start ? { date: { gte: start, lt: new Date(start.getTime() + 86_400_000) } } : {}),
       },
       include: {
-        generatedLines: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
+        generatedLines: { select: { description: true, amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
         outlet: { select: { name: true } },
         outletCheck: { select: { checkNumber: true } },
         folio: {
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
         checkNumber: li.outletCheck?.checkNumber ?? null,
         date: li.date,
         total: Math.round(total * 100) / 100,
+        lines: breakdownLines(li.amount, li, li.generatedLines.filter((l) => !l.isVoid)),
         isVoid: li.isVoid,
         folioClosed: li.folio.isClosed,
       };

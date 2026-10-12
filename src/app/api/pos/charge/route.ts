@@ -8,6 +8,7 @@ import { resolveRoutingTargetFolioId } from "@/lib/folio-routing"
 import { ensureOpenShift } from "@/lib/cashier-shift"
 import { allocateOutletCheckNumber } from "@/lib/document-sequence"
 import { logActivity } from "@/lib/activity-log"
+import { breakdownLines } from "@/lib/pos/breakdown"
 
 export async function POST(request: Request) {
   try {
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
     // Attribute to the caller's open drawer for the folio's property (auto-open if needed).
     const shift = await ensureOpenShift(ctx, folio.propertyId)
 
-    const { lineItem, baseAmount, taxAmount, serviceChargeAmount } = await prisma.$transaction(async (tx) => {
+    const { lineItem, baseAmount, taxAmount, serviceChargeAmount, total, breakdown } = await prisma.$transaction(async (tx) => {
       let outletCheckId = existingOutletCheckId
       if (outlet && checkToCreateFolioId !== undefined) {
         const checkNumber = await allocateOutletCheckNumber(outlet.id, tx)
@@ -165,6 +166,10 @@ export async function POST(request: Request) {
       await tx.folioLineItem.update({ where: { id: posted.parent.id }, data: { postedVia: "FAST_POST" } })
 
       return {
+        // Gross (net + service charge + tax + any levy) and what it is made of — the
+        // parent line alone only carries the net, tax usually sits on generated lines.
+        total: posted.grandTotal,
+        breakdown: breakdownLines(posted.baseAmount, posted.parent, posted.generated),
         lineItem: await tx.folioLineItem.findUniqueOrThrow({
           where: { id: posted.parent.id },
           include: {
@@ -187,7 +192,7 @@ export async function POST(request: Request) {
       description: `POS charge "${lineDescription}" (${chargeCode.code}, $${(baseAmount + taxAmount + serviceChargeAmount).toFixed(2)})${outlet ? ` via ${outlet.name}` : ""}`,
     })
 
-    return NextResponse.json(lineItem)
+    return NextResponse.json({ ...lineItem, total, breakdown })
   } catch (error) {
     const { status, body } = toErrorResponse(error)
     return NextResponse.json(body, { status })
