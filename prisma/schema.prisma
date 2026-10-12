@@ -1389,6 +1389,7 @@ model Reservation {
   folios                       Folio[]
   traces                       ReservationTrace[]
   currencyExchanges            CurrencyExchange[]
+  paidOuts                     CashierPaidOut[]
   accompanyingGuests           AccompanyingGuest[]
   // Materialized allocation attachments (source: RATE_PLAN | MEAL_PLAN | MANUAL) —
   // written at create/edit, read by Night Audit. See ReservationAllocation.
@@ -1707,10 +1708,15 @@ model CashierPaidOut {
   shift           CashierShift @relation(fields: [shiftId], references: [id])
   amount          Float
   reason          String
+  // The in-house guest the cash went to (a refund, a taxi reimbursement ...), when the
+  // cashier linked one. A link only — nothing is posted to their folio.
+  reservationId   String?
+  reservation     Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   createdByUserId String
   createdAt       DateTime     @default(now())
 
   @@index([shiftId])
+  @@index([reservationId])
 }
 
 model Payment {
