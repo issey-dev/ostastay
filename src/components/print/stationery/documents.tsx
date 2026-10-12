@@ -38,7 +38,6 @@ export type InvoiceDocumentProps = {
   billedTo: { name: string; lines: string[] }
   staySummary?: MetaItem[] | null
   staySummaryHeading?: string
-  roomAssignments?: { room: string; type: string; dates: string }[]
   charges: StationeryRow[]
   payments: StationeryRow[]
   totals: StationeryTotalLine[]
@@ -76,7 +75,6 @@ export function InvoiceDocument({
   billedTo,
   staySummary,
   staySummaryHeading = "Stay Summary",
-  roomAssignments,
   charges,
   payments,
   totals,
@@ -113,31 +111,6 @@ export function InvoiceDocument({
           </StationerySection>
         )}
       </div>
-
-      {roomAssignments && roomAssignments.length > 0 && (
-        <StationerySection title="Room Assignments">
-          <div className="overflow-hidden rounded-md border border-[var(--print-border)]">
-            <table className="w-full text-xs text-[var(--print-ink-secondary)]">
-              <thead className="border-b border-[var(--print-border)] bg-[var(--print-surface)]">
-                <tr>
-                  <th className="p-2 text-left font-semibold">Room</th>
-                  <th className="p-2 text-left font-semibold">Room Type</th>
-                  <th className="p-2 text-right font-semibold">Dates</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roomAssignments.map((a, i) => (
-                  <tr key={i} className="border-b border-[var(--print-border)] last:border-0">
-                    <td className="p-2 font-semibold">{a.room}</td>
-                    <td className="p-2">{a.type}</td>
-                    <td className="p-2 text-right text-[var(--print-muted)]">{a.dates}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </StationerySection>
-      )}
 
       {/* Charges and payments read as ONE chronological ledger (owner rule,
           2026-08-03): a payment is an entry against the stay like any other, shown as a

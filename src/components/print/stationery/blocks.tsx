@@ -160,7 +160,7 @@ export function StationeryDefinitionList({ items }: { items: MetaItem[] }) {
       {items.map((it) => (
         <div key={it.label} className="flex gap-2">
           <dt className="w-28 shrink-0 text-[var(--print-faint)]">{it.label}</dt>
-          <dd className="font-medium text-[var(--print-ink)]">{it.value}</dd>
+          <dd className="whitespace-pre-line font-medium text-[var(--print-ink)]">{it.value}</dd>
         </div>
       ))}
     </dl>
