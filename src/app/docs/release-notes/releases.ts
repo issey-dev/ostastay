@@ -19,9 +19,13 @@ export const RELEASES: Release[] = [
   {
     version: "8.8.3",
     date: "2026-10-12",
-    highlights: "Currency exchanges can be recorded for an in-house guest as well as for a walk-in.",
+    highlights: "Cashiering: currency exchanges and paid-outs can be linked to an in-house guest, and closing a shift now shows what should be in the drawer before you count it.",
     new: [
-      "Cashiering, New exchange: choose Walk-in (type a name if you want) or In-house guest, and pick the guest from a searchable list of rooms. The guest's name and room show on the exchange in the shift list and on the printed receipt. Linking a guest does not post anything to their folio.",
+      "Cashiering, New exchange and New paid-out: choose Walk-in / Not linked, or In-house guest and pick the guest from a searchable list of rooms. The guest's name and room show on the exchange or paid-out in the shift list and on the printed exchange receipt. Linking a guest does not post anything to their folio.",
+      "Close shift shows a summary before you close: the payments taken by method, how the expected cash is made up (opening float, cash received, cash refunded, paid-outs and currency exchanges) and the expected closing cash.",
+    ],
+    improved: [
+      "Close shift: enter the cash you counted and see straight away whether it is balanced, short or over, then tick to confirm the amount in the drawer. The shift only closes once it is confirmed. It is no longer a blind drop.",
     ],
     comingNext: [
       "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",

@@ -3500,3 +3500,16 @@ App-owner direction for the Revenue module and stop sale.
   shows both warnings and needs both. The website and channel paths can never override (their
   system context has no permissions). Supersedes the earlier "hard block, no override" rule
   (2026-07-26) for desk users. `gateBookingConflicts` in `src/lib/restrictions.ts`.
+
+## Cashiering (2026-10-12, 8.8.3)
+
+- **Closing a shift is no longer a blind drop.** The Close shift window shows the payments taken by
+  method, how the expected cash is made up (opening float + cash received - cash refunded -
+  paid-outs +/- local-currency exchanges) and the expected closing cash, then asks for the counted
+  cash (with a live balanced / short / over line) and an "I confirm there is X in the drawer" tick
+  before it will close. The reconciliation after closing is unchanged. (Owner request; replaces
+  the earlier blind-drop wording.)
+- **Currency exchanges and paid-outs can be linked to an in-house guest** (Walk-in / Not linked is
+  the default). It is a link only: the guest's name and room show on the shift list and the
+  exchange receipt, nothing is posted to their folio. Only an in-house reservation at the same
+  property can be linked (`CurrencyExchange.reservationId`, `CashierPaidOut.reservationId`).

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summary";
+import { resolveStationeryBrand } from "@/lib/stationery-brand";
+import { summarizeShiftPayments, expectedCashForShift, netBaseCashFromExchanges } from "@/lib/shift-summary";
 
 export async function POST(request: Request) {
   try {
@@ -33,9 +34,9 @@ export async function POST(request: Request) {
             paymentMethod: true
           }
         },
-        currencyExchanges: true,
-        paidOuts: true,
-        property: { select: { defaultCurrency: true } }
+        currencyExchanges: { orderBy: { createdAt: "asc" }, include: { reservation: { select: { assignments: { select: { room: { select: { roomNumber: true } } }, orderBy: { startDate: "asc" } } } } } },
+        paidOuts: { orderBy: { createdAt: "asc" }, include: { reservation: { select: { primaryGuest: { select: { firstName: true, lastName: true, companyName: true } }, assignments: { select: { room: { select: { roomNumber: true } } }, orderBy: { startDate: "asc" } } } } } },
+        property: { select: { name: true, defaultCurrency: true, logoUrl: true, taxId: true, contactPhone: true, contactEmail: true, address: true, bannerColor: true, stationeryFont: true } }
       }
     });
 
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     // 2. Expected Cash = Opening Float + cash in − cash refunds − paid-outs + the base-
     // currency leg of any currency exchanges, via the shared shift-summary helper so
     // history and close views can never disagree.
-    const { byMethod } = summarizeShiftPayments(activeShift.payments);
+    const { byMethod, cashIn, cashOut } = summarizeShiftPayments(activeShift.payments);
     const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts, activeShift.currencyExchanges, activeShift.property?.defaultCurrency ?? null);
     const paidOutTotal = activeShift.paidOuts.reduce((sum, p) => sum + p.amount, 0);
     const discrepancy = closingDrop - expectedCash; // Negative = Short, Positive = Over
@@ -69,6 +70,10 @@ export async function POST(request: Request) {
       description: `Closed cashier shift — drop $${closingDrop.toFixed(2)}, expected $${expectedCash.toFixed(2)}, ${discrepancy === 0 ? "balanced" : discrepancy > 0 ? `over $${discrepancy.toFixed(2)}` : `short $${Math.abs(discrepancy).toFixed(2)}`}`,
     });
 
+    const cashier = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+    const roomsOf = (r: { assignments: { room: { roomNumber: string } | null }[] } | null | undefined) =>
+      [...new Set((r?.assignments ?? []).map((a) => a.room?.roomNumber).filter(Boolean))].join(", ") || null;
+
     return NextResponse.json({
       success: true,
       data: {
@@ -77,7 +82,39 @@ export async function POST(request: Request) {
         discrepancy,
         byMethod,
         paidOutTotal,
-        shift: closedShift
+        shift: closedShift,
+        // The printed shift report: who, when, how the expected cash is made up, and the
+        // paid-outs and exchanges behind it.
+        propertyName: activeShift.property?.name ?? null,
+        // The same identity block printed on invoices and receipts (logo, name, address, contact, tax id).
+        brand: activeShift.property ? resolveStationeryBrand(activeShift.property) : null,
+        cashierName: cashier ? `${cashier.firstName} ${cashier.lastName ?? ""}`.trim() : null,
+        openedAt: activeShift.openedAt,
+        closedAt: closedShift.closedAt,
+        cashDrawer: {
+          openingFloat: activeShift.openingFloat,
+          cashIn,
+          cashOut,
+          paidOuts: paidOutTotal,
+          exchangeNet: netBaseCashFromExchanges(activeShift.currencyExchanges, activeShift.property?.defaultCurrency ?? null),
+          expected: expectedCash,
+        },
+        paidOuts: activeShift.paidOuts.map((p) => {
+          const g = p.reservation?.primaryGuest;
+          return {
+            reason: p.reason,
+            amount: p.amount,
+            guest: g ? g.companyName || `${g.firstName} ${g.lastName ?? ""}`.trim() : null,
+            room: roomsOf(p.reservation),
+            at: p.createdAt,
+          };
+        }),
+        exchanges: activeShift.currencyExchanges.map((x) => ({
+          text: `${x.amountFrom.toFixed(2)} ${x.fromCurrency} → ${x.amountTo.toFixed(2)} ${x.toCurrency} @ ${x.rate}`,
+          guest: x.guestName,
+          room: roomsOf(x.reservation),
+          at: x.createdAt,
+        })),
       }
     });
 
