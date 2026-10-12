@@ -22,7 +22,7 @@ export async function GET() {
       orderBy: { openedAt: "desc" },
       include: {
         payments: { include: { paymentMethod: true } },
-        currencyExchanges: { orderBy: { createdAt: "desc" } },
+        currencyExchanges: { orderBy: { createdAt: "desc" }, include: { reservation: { select: { id: true, assignments: { select: { room: { select: { roomNumber: true } } }, orderBy: { startDate: "asc" } } } } } },
         paidOuts: { orderBy: { createdAt: "desc" } },
         lineItems: { include: { ...LINE_BUCKET_INCLUDE, chargeCode: { select: { ...LINE_BUCKET_INCLUDE.chargeCode.select, description: true } } } },
         property: { select: { defaultCurrency: true } },

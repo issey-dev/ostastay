@@ -1388,6 +1388,7 @@ model Reservation {
   assignments                  RoomAssignment[]
   folios                       Folio[]
   traces                       ReservationTrace[]
+  currencyExchanges            CurrencyExchange[]
   accompanyingGuests           AccompanyingGuest[]
   // Materialized allocation attachments (source: RATE_PLAN | MEAL_PLAN | MANUAL) —
   // written at create/edit, read by Night Audit. See ReservationAllocation.
@@ -1802,6 +1803,11 @@ model CurrencyExchange {
   shift      CashierShift @relation(fields: [shiftId], references: [id])
 
   guestName    String?
+  // The in-house guest the exchange was done for, when the cashier linked one. Null for a
+  // walk-in. A link only: it puts the guest's name and room on the receipt and the shift
+  // list — nothing is posted to their folio.
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   fromCurrency String
   toCurrency   String
   rate         Float
@@ -1819,6 +1825,7 @@ model CurrencyExchange {
   @@index([createdByUserId])
   @@index([propertyId])
   @@index([shiftId])
+  @@index([reservationId])
 }
 
 // A revenue-generating point of sale scoped to one Property (Spa, Restaurant, Bar,
