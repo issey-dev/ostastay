@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils"
 import { differenceInCalendarDays } from "date-fns"
 import { ChevronLeft, ChevronRight } from "@/components/icons"
 import * as React from "react"
+import { useProperty } from "@/components/providers/property-provider"
+import { parseDateKey } from "@/lib/date-only"
 import {
   DayPicker,
   useDayPicker,
@@ -51,6 +53,18 @@ export type CalendarProps = DayPickerProps & {
 type NavView = "days" | "years"
 
 /**
+ * "Today" for every calendar in the app: the current property's BUSINESS DATE, not the
+ * machine clock. The business date only moves when Night Audit runs, so the day the desk
+ * is working in can differ from the wall-clock date — highlighting the clock's day (and
+ * opening on its month) would point at a day the system is not on. Outside a property
+ * (public pages) there is no business date and the clock is used.
+ */
+function useAppToday(): Date {
+  const businessDate = useProperty().currentProperty?.businessDate ?? null
+  return React.useMemo(() => parseDateKey(businessDate) ?? new Date(), [businessDate])
+}
+
+/**
  * A custom calendar component built on top of react-day-picker.
  * @param props The props for the calendar.
  * @default yearRange 12
@@ -65,18 +79,19 @@ function Calendar({
   components,
   ...props
 }: CalendarProps) {
+  const appToday = useAppToday()
   const [navView, setNavView] = React.useState<NavView>("days")
   const [displayYears, setDisplayYears] = React.useState<{
     from: number
     to: number
   }>(
     React.useMemo(() => {
-      const currentYear = new Date().getFullYear()
+      const currentYear = appToday.getFullYear()
       return {
         from: currentYear - Math.floor(yearRange / 2 - 1),
         to: currentYear + Math.ceil(yearRange / 2),
       }
-    }, [yearRange])
+    }, [yearRange, appToday])
   )
 
   const { onNextClick, onPrevClick, startMonth, endMonth } = props
@@ -242,6 +257,10 @@ function Calendar({
       }}
       numberOfMonths={columnsDisplayed}
       {...props}
+      // After the spread: callers pass `defaultMonth={selectedDay}`, which is undefined
+      // while nothing is picked and would otherwise open on the machine's month.
+      today={props.today ?? appToday}
+      defaultMonth={props.defaultMonth ?? appToday}
     />
   )
 }
@@ -467,6 +486,7 @@ function YearGrid({
   navView: NavView
 } & React.HTMLAttributes<HTMLDivElement>) {
   const { goToMonth, selected, months } = useDayPicker()
+  const appToday = useAppToday()
 
   // `selected` is a Date in single mode, a { from, to } range in range mode and a
   // Date[] in multiple mode — keep the month of whichever date applies, falling back
@@ -499,7 +519,7 @@ function YearGrid({
               key={i}
               className={cn(
                 "h-7 w-full text-sm font-normal text-foreground",
-                displayYears.from + i === new Date().getFullYear() &&
+                displayYears.from + i === appToday.getFullYear() &&
                   "bg-accent font-medium text-accent-foreground"
               )}
               variant="ghost"

@@ -14,6 +14,8 @@ type Row = {
   taxInvoiceNumber: string | null
   outletCheckNumber: string | null
   outletName: string | null
+  isClosed: boolean
+  // Business date: when a closed bill was closed, or when an open one was last posted to.
   closedBusinessDate: string | null
   charges: number
   payments: number
@@ -21,8 +23,9 @@ type Row = {
   reopenable: boolean
 }
 
-// Closed walk-in (Fast Post) bills, filterable by date. Opening a row shows the bill in
-// the modal; same-business-day bills can be reopened there for adjustments.
+// Walk-in (Fast Post) bills — closed ones and open ones with postings — filterable by
+// business date. Opening a row shows the bill in the modal; open bills can be settled and
+// closed there, same-business-day closed bills reopened for adjustments.
 export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: string; refreshKey?: number; onOpen: (folioId: string) => void }) {
   const [rows, setRows] = useState<Row[]>([])
   const [date, setDate] = useState("")
@@ -55,7 +58,7 @@ export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon={Receipt} title={date ? "No closed bills on this date" : "No closed walk-in bills yet"} className="py-10" />
+        <EmptyState icon={Receipt} title={date ? "No walk-in bills on this date" : "No walk-in bills yet"} className="py-10" />
       ) : (
         <div className="divide-y rounded-lg border">
           {rows.map((r) => (
@@ -76,6 +79,7 @@ export function WalkInHistory({ propertyId, refreshKey, onOpen }: { propertyId: 
                   <p className="font-semibold text-foreground">${r.charges.toFixed(2)}</p>
                   {Math.abs(r.balance) > 0.01 && <p className="text-xs text-destructive">Balance ${r.balance.toFixed(2)}</p>}
                 </div>
+                {!r.isClosed && <Badge variant="outline" className="border-warning/40 text-warning">Open</Badge>}
                 {r.reopenable && <Badge variant="outline" className="border-success/40 text-success">Same day</Badge>}
                 <Button size="sm" variant="outline" onClick={() => onOpen(r.id)}>Open</Button>
               </div>
