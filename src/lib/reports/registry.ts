@@ -4,6 +4,7 @@ import { RESERVATION_REPORTS } from "@/lib/reports/defs/reservations";
 import { REVENUE_REPORTS } from "@/lib/reports/defs/revenue";
 import { FINANCIAL_REPORTS } from "@/lib/reports/defs/financial";
 import { HOUSEKEEPING_REPORTS } from "@/lib/reports/defs/housekeeping";
+import { MAINTENANCE_REPORTS } from "@/lib/reports/defs/maintenance";
 import { TRANSPORT_REPORTS } from "@/lib/transport/report";
 
 // Every report in the system. Add a module's defs array here to register it.
@@ -13,6 +14,7 @@ export const REPORTS: ReportDef[] = [
   ...REVENUE_REPORTS,
   ...FINANCIAL_REPORTS,
   ...HOUSEKEEPING_REPORTS,
+  ...MAINTENANCE_REPORTS,
   ...TRANSPORT_REPORTS,
 ];
 
@@ -27,6 +29,7 @@ export const MODULE_ORDER: { module: ReportDef["module"]; label: string }[] = [
   { module: "REVENUE", label: "Revenue" },
   { module: "FINANCIAL", label: "Financial" },
   { module: "HOUSEKEEPING", label: "Housekeeping" },
+  { module: "MAINTENANCE", label: "Maintenance" },
   { module: "TRANSPORTATION", label: "Transportation" },
 ];
 

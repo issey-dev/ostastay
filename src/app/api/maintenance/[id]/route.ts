@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { resolveBusinessDate } from "@/lib/business-date";
 import { isValidMaintenanceStatus, isValidMaintenancePriority } from "@/lib/maintenance";
 
 // The one maintenance update endpoint (the old body-based PATCH on the
@@ -51,6 +52,23 @@ export async function PATCH(
     }
     if (Object.keys(dataToUpdate).length === 0) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+
+    // Stamp the resolution (when, on which business date, by whom) the moment the ticket
+    // becomes RESOLVED; reopening it clears the stamp. Saving RESOLVED on an
+    // already-resolved ticket keeps the original resolution.
+    if (status === "RESOLVED" && existing.status !== "RESOLVED") {
+      const property = await prisma.property.findUnique({
+        where: { id: existing.room.propertyId },
+        select: { businessDate: true },
+      });
+      dataToUpdate.resolvedAt = new Date();
+      dataToUpdate.resolvedOn = resolveBusinessDate(property ?? {});
+      dataToUpdate.resolvedById = ctx.userId;
+    } else if (status !== undefined && status !== "RESOLVED" && existing.status === "RESOLVED") {
+      dataToUpdate.resolvedAt = null;
+      dataToUpdate.resolvedOn = null;
+      dataToUpdate.resolvedById = null;
     }
 
     const order = await prisma.roomMaintenance.update({

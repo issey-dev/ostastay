@@ -305,6 +305,7 @@ model User {
   roomAttendant       RoomAttendant?
   assignedRooms       Room[]            @relation("RoomAssignedAttendant")
   assignedMaintenance RoomMaintenance[] @relation("MaintenanceAssignedTo")
+  resolvedMaintenance RoomMaintenance[] @relation("MaintenanceResolvedBy")
 
   supportGrantsRequested   SupportAccessGrant[]  @relation("GrantRequestedBy")
   supportGrantsApproved    SupportAccessGrant[]  @relation("GrantApprovedBy")
@@ -2167,11 +2168,21 @@ model RoomMaintenance {
   assignedToId String?
   assignedTo   User?   @relation("MaintenanceAssignedTo", fields: [assignedToId], references: [id])
 
+  // Set when the ticket moves to RESOLVED, cleared if it is reopened. resolvedOn is the
+  // property's BUSINESS DATE at that moment (UTC midnight) — the board shows a resolved
+  // ticket only until the business date rolls past it; the Maintenance Resolutions report
+  // is the history.
+  resolvedAt   DateTime?
+  resolvedOn   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("MaintenanceResolvedBy", fields: [resolvedById], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([assignedToId])
   @@index([roomId])
+  @@index([resolvedOn])
 }
 
 model AccompanyingGuest {

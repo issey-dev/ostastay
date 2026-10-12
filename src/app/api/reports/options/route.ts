@@ -62,6 +62,13 @@ export async function GET(request: Request) {
           ? (await prisma.user.findMany({ where: { OR: [{ propertyId }, { enterpriseId: ctx.enterpriseId, scope: "ENTERPRISE" }] }, select: { id: true, firstName: true, lastName: true }, orderBy: { firstName: "asc" }, take: 500 })).map((u) => ({ label: `${u.firstName} ${u.lastName ?? ""}`.trim(), value: u.id }))
           : [];
         break;
+      case "technicians":
+        // Everyone with the Maintenance job function at this property (or enterprise-wide),
+        // former staff included — the history can name someone who has since left.
+        options = propertyId
+          ? (await prisma.user.findMany({ where: { jobFunction: "MAINTENANCE", isSystem: false, OR: [{ propertyId }, { enterpriseId: ctx.enterpriseId, scope: "ENTERPRISE" }] }, select: { id: true, firstName: true, lastName: true }, orderBy: { firstName: "asc" }, take: 500 })).map((u) => ({ label: `${u.firstName} ${u.lastName ?? ""}`.trim(), value: u.id }))
+          : [];
+        break;
       default:
         options = [];
     }
