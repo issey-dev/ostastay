@@ -84,9 +84,12 @@ export async function GET(request: Request) {
             reservation: {
               include: {
                 // The board card shows the occupant's name, headcount, and a sharer
-                // badge — a bare `reservation: true` never carried these.
+                // badge — a bare `reservation: true` never carried these. The task sheet
+                // lists the sharers by name too.
                 primaryGuest: { select: { firstName: true, lastName: true } },
-                accompanyingGuests: { select: { id: true } },
+                accompanyingGuests: {
+                  select: { id: true, profile: { select: { firstName: true, lastName: true } } },
+                },
               },
             },
           }

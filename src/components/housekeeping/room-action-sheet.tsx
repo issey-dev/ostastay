@@ -110,6 +110,7 @@ export function RoomActionSheet({
   onCompleteTask,
   onMarkOutOfOrder,
   onReportIssue,
+  onAssign,
   onEditMaintenance,
 }: {
   room: any | null
@@ -119,6 +120,7 @@ export function RoomActionSheet({
   onCompleteTask: (taskId: string) => Promise<void> | void
   onMarkOutOfOrder: (roomId: string) => void
   onReportIssue: (roomId: string) => void
+  onAssign: (roomId: string) => void
   onEditMaintenance: (ticket: any) => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -223,6 +225,9 @@ export function RoomActionSheet({
                 </Button>
                 <Button disabled={busy || room.status === "DIRTY"} onClick={() => setStatus("DIRTY")} className={cn(big, "border", toneMutedClasses("danger"))}>
                   <Brush className="h-5 w-5" /> {room.status === "OUT_OF_ORDER" ? "Return to service (dirty)" : "Mark dirty"}
+                </Button>
+                <Button disabled={busy} variant="outline" onClick={() => onAssign(room.id)} className={big}>
+                  <Users className="h-5 w-5" /> {room.assignedAttendant ? "Reassign attendant…" : "Assign attendant…"}
                 </Button>
                 <Button disabled={busy} onClick={() => onReportIssue(room.id)} className={cn(big, "border", toneMutedClasses("warning"))}>
                   <Wrench className="h-5 w-5" /> Report issue
