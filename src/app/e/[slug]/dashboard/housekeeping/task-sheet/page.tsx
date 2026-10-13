@@ -27,21 +27,76 @@ const BUCKETS: Bucket[] = [
   { key: "done", label: "Ready / other", hint: "" },
 ]
 
-const todayIso = todayKey
-
-const bucketForRoom = (room: any): string => {
+// The occupancy on a room today, off the board API's RoomAssignment rows: the in-house
+// stay (a stayover, or a departure when it checks out today) and a stay arriving today.
+// A same-day turnover has both.
+const roomStays = (room: any, today: string) => {
   const assignments: any[] = room.RoomAssignment ?? []
-  const inHouse = assignments.find((a) => a.reservation?.status === "IN_HOUSE")
-  const arriving = assignments.find(
-    (a) => a.reservation?.status === "RESERVED" && a.reservation?.checkInDate?.slice(0, 10) === todayIso()
-  )
+  const inHouse = assignments.find((a) => a.reservation?.status === "IN_HOUSE")?.reservation ?? null
+  const arriving =
+    assignments.find(
+      (a) => a.reservation?.status === "RESERVED" && a.reservation?.checkInDate?.slice(0, 10) === today
+    )?.reservation ?? null
+  const departing = !!inHouse && inHouse.checkOutDate?.slice(0, 10) === today
+  return { inHouse, arriving, departing }
+}
+
+const bucketForRoom = (room: any, today: string): string => {
+  const { inHouse, arriving, departing } = roomStays(room, today)
   const needsWork = room.status === "DIRTY"
   if (arriving && room.status !== "INSPECTED" && room.status !== "CLEAN") return "arrival"
   if (arriving && needsWork) return "arrival"
-  if (inHouse && inHouse.reservation?.checkOutDate?.slice(0, 10) === todayIso()) return "dueout"
+  if (departing) return "dueout"
   if (!inHouse && needsWork) return "dirty"
   if (inHouse) return "stayover"
   return "done"
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const shortDate = (iso?: string | null) => {
+  if (!iso) return ""
+  const [, m, d] = iso.slice(0, 10).split("-")
+  return `${d} ${MONTHS[Number(m) - 1] ?? ""}`
+}
+
+const fullName = (p?: { firstName?: string | null; lastName?: string | null } | null) =>
+  `${p?.firstName ?? ""} ${p?.lastName ?? ""}`.trim()
+
+const paxLabel = (res: any) =>
+  [
+    `${res.adults ?? 0}A`,
+    (res.children ?? 0) > 0 ? `${res.children}C` : null,
+    (res.infants ?? 0) > 0 ? `${res.infants}I` : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+const STAY_KIND = {
+  arrival: { label: "Arriving", tone: "text-info" },
+  stayover: { label: "Stayover", tone: "text-foreground" },
+  departure: { label: "Departing", tone: "text-warning" },
+} as const
+
+// One guest block on a room card, modelled on the Reservations list row: lead guest, the
+// sharers under it ("with …"), headcount and the stay dates.
+function GuestBlock({ res, kind }: { res: any; kind: keyof typeof STAY_KIND }) {
+  const sharers = (res.accompanyingGuests ?? []).map((a: any) => fullName(a.profile)).filter(Boolean)
+  const k = STAY_KIND[kind]
+  return (
+    <div className="border-l-2 border-border pl-3 text-sm">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate font-semibold text-foreground">{fullName(res.primaryGuest) || "Guest"}</span>
+        <span className={`shrink-0 text-xs font-semibold uppercase tracking-wide ${k.tone}`}>{k.label}</span>
+      </div>
+      {sharers.length > 0 && (
+        <p className="text-xs text-muted-foreground">with {sharers.join(", ")}</p>
+      )}
+      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+        {paxLabel(res)}
+        {res.checkInDate && res.checkOutDate && ` · ${shortDate(res.checkInDate)} → ${shortDate(res.checkOutDate)}`}
+      </p>
+    </div>
+  )
 }
 
 // A housekeeper's working view: their assigned rooms only, ordered by what to
@@ -144,12 +199,14 @@ export default function TaskSheetPage() {
     () => (attendantId ? rooms.filter((r) => r.assignedAttendantId === attendantId) : []),
     [rooms, attendantId]
   )
+  // The property's business date (the operational "today"), as the board API uses.
+  const today = (currentProperty?.businessDate ?? todayKey()).slice(0, 10)
   const grouped = useMemo(() => {
     const map = new Map<string, any[]>(BUCKETS.map((b) => [b.key, []]))
-    myRooms.forEach((room) => map.get(bucketForRoom(room))!.push(room))
+    myRooms.forEach((room) => map.get(bucketForRoom(room, today))!.push(room))
     map.forEach((list) => list.sort((a, b) => a.roomNumber.localeCompare(b.roomNumber)))
     return map
-  }, [myRooms])
+  }, [myRooms, today])
 
   const attendantName = (id: string) => {
     const hk = housekeepers.find((h) => h.id === id)
@@ -228,20 +285,50 @@ export default function TaskSheetPage() {
               {list.map((room) => {
                 const openTasks = (room.housekeepingTasks ?? []).filter((t: any) => t.status !== "COMPLETED")
                 const busy = busyRoomId === room.id
+                const { inHouse, arriving, departing } = roomStays(room, today)
+                const tickets: any[] = room.maintenance ?? []
                 return (
                   <div key={room.id} className="bg-card border border-border rounded-xl p-4 shadow-sm space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <span className="text-xl font-bold text-foreground flex items-center gap-2">
                           {room.roomNumber}
-                          {(room.maintenance?.length ?? 0) > 0 && (
+                          {tickets.length > 0 && (
                             <Wrench className="w-4 h-4 text-warning" aria-label="Open maintenance ticket" />
                           )}
                         </span>
                         <p className="text-xs text-muted-foreground">{room.roomType?.name}</p>
                       </div>
-                      <StatusBadge label={room.status.replace(/_/g, " ")} status={room.status} />
+                      <div className="flex flex-col items-end gap-1">
+                        <StatusBadge label={room.status.replace(/_/g, " ")} status={room.status} />
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {inHouse ? "Occupied" : "Vacant"}
+                        </span>
+                      </div>
                     </div>
+
+                    {(inHouse || arriving) && (
+                      <div className="space-y-2">
+                        {inHouse && <GuestBlock res={inHouse} kind={departing ? "departure" : "stayover"} />}
+                        {arriving && <GuestBlock res={arriving} kind="arrival" />}
+                      </div>
+                    )}
+
+                    {tickets.map((t: any) => (
+                      <div
+                        key={t.id}
+                        className="flex items-start gap-2 rounded-md border border-warning/20 bg-warning-muted px-2.5 py-1.5 text-sm text-warning"
+                      >
+                        <Wrench className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 leading-snug">
+                          <span className="break-words">{t.description}</span>
+                          <span className="block text-xs opacity-80">
+                            {String(t.status).replace(/_/g, " ").toLowerCase()}
+                            {t.priority ? ` · ${String(t.priority).toLowerCase()} priority` : ""}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
 
                     {openTasks.map((task: any) => (
                       <div
@@ -264,31 +351,34 @@ export default function TaskSheetPage() {
                       </div>
                     ))}
 
-                    {(room.status === "DIRTY" || room.status === "CLEAN") && (
-                      <div className="flex gap-2">
-                        {room.status === "DIRTY" && (
-                          <Button
-                            size="sm"
-                            className="flex-1"
-                            disabled={busy}
-                            onClick={() => setRoomStatus(room.id, "CLEAN")}
-                          >
-                            <Brush className="w-4 h-4 mr-2" /> Mark clean
-                          </Button>
-                        )}
-                        {room.status === "CLEAN" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1"
-                            disabled={busy}
-                            onClick={() => setRoomStatus(room.id, "INSPECTED")}
-                          >
-                            <CheckCircle2 className="w-4 h-4 mr-2" /> Mark inspected
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                    {/* Status buttons — the room's current status is greyed out. The next step
+                        in the cleaning flow is the filled one. */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        size="sm"
+                        variant={room.status === "DIRTY" ? "default" : "outline"}
+                        disabled={busy || room.status === "CLEAN"}
+                        onClick={() => setRoomStatus(room.id, "CLEAN")}
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Clean
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={room.status === "CLEAN" ? "default" : "outline"}
+                        disabled={busy || room.status === "INSPECTED"}
+                        onClick={() => setRoomStatus(room.id, "INSPECTED")}
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Inspected
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || room.status === "DIRTY"}
+                        onClick={() => setRoomStatus(room.id, "DIRTY")}
+                      >
+                        <Brush className="w-4 h-4 mr-1.5" /> {room.status === "OUT_OF_ORDER" ? "Return (dirty)" : "Dirty"}
+                      </Button>
+                    </div>
                   </div>
                 )
               })}

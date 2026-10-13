@@ -1,10 +1,12 @@
 "use client"
 
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import { PageHeader } from "@/components/ui/page-header"
 import { useState, useEffect } from "react"
 import { useProperty } from "@/components/providers/property-provider"
-import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, RefreshCw, Wrench } from "@/components/icons"
-import { Button } from "@/components/ui/button"
+import { Clock, CheckCircle2, AlertTriangle, Eye, EyeOff, FileText, RefreshCw, Wrench } from "@/components/icons"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -27,6 +29,7 @@ type Ticket = {
 }
 
 export default function MaintenanceDashboard() {
+  const { slug } = useParams<{ slug: string }>()
   const { currentProperty } = useProperty()
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [maintenanceTeam, setMaintenanceTeam] = useState<any[]>([])
@@ -57,7 +60,7 @@ export default function MaintenanceDashboard() {
       setLoadError(false)
     }
     try {
-      const res = await fetch(`/api/maintenance?propertyId=${currentProperty.id}`)
+      const res = await fetch(`/api/maintenance?propertyId=${currentProperty.id}&board=1`)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setTickets(data)
@@ -123,7 +126,7 @@ export default function MaintenanceDashboard() {
   const columns: { id: string; title: string; tone: StatusTone; icon: React.ReactNode }[] = [
     { id: "OPEN", title: "Open", tone: "danger", icon: <AlertTriangle className="w-5 h-5" /> },
     { id: "IN_PROGRESS", title: "In progress", tone: "info", icon: <Clock className="w-5 h-5" /> },
-    { id: "RESOLVED", title: "Resolved", tone: "success", icon: <CheckCircle2 className="w-5 h-5" /> }
+    { id: "RESOLVED", title: "Resolved today", tone: "success", icon: <CheckCircle2 className="w-5 h-5" /> }
   ]
 
   const priorityTone: Record<string, StatusTone> = { HIGH: "danger", MEDIUM: "warning", LOW: "info" }
@@ -174,8 +177,15 @@ export default function MaintenanceDashboard() {
             className="flex items-center gap-2 max-md:hidden"
           >
             {showResolved ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            {showResolved ? "Hide resolved" : "Show resolved"}
+            {showResolved ? "Hide resolved" : "Show resolved today"}
           </Button>
+          <Link
+            href={`/e/${slug}/dashboard/reports?report=maint-resolutions`}
+            className={`${buttonVariants({ variant: "outline" })} flex items-center gap-2 max-md:hidden`}
+          >
+            <FileText className="w-4 h-4" />
+            Resolution history
+          </Link>
           <Button onClick={() => setShowReportDialog(true)} className="flex items-center gap-2">
             <Wrench className="w-4 h-4" />
             Report issue

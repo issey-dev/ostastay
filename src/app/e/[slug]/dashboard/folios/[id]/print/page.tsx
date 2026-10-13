@@ -185,17 +185,25 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
     lines: [invoiceGuestEmail || "", invoiceGuestMobile || ""],
   }
 
-  // "101 · Standard" for a single room; the multi-room case is spelled out in the Room
-  // Assignments table below, so here it just states how many.
+  // "101 · Standard" for a single room. A stay in several rooms (or a room change) is
+  // listed segment by segment inside the Stay Summary — one line each with its dates —
+  // rather than as a table of its own. Back-to-back segments in the same room and type
+  // (a rate change, say) are one line.
   const assignments: any[] = reservation?.assignments ?? []
   const roomValue = (() => {
     if (assignments.length === 0) return "TBA"
-    if (assignments.length === 1) {
-      const a = assignments[0]
-      return [a.room?.roomNumber || "TBA", a.roomType?.name].filter(Boolean).join(" · ")
+    const segments: { room: string; type: string; start: string; end: string }[] = []
+    for (const a of assignments) {
+      const room = a.room?.roomNumber || "TBA"
+      const type = a.roomType?.name ?? ""
+      const last = segments[segments.length - 1]
+      if (last && last.room === room && last.type === type) last.end = a.endDate
+      else segments.push({ room, type, start: a.startDate, end: a.endDate })
     }
-    const numbers = assignments.map((a) => a.room?.roomNumber).filter(Boolean)
-    return `${numbers.length ? numbers.join(", ") : "TBA"} (${assignments.length} rooms)`
+    if (segments.length === 1) return [segments[0].room, segments[0].type].filter(Boolean).join(" · ")
+    return segments
+      .map((s) => `${[s.room, s.type].filter(Boolean).join(" · ")} · ${format(parseISO(s.start), "dd-MMM")} – ${format(parseISO(s.end), "dd-MMM")}`)
+      .join("\n")
   })()
 
   const paxValue = reservation
@@ -225,15 +233,6 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
         ...(outletHeader ? [{ label: "Check No", value: outletHeader.checkNumber }] : []),
         { label: "Type", value: "Walk-in / Outlet Sale" },
       ]
-
-  const roomAssignments =
-    reservation?.assignments && reservation.assignments.length > 1
-      ? reservation.assignments.map((a: any) => ({
-          room: `Room ${a.room?.roomNumber || "TBA"}`,
-          type: a.roomType.name,
-          dates: `${format(parseISO(a.startDate), "dd-MMM")} – ${format(parseISO(a.endDate), "dd-MMM-yy")}`,
-        }))
-      : undefined
 
   const totals: StationeryTotalLine[] = [
     { label: "Subtotal Charges", amount: totalBaseCharges },
@@ -297,7 +296,6 @@ export default function PrintInvoicePage({ params }: { params: Promise<{ id: str
         billedTo={billedTo}
         staySummary={staySummary}
         staySummaryHeading={reservation ? "Stay Summary" : "Sale Type"}
-        roomAssignments={roomAssignments}
         charges={chargeRows}
         payments={paymentRows}
         totals={totals}

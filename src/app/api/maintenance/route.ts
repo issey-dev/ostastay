@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
+import { resolveBusinessDate } from "@/lib/business-date";
 import { isValidMaintenanceIssueType, isValidMaintenancePriority } from "@/lib/maintenance";
 
 export async function GET(request: Request) {
@@ -17,8 +18,20 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId);
 
+    // ?board=1 is the Maintenance board's view: every active ticket, plus the ones
+    // resolved on the current business date — a resolved ticket drops off once the
+    // business date rolls. Older resolutions live in the Maintenance Resolutions report.
+    // Without it (the Inventory work-order list) every ticket comes back.
+    let boardFilter = {};
+    if (searchParams.get("board") === "1") {
+      const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } });
+      boardFilter = {
+        OR: [{ status: { not: "RESOLVED" } }, { resolvedOn: { gte: resolveBusinessDate(property ?? {}) } }],
+      };
+    }
+
     const maintenance = await prisma.roomMaintenance.findMany({
-      where: { room: { propertyId } },
+      where: { room: { propertyId }, ...boardFilter },
       include: {
         room: true,
         assignedTo: true

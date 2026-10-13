@@ -21,6 +21,7 @@ export type ReportOptionSource =
   | "outlets"
   | "travelAgents"
   | "cashiers"
+  | "technicians"
   | "chargeCategories"
   | "reservationStatuses"
   | "traceTypes";
@@ -131,7 +132,7 @@ export type ReportRunContext = {
 
 export type ReportDef = {
   key: string;
-  module: "FRONT_DESK" | "RESERVATIONS" | "REVENUE" | "FINANCIAL" | "HOUSEKEEPING" | "TRANSPORTATION";
+  module: "FRONT_DESK" | "RESERVATIONS" | "REVENUE" | "FINANCIAL" | "HOUSEKEEPING" | "MAINTENANCE" | "TRANSPORTATION";
   name: string;
   description: string;
   params: ReportParam[];

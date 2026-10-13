@@ -150,6 +150,10 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
   const [routingSaving, setRoutingSaving] = useState(false)
   // Other in-house reservations' folios at this property — cross-room routing/move targets.
   const [inHouseFolios, setInHouseFolios] = useState<{ id: string; label: string }[]>([])
+  // Move charges: the "+ Another room" list (in-house folios and posting masters), loaded
+  // the first time it is opened.
+  const [showOtherRooms, setShowOtherRooms] = useState(false)
+  const [otherRoomOptions, setOtherRoomOptions] = useState<{ label: string; value: string; group?: string; keywords?: string }[] | null>(null)
 
   useEffect(() => {
     if (reservationId) {
@@ -449,6 +453,29 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
     const taHasFolio = ta && folios.some((f: any) => f.payeeProfileId === ta.upid)
     const taOption = ta && !taHasFolio ? [{ id: `__ta__:${ta.upid}`, label: `${profName(ta)} · Travel Agent (new folio)` }] : []
     return [...sameRes, ...taOption, ...inHouseFolios]
+  }
+
+  // Move charges starts with who the bill naturally belongs to: this reservation's other
+  // folios and its linked travel agent / company. Any other room is behind "+ Another room".
+  const moveDefaultOptions = () => targetFolioOptions().filter((o) => !inHouseFolios.some((h) => h.id === o.id))
+
+  const openOtherRooms = async () => {
+    setShowOtherRooms(true)
+    if (otherRoomOptions || !propertyId) return
+    try {
+      const res = await fetch(`/api/folios/transfer-targets?propertyId=${propertyId}&excludeReservationId=${reservationId}`)
+      setOtherRoomOptions(res.ok ? await res.json() : [])
+    } catch {
+      setOtherRoomOptions([])
+    }
+  }
+
+  const closeMoveDialog = (open: boolean) => {
+    setIsMoveDialogOpen(open)
+    if (!open) {
+      setShowOtherRooms(false)
+      setTargetFolioId("")
+    }
   }
 
   // A routing/move target may be the synthetic "new TA folio" option — create it first
@@ -1030,7 +1057,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
       )}
 
       {/* Move Charges Dialog */}
-      <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+      <Dialog open={isMoveDialogOpen} onOpenChange={closeMoveDialog}>
         <DialogContent size="sm">
           <form onSubmit={handleMoveCharges} className="contents">
           <DialogHeader>
@@ -1039,28 +1066,54 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
               Select the destination folio for the {selectedLineItemIds.length} selected charge(s).
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label>Transfer to</Label>
-            <Select value={targetFolioId} onValueChange={(v) => setTargetFolioId(v ?? "")}>
-              <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Select guest, travel agent, or another room">
-                  {targetFolioOptions().find((o) => o.id === targetFolioId)?.label}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {targetFolioOptions().map((opt) => (
-                  <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {targetFolioOptions().length === 0 && (
-              <p className="text-sm text-warning mt-2">
-                Add another folio window (Add folio) or check in another room to move charges.
-              </p>
+          <div className="space-y-3 py-4">
+            <div>
+              <Label>Transfer to</Label>
+              <Select
+                value={moveDefaultOptions().some((o) => o.id === targetFolioId) ? targetFolioId : ""}
+                onValueChange={(v) => setTargetFolioId(v ?? "")}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select a folio, travel agent or company">
+                    {moveDefaultOptions().find((o) => o.id === targetFolioId)?.label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {moveDefaultOptions().map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {moveDefaultOptions().length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  No other folio on this reservation. Use Add folio, or move the charges to another room.
+                </p>
+              )}
+            </div>
+
+            {showOtherRooms ? (
+              <div>
+                <Label>Another room or posting master</Label>
+                <div className="mt-2">
+                  <SearchableSelect
+                    searchable
+                    options={otherRoomOptions ?? []}
+                    value={otherRoomOptions?.some((o) => o.value === targetFolioId) ? targetFolioId : ""}
+                    onChange={setTargetFolioId}
+                    placeholder={otherRoomOptions === null ? "Loading…" : "Search room, guest or confirmation no…"}
+                    searchPlaceholder="Room, guest or confirmation no…"
+                    emptyText="No in-house reservation or posting master found."
+                  />
+                </div>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" size="sm" onClick={openOtherRooms}>
+                <Plus className="mr-1.5 h-4 w-4" /> Another room
+              </Button>
             )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsMoveDialogOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => closeMoveDialog(false)}>Cancel</Button>
             <SubmitButton pending={pending === "move"} pendingLabel="Moving…" disabled={!targetFolioId}>Move charges</SubmitButton>
           </DialogFooter>
           </form>

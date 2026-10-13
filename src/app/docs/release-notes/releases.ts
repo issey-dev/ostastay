@@ -17,6 +17,33 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.2",
+    date: "2026-10-12",
+    highlights: "Housekeeping and Maintenance get easier to run day to day: assign a room to an attendant straight from the room, a task sheet that shows who is in the room, a maintenance board that only keeps today's resolutions with a report for the history, and a Fast Post History that finally shows what was posted.",
+    new: [
+      "Housekeeping: Assign attendant (or Reassign attendant) is in the menu of every room, on the board and on the phone, so one room can be handed out without selecting it first.",
+      "Task sheet: each room shows who is in it (the lead guest and the names of those sharing), the headcount, Occupied or Vacant, and whether the guest is arriving, staying over or departing, with the stay dates. A same-day turnover shows both the departing and the arriving guest. Open maintenance issues show under the room with their state and priority.",
+      "Task sheet: every room has Clean, Inspected and Dirty buttons (the room's current status is greyed out and the next step is highlighted), not only the dirty and clean ones.",
+      "Maintenance Resolutions report (Reports, Maintenance): the tickets resolved in a date range, optionally for one technician, with who resolved them and how many days they were open. It can be downloaded as PDF, Excel or CSV.",
+      "Fast Post History lists the charges posted to room folios as well as walk-in bills. Each room posting has Open folio and, while the folio is open, Void (with a reason). Walk-in bills that are still open are listed too, with an Open badge.",
+      "Folio, Move charges: another room's folio, or a group's Posting Master, can be picked from a searchable list behind the Another room button.",
+    ],
+    improved: [
+      "The Maintenance board shows every open and in-progress ticket, and the tickets resolved on the current business date. Once the business date moves on, resolved tickets leave the board; the Resolution history button opens the report for older ones.",
+      "Move charges starts with this reservation's own folios and its linked travel agent or company, instead of listing every in-house room.",
+      "Fast Post shows each posting's total including service charge and tax. A + next to the amount opens the breakdown line by line.",
+      "Every date picker treats the property's business date as today: it is highlighted, and an empty picker opens on its month, instead of using the computer's date. The Fast Post History opens on the business date.",
+      "Tax invoices, proforma invoices and interim bills no longer print a Room Assignments table. The Room line of the Stay Summary lists a room change with its dates, and a stay that stays in the same room shows that room once.",
+    ],
+    fixed: [
+      "Fast Post History now shows what was posted. It used to list only closed walk-in bills, so room postings and walk-in bills that were still open never appeared.",
+      "The task sheet groups rooms (arrival, due out, dirty, stayover) by the business date, not the computer's calendar date.",
+    ],
+    comingNext: [
+      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
+    ],
+  },
+  {
     version: "8.8.0",
     date: "2026-10-11",
     highlights: "A big step for day-to-day operations: card views and clearer badges on the Front Desk, Reservations, Group Blocks and Client Relations, a Posting Master for every group block, split stays that bill correctly, safer room moves on the Tape Chart, and phone numbers with a country-code picker.",
@@ -50,9 +77,6 @@ export const RELEASES: Release[] = [
       "Opening a reservation that has not arrived yet on a wide screen shows its Edit button in the header again.",
       "Reading a passport or ID on eRegistration is faster and never leaves the guest stuck: Next stays locked while the ID is read, and after 30 seconds the guest is asked to fill in their details manually and can carry on.",
       "On the eRegistration form, the Next button no longer flickers in and out when you move the pointer over or off the form.",
-    ],
-    comingNext: [
-      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
     ],
   },
   {

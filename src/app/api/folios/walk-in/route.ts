@@ -4,10 +4,13 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
-// History list of CLOSED walk-in (Fast Post) bills for a property, most recent first.
-// Optional ?date=yyyy-mm-dd filters by the business date the bill was closed on. Each row
-// carries computed totals and a `reopenable` flag (true only while the property's business
-// date still equals the bill's close date — see PATCH /api/folios/[id]).
+// History list of walk-in (Fast Post) bills for a property, most recent first: CLOSED
+// bills, plus OPEN ones that already have something posted on them (an open bill with
+// nothing on it is just an empty tab and stays out). Optional ?date=yyyy-mm-dd filters by
+// BUSINESS date — the date a bill was closed on, or for an open bill the business date of
+// its postings. Each row carries computed totals, `isClosed`, and a `reopenable` flag (true
+// only while the property's business date still equals the bill's close date — see
+// PATCH /api/folios/[id]).
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
@@ -18,16 +21,21 @@ export async function GET(request: Request) {
     if (!propertyId) return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
     await assertPropertyAccess(ctx, propertyId);
 
-    const where: { propertyId: string; reservationId: null; isClosed: true; closedBusinessDate?: { gte: Date; lt: Date } } = {
+    const date = searchParams.get("date");
+    const day = date
+      ? (() => {
+          const start = toUtcMidnight(new Date(`${date}T00:00:00.000Z`));
+          return { gte: start, lt: new Date(start.getTime() + 86_400_000) };
+        })()
+      : null;
+    const where = {
       propertyId,
       reservationId: null,
-      isClosed: true,
+      OR: [
+        { isClosed: true, ...(day ? { closedBusinessDate: day } : {}) },
+        { isClosed: false, lineItems: { some: { isVoid: false, ...(day ? { date: day } : {}) } } },
+      ],
     };
-    const date = searchParams.get("date");
-    if (date) {
-      const start = toUtcMidnight(new Date(`${date}T00:00:00.000Z`));
-      where.closedBusinessDate = { gte: start, lt: new Date(start.getTime() + 86_400_000) };
-    }
 
     const [folios, property] = await Promise.all([
       prisma.folio.findMany({
@@ -57,7 +65,12 @@ export async function GET(request: Request) {
         taxInvoiceNumber: f.taxInvoiceNumber,
         outletCheckNumber: check?.checkNumber ?? null,
         outletName: check?.outlet?.name ?? null,
-        closedBusinessDate: f.closedBusinessDate,
+        isClosed: f.isClosed,
+        // Closed bills carry the date they closed on; an open one the latest business date
+        // it was posted on.
+        closedBusinessDate: f.isClosed
+          ? f.closedBusinessDate
+          : f.lineItems.filter((li) => !li.isVoid).map((li) => li.date).sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
         charges: Math.round(charges * 100) / 100,
         payments: Math.round(payments * 100) / 100,
         balance: Math.round((charges - payments) * 100) / 100,

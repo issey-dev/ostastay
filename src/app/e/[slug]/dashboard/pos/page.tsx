@@ -20,6 +20,7 @@ import { ErrorState } from "@/components/ui/error-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { WalkInFolioPanel } from "@/components/pos/walk-in-folio-panel"
 import { WalkInHistory } from "@/components/pos/walk-in-history"
+import { AmountBreakdown } from "@/components/pos/amount-breakdown"
 import { MobileActionBar } from "@/components/ui/mobile"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -281,7 +282,7 @@ function POSDashboard() {
                 </p>
               </div>
               <div className="shrink-0 text-right tabular-nums">
-                <p className="font-mono text-sm font-semibold text-foreground">${parseFloat(item.amount).toFixed(2)}</p>
+                <AmountBreakdown total={item.total ?? parseFloat(item.amount)} lines={item.breakdown} />
                 <p className="text-[11px] text-muted-foreground">{new Date(item.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
               </div>
             </div>
@@ -299,7 +300,7 @@ function POSDashboard() {
           key={i}
           title={`Room ${item.roomNumber}`}
           subtitle={item.chargeCode?.description || "Charge"}
-          badge={<span className="font-bold text-success tabular-nums">${parseFloat(item.amount).toFixed(2)}</span>}
+          badge={<AmountBreakdown total={item.total ?? parseFloat(item.amount)} lines={item.breakdown} className="font-bold text-success" />}
           meta={[
             { label: "Time", value: new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
             ...(item.outletCheck?.checkNumber

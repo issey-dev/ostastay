@@ -49,6 +49,7 @@ type RoomStatusCardProps = {
   onCompleteTask?: (taskId: string) => Promise<void> | void
   onMarkOutOfOrder?: (roomId: string) => void
   onReportIssue?: (roomId: string) => void
+  onAssign?: (roomId: string) => void
   /** The property's business date (YYYY-MM-DD) — the operational "today" that
    *  drives due-out / arrival-today flags. Falls back to the wall clock. */
   businessDate?: string | null
@@ -65,6 +66,7 @@ export function RoomStatusCard({
   onCompleteTask,
   onMarkOutOfOrder,
   onReportIssue,
+  onAssign,
   businessDate,
 }: RoomStatusCardProps) {
   const [loading, setLoading] = useState(false)
@@ -166,6 +168,11 @@ export function RoomStatusCard({
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
+            {onAssign && (
+              <DropdownMenuItem onClick={() => onAssign(room.id)}>
+                <Users /> {room.assignedAttendant ? "Reassign attendant…" : "Assign attendant…"}
+              </DropdownMenuItem>
+            )}
             {onReportIssue && (
               <DropdownMenuItem onClick={() => onReportIssue(room.id)}>
                 <Wrench /> Report issue…

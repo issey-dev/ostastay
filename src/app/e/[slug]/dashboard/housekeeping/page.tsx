@@ -340,12 +340,17 @@ export default function HousekeepingDashboard() {
 
   // From the phone room sheet or the desktop card menu: run the existing bulk dialogs
   // for just this room.
-  const openSingleRoomDialog = (roomId: string, dialog: "ooo" | "issue") => {
+  const openSingleRoomDialog = (roomId: string, dialog: "ooo" | "issue" | "assign") => {
     setSheetRoomId(null)
     setSelectedRooms([roomId])
     if (dialog === "ooo") {
       setSingleRoomFlow(true)
       setShowOOODialog(true)
+    } else if (dialog === "assign") {
+      // Start on the room's current attendant so the dialog shows who has it today.
+      setSelectedAttendantId(rooms.find((r: any) => r.id === roomId)?.assignedAttendantId ?? "UNASSIGNED")
+      setSingleRoomFlow(true)
+      setShowAssignDialog(true)
     } else {
       setShowMaintenanceDialog(true)
     }
@@ -532,6 +537,7 @@ export default function HousekeepingDashboard() {
                 onEditMaintenance={handleEditMaintenance}
                 onMarkOutOfOrder={(roomId) => openSingleRoomDialog(roomId, "ooo")}
                 onReportIssue={(roomId) => openSingleRoomDialog(roomId, "issue")}
+                onAssign={(roomId) => openSingleRoomDialog(roomId, "assign")}
                 businessDate={currentProperty?.businessDate}
               />
             ))}
@@ -660,6 +666,7 @@ export default function HousekeepingDashboard() {
         onCompleteTask={handleCompleteTask}
         onMarkOutOfOrder={(roomId) => openSingleRoomDialog(roomId, "ooo")}
         onReportIssue={(roomId) => openSingleRoomDialog(roomId, "issue")}
+        onAssign={(roomId) => openSingleRoomDialog(roomId, "assign")}
         onEditMaintenance={(ticket) => {
           setSheetRoomId(null)
           handleEditMaintenance(ticket)
@@ -763,6 +770,7 @@ export default function HousekeepingDashboard() {
         if (!open) {
           setSelectedRooms([])
           setSelectedAttendantId("UNASSIGNED")
+          setSingleRoomFlow(false)
         }
       }}>
         <DialogContent>
@@ -787,7 +795,20 @@ export default function HousekeepingDashboard() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAssignDialog(false)
+                // A one-room assignment has no bulk selection to go back to.
+                if (singleRoomFlow) {
+                  setSingleRoomFlow(false)
+                  setSelectedRooms([])
+                  setSelectedAttendantId("UNASSIGNED")
+                }
+              }}
+            >
+              Cancel
+            </Button>
             <Button onClick={handleAssignSubmit} disabled={isUpdatingBulk}>
               {isUpdatingBulk ? "Saving..." : "Save assignment"}
             </Button>
