@@ -7,6 +7,8 @@ import { logActivity } from "@/lib/activity-log";
 const paidOutSchema = z.object({
   amount: z.number().finite().positive(),
   reason: z.string().min(1).max(300),
+  // Optional: the in-house guest the cash went to.
+  reservationId: z.string().min(1).optional().nullable(),
 });
 
 // Record a petty-cash disbursement from the drawer (paid-out). Requires an
@@ -21,7 +23,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid paid-out payload", details: parsed.error.flatten() }, { status: 400 });
     }
-    const { amount, reason } = parsed.data;
+    const { amount, reason, reservationId } = parsed.data;
 
     const shift = await prisma.cashierShift.findFirst({
       where: { enterpriseId: ctx.enterpriseId, userId: ctx.userId, closedAt: null },
@@ -30,8 +32,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Open a cashier shift before recording a paid-out" }, { status: 400 });
     }
 
+    // A linked guest must be in-house at the shift's property.
+    let guestLabel = "";
+    if (reservationId) {
+      const reservation = await prisma.reservation.findUnique({
+        where: { id: reservationId },
+        select: { propertyId: true, status: true, primaryGuest: { select: { firstName: true, lastName: true, companyName: true } } },
+      });
+      if (!reservation || reservation.propertyId !== shift.propertyId) {
+        return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+      }
+      if (reservation.status !== "IN_HOUSE") {
+        return NextResponse.json({ error: "Only an in-house guest can be linked to a paid-out." }, { status: 400 });
+      }
+      const g = reservation.primaryGuest;
+      guestLabel = g ? g.companyName || `${g.firstName} ${g.lastName ?? ""}`.trim() : "";
+    }
+
     const paidOut = await prisma.cashierPaidOut.create({
-      data: { shiftId: shift.id, amount, reason, createdByUserId: ctx.userId },
+      data: { shiftId: shift.id, amount, reason, reservationId: reservationId || null, createdByUserId: ctx.userId },
     });
 
     await logActivity({
@@ -40,7 +59,7 @@ export async function POST(request: Request) {
       action: "PAID_OUT",
       entityType: "CashierPaidOut",
       entityId: paidOut.id,
-      description: `Paid out $${amount.toFixed(2)} from drawer — ${reason}`,
+      description: `Paid out $${amount.toFixed(2)} from drawer — ${reason}${guestLabel ? ` (in-house guest ${guestLabel})` : ""}`,
     });
 
     return NextResponse.json(paidOut, { status: 201 });
