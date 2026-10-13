@@ -17,6 +17,21 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.3",
+    date: "2026-10-12",
+    highlights: "Cashiering: currency exchanges and paid-outs can be linked to an in-house guest, and closing a shift now shows what should be in the drawer before you count it.",
+    new: [
+      "Cashiering, New exchange and New paid-out: choose Walk-in / Not linked, or In-house guest and pick the guest from a searchable list of rooms. The guest's name and room show on the exchange or paid-out in the shift list and on the printed exchange receipt. Linking a guest does not post anything to their folio.",
+      "Close shift shows a summary before you close: the payments taken by method, how the expected cash is made up (opening float, cash received, cash refunded, paid-outs and currency exchanges) and the expected closing cash.",
+    ],
+    improved: [
+      "Close shift: enter the cash you counted and see straight away whether it is balanced, short or over, then tick to confirm the amount in the drawer. The shift only closes once it is confirmed. It is no longer a blind drop.",
+    ],
+    comingNext: [
+      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
+    ],
+  },
+  {
     version: "8.8.2",
     date: "2026-10-12",
     highlights: "Housekeeping and Maintenance get easier to run day to day: assign a room to an attendant straight from the room, a task sheet that shows who is in the room, a maintenance board that only keeps today's resolutions with a report for the history, and a Fast Post History that finally shows what was posted.",
@@ -38,9 +53,6 @@ export const RELEASES: Release[] = [
     fixed: [
       "Fast Post History now shows what was posted. It used to list only closed walk-in bills, so room postings and walk-in bills that were still open never appeared.",
       "The task sheet groups rooms (arrival, due out, dirty, stayover) by the business date, not the computer's calendar date.",
-    ],
-    comingNext: [
-      "Changing a stay's dates from the Tape Chart: drag the start or end of a booking to extend or shorten it. Availability, stop-sale and the new rate and total are checked and shown for confirmation before anything is saved.",
     ],
   },
   {

@@ -84,7 +84,11 @@ export default function CurrencyExchangeReceiptPage({ params }: { params: Promis
         brand={brand}
         kind="exchange"
         meta={meta}
-        receivedFrom={exchange.guestName || "Walk-in Customer"}
+        receivedFrom={
+          exchange.reservation
+            ? `${exchange.guestName || "In-house guest"} · Room ${[...new Set((exchange.reservation.assignments ?? []).map((a: any) => a.room?.roomNumber).filter(Boolean))].join(", ") || "TBA"}`
+            : exchange.guestName || "Walk-in Customer"
+        }
         paymentDetails={paymentDetails}
         rows={rows}
         amountLabel={`Amount Received (${exchange.toCurrency})`}

@@ -6,6 +6,7 @@ import { allocateSequenceNumber } from "@/lib/document-sequence";
 
 const EXCHANGE_INCLUDE = {
   property: true,
+  reservation: { select: { assignments: { select: { room: { select: { roomNumber: true } } }, orderBy: { startDate: "asc" as const } } } },
 };
 
 export async function GET(

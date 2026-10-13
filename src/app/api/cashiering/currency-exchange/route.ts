@@ -47,11 +47,32 @@ export async function POST(request: Request) {
     // the exchange can never attach to a drawer at a different property.
     const shift = await ensureOpenShift(ctx, propertyId);
 
+    // Optionally link the exchange to an in-house guest at this property. The guest's name
+    // is stored on the exchange so the receipt and shift list read the same either way.
+    let reservationId: string | null = null;
+    let guestName: string | null = body.guestName || null;
+    if (body.reservationId) {
+      const reservation = await prisma.reservation.findUnique({
+        where: { id: String(body.reservationId) },
+        select: { id: true, propertyId: true, status: true, primaryGuest: { select: { firstName: true, lastName: true, companyName: true } } },
+      });
+      if (!reservation || reservation.propertyId !== propertyId) {
+        return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+      }
+      if (reservation.status !== "IN_HOUSE") {
+        return NextResponse.json({ error: "Only an in-house guest can be linked to a currency exchange." }, { status: 400 });
+      }
+      reservationId = reservation.id;
+      const g = reservation.primaryGuest;
+      guestName = guestName || (g ? g.companyName || `${g.firstName} ${g.lastName ?? ""}`.trim() : null);
+    }
+
     const currencyExchange = await prisma.currencyExchange.create({
       data: {
         propertyId,
         shiftId: shift.id,
-        guestName: body.guestName || null,
+        guestName,
+        reservationId,
         fromCurrency: body.fromCurrency,
         toCurrency: body.toCurrency,
         rate,
@@ -67,7 +88,7 @@ export async function POST(request: Request) {
       action: "CREATE",
       entityType: "CurrencyExchange",
       entityId: currencyExchange.id,
-      description: `Currency exchange ${currencyExchange.amountFrom} ${currencyExchange.fromCurrency} → ${currencyExchange.amountTo} ${currencyExchange.toCurrency}${body.guestName ? ` for ${body.guestName}` : ""}`,
+      description: `Currency exchange ${currencyExchange.amountFrom} ${currencyExchange.fromCurrency} → ${currencyExchange.amountTo} ${currencyExchange.toCurrency}${guestName ? ` for ${guestName}` : ""}${reservationId ? " (in-house guest)" : ""}`,
     });
 
     return NextResponse.json(currencyExchange, { status: 201 });

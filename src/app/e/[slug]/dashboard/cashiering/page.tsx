@@ -7,6 +7,9 @@ import { Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, P
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ShiftReportPrint } from "@/components/cashiering/shift-report-print";
+import { GuestLinkField, type GuestLinkMode } from "@/components/cashiering/guest-link-field";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -106,9 +109,10 @@ function CashieringContent() {
   const [isOpening, setIsOpening] = useState(false);
   const [defaults, setDefaults] = useState({ fromCurrency: "USD", toCurrency: "MVR" });
 
-  // Close Shift (Blind Drop) State
+  // Close Shift state: the drawer count and the cashier's confirmation of it
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [closingDrop, setClosingDrop] = useState("");
+  const [closeConfirmed, setCloseConfirmed] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
   // Reconciliation Result State
@@ -121,19 +125,29 @@ function CashieringContent() {
   const [isPaidOutModalOpen, setIsPaidOutModalOpen] = useState(false);
   const [isPayingOut, setIsPayingOut] = useState(false);
   const [paidOutForm, setPaidOutForm] = useState({ amount: "", reason: "" });
+  const [paidOutFor, setPaidOutFor] = useState<GuestLinkMode>("other");
+  const [paidOutReservationId, setPaidOutReservationId] = useState("");
+
+  const closePaidOutDialog = (open: boolean) => {
+    setIsPaidOutModalOpen(open);
+    if (!open) {
+      setPaidOutFor("other");
+      setPaidOutReservationId("");
+    }
+  };
 
   const handleCreatePaidOut = async () => {
     const amount = parseFloat(paidOutForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0 || !paidOutForm.reason.trim()) return;
+    if (!Number.isFinite(amount) || amount <= 0 || !paidOutForm.reason.trim() || (paidOutFor === "inhouse" && !paidOutReservationId)) return;
     setIsPayingOut(true);
     try {
       const res = await fetch("/api/cashiering/paid-out", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, reason: paidOutForm.reason.trim() }),
+        body: JSON.stringify({ amount, reason: paidOutForm.reason.trim(), ...(paidOutFor === "inhouse" ? { reservationId: paidOutReservationId } : {}) }),
       });
       if (res.ok) {
-        setIsPaidOutModalOpen(false);
+        closePaidOutDialog(false);
         setPaidOutForm({ amount: "", reason: "" });
         toast.success("Paid-out recorded");
         setTab("paidouts");
@@ -151,6 +165,10 @@ function CashieringContent() {
   // Currency Exchange State
   const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
+  // Who the exchange is for: a walk-in (optional typed name) or an in-house guest picked from
+  // a list (linked by reservation).
+  const [exchangeFor, setExchangeFor] = useState<GuestLinkMode>("other");
+  const [exchangeReservationId, setExchangeReservationId] = useState("");
   const [exchangeForm, setExchangeForm] = useState({
     guestName: "",
     fromCurrency: "USD",
@@ -239,6 +257,14 @@ function CashieringContent() {
     }
   };
 
+  const closeShiftDialog = (open: boolean) => {
+    setIsCloseModalOpen(open);
+    if (!open) {
+      setClosingDrop("");
+      setCloseConfirmed(false);
+    }
+  };
+
   const handleCloseShift = async () => {
     setIsClosing(true);
     try {
@@ -251,18 +277,25 @@ function CashieringContent() {
 
       if (json.success) {
         setReconciliation(json.data);
-        setIsCloseModalOpen(false);
-        setClosingDrop("");
+        closeShiftDialog(false);
         await fetchStatus(); // Refresh to show shift is closed
       } else {
         toast.error(json.error || "Failed to close shift");
-        setIsCloseModalOpen(false);
+        closeShiftDialog(false);
       }
     } catch {
       toast.error("Unexpected error closing shift");
-      setIsCloseModalOpen(false);
+      closeShiftDialog(false);
     } finally {
       setIsClosing(false);
+    }
+  };
+
+  const closeExchangeDialog = (open: boolean) => {
+    setIsExchangeModalOpen(open);
+    if (!open) {
+      setExchangeFor("other");
+      setExchangeReservationId("");
     }
   };
 
@@ -272,10 +305,14 @@ function CashieringContent() {
       const res = await fetch("/api/cashiering/currency-exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(exchangeForm)
+        body: JSON.stringify(
+          exchangeFor === "inhouse"
+            ? { ...exchangeForm, guestName: "", reservationId: exchangeReservationId }
+            : exchangeForm
+        )
       });
       if (res.ok) {
-        setIsExchangeModalOpen(false);
+        closeExchangeDialog(false);
         setExchangeForm({ guestName: "", fromCurrency: defaults.fromCurrency, toCurrency: defaults.toCurrency, rate: "", amountFrom: "", amountTo: "" });
         toast.success("Exchange recorded");
         setTab("exchanges");
@@ -335,15 +372,20 @@ function CashieringContent() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Cashiering" hint="Manage your physical cash drawer and track all financial postings during your shift." />
+      <div className="print:hidden">
+        <PageHeader title="Cashiering" hint="Manage your physical cash drawer and track all financial postings during your shift." />
+      </div>
+
+      {/* Printing the closed shift prints this report alone (everything else is print:hidden). */}
+      {reconciliation && <ShiftReportPrint report={reconciliation} />}
 
       {/* RECONCILIATION RESULT VIEW */}
       {reconciliation && (
-        <Card className="border-border overflow-hidden">
+        <Card className="border-border overflow-hidden print:hidden">
           <div className="bg-primary p-6 text-primary-foreground text-center max-md:p-4">
             <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-80" />
             <h3 className="text-xl font-bold">Shift closed</h3>
-            <p className="text-primary-foreground/80 mt-1 text-sm">Blind drop reconciliation</p>
+            <p className="text-primary-foreground/80 mt-1 text-sm">Shift reconciliation</p>
           </div>
           <CardContent className="p-6 max-md:p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center tabular-nums">
@@ -390,7 +432,7 @@ function CashieringContent() {
 
       {/* SHIFT CLOSED (needs to open) — one bar: opening float + Open shift. */}
       {!status?.hasActiveShift && !reconciliation && (
-        <div className="flex flex-wrap items-end justify-between gap-4 border border-border bg-card px-4 py-3">
+        <div className="print:hidden flex flex-wrap items-end justify-between gap-4 border border-border bg-card px-4 py-3">
           <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
             <div>
               <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
@@ -423,7 +465,7 @@ function CashieringContent() {
 
       {/* No open shift: history is the only list left. */}
       {!status?.hasActiveShift && shiftHistory.length > 0 && (
-        <section>
+        <section className="print:hidden">
           <h2 className="mb-2 text-sm font-semibold text-foreground">Shift history</h2>
           <div className="border border-border bg-card">
             <ShiftHistoryList shiftHistory={shiftHistory} />
@@ -433,7 +475,7 @@ function CashieringContent() {
 
       {/* SHIFT OPEN */}
       {status?.hasActiveShift && !reconciliation && (
-        <div className="space-y-4">
+        <div className="space-y-4 print:hidden">
           {/* Phones: the three numbers a cashier checks, before anything else. */}
           <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card md:hidden">
             {[
@@ -626,7 +668,7 @@ function CashieringContent() {
                           {exchange.amountFrom.toFixed(2)} {exchange.fromCurrency} → {exchange.amountTo.toFixed(2)} {exchange.toCurrency}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
-                          {exchange.guestName || "Walk-in"} · Rate {exchange.rate} · {format(parseISO(exchange.createdAt), "h:mm a")}
+                          {exchange.guestName || "Walk-in"}{exchange.reservation ? ` · Room ${[...new Set((exchange.reservation.assignments ?? []).map((a: any) => a.room?.roomNumber).filter(Boolean))].join(", ") || "TBA"}` : ""} · Rate {exchange.rate} · {format(parseISO(exchange.createdAt), "h:mm a")}
                         </p>
                       </div>
                       <Button
@@ -663,7 +705,10 @@ function CashieringContent() {
                     <div key={po.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/50">
                       <div>
                         <p className="font-medium text-foreground">{po.reason}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{format(parseISO(po.createdAt), "h:mm a")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                          {po.reservation ? `${po.reservation.primaryGuest ? (po.reservation.primaryGuest.companyName || `${po.reservation.primaryGuest.firstName} ${po.reservation.primaryGuest.lastName ?? ""}`.trim()) : "Guest"} · Room ${[...new Set((po.reservation.assignments ?? []).map((a: any) => a.room?.roomNumber).filter(Boolean))].join(", ") || "TBA"} · ` : ""}
+                          {format(parseISO(po.createdAt), "h:mm a")}
+                        </p>
                       </div>
                       <div className="font-semibold font-mono tabular-nums text-destructive">−{money(po.amount)}</div>
                     </div>
@@ -679,49 +724,118 @@ function CashieringContent() {
         </div>
       )}
 
-      {/* BLIND DROP MODAL */}
-      <Dialog open={isCloseModalOpen} onOpenChange={setIsCloseModalOpen}>
+      {/* CLOSE SHIFT MODAL — what was taken, what should be in the drawer, the count, a confirmation */}
+      <Dialog open={isCloseModalOpen} onOpenChange={closeShiftDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Close shift: blind drop</DialogTitle>
+            <DialogTitle>Close shift</DialogTitle>
             <DialogDescription>
-              Count the physical cash in your drawer and enter the total amount below. The system will calculate if your drawer is balanced, short, or over.
+              Check what was taken and what should be in the drawer, count the cash, then confirm to close.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6">
-            <label className="text-sm font-semibold text-foreground mb-2 block">Actual physical cash count</label>
-            <div className="relative">
-              <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6" />
-              <Input 
-                {...INPUT_MONEY}
-                type="number" 
-                step="0.01" 
-                autoFocus
-                className="pl-12 text-3xl font-bold h-16 bg-muted border-border focus:border-ring focus:ring-ring"
-                placeholder="0.00"
-                value={closingDrop}
-                onChange={(e) => setClosingDrop(e.target.value)}
+          <div className="space-y-5 py-4 tabular-nums">
+            <section>
+              <h4 className="mb-1.5 text-sm font-semibold text-foreground">Payments this shift</h4>
+              {(status?.summary?.paymentSummary?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">No payments taken.</p>
+              ) : (
+                <div className="divide-y divide-border border-y border-border text-sm">
+                  {status.summary.paymentSummary.map((row: any) => (
+                    <div key={row.method} className="flex items-center justify-between gap-3 py-2">
+                      <span className="font-medium text-foreground">{row.method}</span>
+                      <span className="text-xs text-muted-foreground">
+                        +{money(row.received)}{row.refunded > 0 && <span className="text-destructive"> / −{money(row.refunded)} refunded</span>}
+                      </span>
+                      <span className="w-24 text-right font-mono font-semibold text-foreground">{money(row.net)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between py-2 font-semibold text-foreground">
+                    <span>Total payments</span>
+                    <span className="font-mono">{money(status.summary.paymentsNet)}</span>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {status?.summary?.cashDrawer && (
+              <section>
+                <h4 className="mb-1.5 text-sm font-semibold text-foreground">Cash drawer</h4>
+                <dl className="divide-y divide-border border-y border-border text-sm">
+                  {[
+                    { label: "Opening float", value: status.summary.cashDrawer.openingFloat, sign: "" },
+                    { label: "Cash received", value: status.summary.cashDrawer.cashIn, sign: "+" },
+                    { label: "Cash refunded", value: status.summary.cashDrawer.cashOut, sign: "−" },
+                    { label: "Paid-outs", value: status.summary.cashDrawer.paidOuts, sign: "−" },
+                    { label: "Currency exchanges (local cash)", value: status.summary.cashDrawer.exchangeNet, sign: "±" },
+                  ].map((r) => (
+                    <div key={r.label} className="flex items-center justify-between py-1.5">
+                      <dt className="text-muted-foreground">{r.label}</dt>
+                      <dd className="font-mono text-foreground">{r.sign}{money(Math.abs(r.value))}</dd>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between py-2 font-semibold text-foreground">
+                    <dt>Expected in drawer (closing cash)</dt>
+                    <dd className="font-mono">{money(status.summary.cashDrawer.expected)}</dd>
+                  </div>
+                </dl>
+              </section>
+            )}
+
+            <section>
+              <label className="mb-2 block text-sm font-semibold text-foreground" htmlFor="closing-drop">Cash counted in the drawer</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6" />
+                <Input
+                  {...INPUT_MONEY}
+                  id="closing-drop"
+                  type="number"
+                  step="0.01"
+                  autoFocus
+                  className="pl-12 text-3xl font-bold h-16 bg-muted border-border focus:border-ring focus:ring-ring"
+                  placeholder="0.00"
+                  value={closingDrop}
+                  onChange={(e) => { setClosingDrop(e.target.value); setCloseConfirmed(false) }}
+                />
+              </div>
+              {closingDrop !== "" && status?.summary?.cashDrawer && (() => {
+                const diff = Math.round((parseFloat(closingDrop) - status.summary.cashDrawer.expected) * 100) / 100
+                if (!Number.isFinite(diff)) return null
+                return (
+                  <p className={`mt-2 text-sm font-medium ${diff === 0 ? "text-success" : "text-destructive"}`}>
+                    {diff === 0 ? "Balanced — the count matches the expected cash." : `${money(Math.abs(diff))} ${diff < 0 ? "short" : "over"} against the expected cash.`}
+                  </p>
+                )
+              })()}
+            </section>
+
+            <label className="flex items-start gap-2.5 text-sm text-foreground">
+              <Checkbox
+                checked={closeConfirmed}
+                disabled={!closingDrop}
+                onCheckedChange={(v) => setCloseConfirmed(v === true)}
+                className="mt-0.5"
               />
-            </div>
-            <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" /> Once submitted, this cannot be undone and any discrepancies will be permanently logged.
-            </p>
+              <span>
+                I confirm there is <span className="font-mono font-semibold">{closingDrop ? money(parseFloat(closingDrop) || 0) : "—"}</span> in the drawer.
+                Closing cannot be undone and any difference is logged.
+              </span>
+            </label>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCloseModalOpen(false)}>Cancel</Button>
-            <Button 
+            <Button variant="outline" onClick={() => closeShiftDialog(false)}>Cancel</Button>
+            <Button
               onClick={handleCloseShift}
-              disabled={isClosing || !closingDrop}
+              disabled={isClosing || !closingDrop || !closeConfirmed}
             >
               {isClosing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Submit drop & close shift
+              Confirm & close shift
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* NEW PAID-OUT MODAL */}
-      <Dialog open={isPaidOutModalOpen} onOpenChange={setIsPaidOutModalOpen}>
+      <Dialog open={isPaidOutModalOpen} onOpenChange={closePaidOutDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record paid-out</DialogTitle>
@@ -747,6 +861,14 @@ function CashieringContent() {
                 />
               </div>
             </div>
+            <GuestLinkField
+              label="Paid to (optional)"
+              otherLabel="Not linked"
+              mode={paidOutFor}
+              onModeChange={setPaidOutFor}
+              reservationId={paidOutReservationId}
+              onReservationChange={setPaidOutReservationId}
+            />
             <div className="space-y-2">
               <Label>Reason</Label>
               <Input
@@ -757,10 +879,10 @@ function CashieringContent() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPaidOutModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => closePaidOutDialog(false)}>Cancel</Button>
             <Button
               onClick={handleCreatePaidOut}
-              disabled={isPayingOut || !paidOutForm.amount || !paidOutForm.reason.trim()}
+              disabled={isPayingOut || !paidOutForm.amount || !paidOutForm.reason.trim() || (paidOutFor === "inhouse" && !paidOutReservationId)}
             >
               {isPayingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Record paid-out
@@ -770,7 +892,7 @@ function CashieringContent() {
       </Dialog>
 
       {/* NEW CURRENCY EXCHANGE MODAL */}
-      <Dialog open={isExchangeModalOpen} onOpenChange={setIsExchangeModalOpen}>
+      <Dialog open={isExchangeModalOpen} onOpenChange={closeExchangeDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record currency exchange</DialogTitle>
@@ -779,14 +901,21 @@ function CashieringContent() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label>Guest name (optional)</Label>
-              <Input
-                placeholder="Walk-in customer"
-                value={exchangeForm.guestName}
-                onChange={(e) => setExchangeForm(p => ({ ...p, guestName: e.target.value }))}
-              />
-            </div>
+            <GuestLinkField
+              label="Guest name (optional)"
+              otherLabel="Walk-in"
+              mode={exchangeFor}
+              onModeChange={setExchangeFor}
+              reservationId={exchangeReservationId}
+              onReservationChange={setExchangeReservationId}
+              otherField={
+                <Input
+                  placeholder="Walk-in customer"
+                  value={exchangeForm.guestName}
+                  onChange={(e) => setExchangeForm(p => ({ ...p, guestName: e.target.value }))}
+                />
+              }
+            />
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>From currency</Label>
@@ -860,10 +989,10 @@ function CashieringContent() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsExchangeModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => closeExchangeDialog(false)}>Cancel</Button>
             <Button
               onClick={handleCreateExchange}
-              disabled={isExchanging || !exchangeForm.fromCurrency || !exchangeForm.toCurrency || !exchangeForm.rate || !exchangeForm.amountFrom || !exchangeForm.amountTo}
+              disabled={isExchanging || (exchangeFor === "inhouse" && !exchangeReservationId) || !exchangeForm.fromCurrency || !exchangeForm.toCurrency || !exchangeForm.rate || !exchangeForm.amountFrom || !exchangeForm.amountTo}
             >
               {isExchanging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Save exchange

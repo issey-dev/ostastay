@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, resolveCurrentPropertyId, toErrorResponse } from "@/lib/scope";
 import { LINE_BUCKET_INCLUDE, lineReportBucket } from "@/lib/posting/report-bucket";
-import { summarizeShiftPayments, expectedCashForShift } from "@/lib/shift-summary";
+import { summarizeShiftPayments, expectedCashForShift, netBaseCashFromExchanges } from "@/lib/shift-summary";
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +22,8 @@ export async function GET() {
       orderBy: { openedAt: "desc" },
       include: {
         payments: { include: { paymentMethod: true } },
-        currencyExchanges: { orderBy: { createdAt: "desc" } },
-        paidOuts: { orderBy: { createdAt: "desc" } },
+        currencyExchanges: { orderBy: { createdAt: "desc" }, include: { reservation: { select: { id: true, assignments: { select: { room: { select: { roomNumber: true } } }, orderBy: { startDate: "asc" } } } } } },
+        paidOuts: { orderBy: { createdAt: "desc" }, include: { reservation: { select: { id: true, primaryGuest: { select: { firstName: true, lastName: true, companyName: true } }, assignments: { select: { room: { select: { roomNumber: true } } }, orderBy: { startDate: "asc" } } } } } },
         lineItems: { include: { ...LINE_BUCKET_INCLUDE, chargeCode: { select: { ...LINE_BUCKET_INCLUDE.chargeCode.select, description: true } } } },
         property: { select: { defaultCurrency: true } },
       },
@@ -48,7 +48,7 @@ export async function GET() {
       const chargesTotal = postingsByChargeCode.reduce((s, r) => s + r.total, 0);
 
       // Payment Summary — how much they collected, by method.
-      const { byMethod } = summarizeShiftPayments(activeShift.payments);
+      const { byMethod, cashIn, cashOut } = summarizeShiftPayments(activeShift.payments);
       const paymentsNet = byMethod.reduce((s, m) => s + m.net, 0);
       const expectedCash = expectedCashForShift(activeShift.openingFloat, activeShift.payments, activeShift.paidOuts, activeShift.currencyExchanges, activeShift.property?.defaultCurrency ?? null);
 
@@ -58,6 +58,16 @@ export async function GET() {
         paymentSummary: byMethod,
         paymentsNet,
         expectedCash,
+        // How the expected cash is made up — shown when the shift is closed, so the cashier
+        // can see what should be in the drawer before counting it.
+        cashDrawer: {
+          openingFloat: activeShift.openingFloat,
+          cashIn,
+          cashOut,
+          paidOuts: activeShift.paidOuts.reduce((s, p) => s + p.amount, 0),
+          exchangeNet: netBaseCashFromExchanges(activeShift.currencyExchanges, activeShift.property?.defaultCurrency ?? null),
+          expected: expectedCash,
+        },
       };
     }
 
