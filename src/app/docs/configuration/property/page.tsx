@@ -81,7 +81,7 @@ export default function PropertySetup() {
           [<a key="e" href="/docs/configuration/property/excursions">Excursions</a>, "Your enterprise has the Excursions add-on."],
           [<a key="s" href="/docs/configuration/property/spa">Spa</a>, "Your enterprise has the Spa add-on."],
           [<a key="o" href="/docs/configuration/property/online-booking">Online booking</a>, "Your own website takes bookings."],
-          [<a key="c" href="/docs/configuration/property/channel-manager">Channel manager</a>, "You sell through online travel agencies and Uppsolut has connected your channel manager."],
+          [<a key="c" href="/docs/configuration/property/channel-manager">Channel manager</a>, "You sell through online travel agencies and have a Beds24 account to connect."],
           [<a key="g" href="/docs/configuration/property/green-tax">Green Tax register</a>, "Maldives properties: nothing to set up, but read it before your first month-end."],
         ]}
       />

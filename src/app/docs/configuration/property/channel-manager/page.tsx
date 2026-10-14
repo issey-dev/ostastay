@@ -14,10 +14,12 @@ export default function ChannelManager() {
 
       <H2>1. The connection</H2>
       <p>
-        Uppsolut connects your property to the channel manager; you can&apos;t do this yourself. Until then the page says the
-        property is not connected: contact Uppsolut to request it. Once connected, the <strong>Channel Manager</strong> page shows{" "}
-        <strong>Connected</strong>, when it was last checked, and whether the inbound webhook is installed. <strong>Check</strong>{" "}
-        tests the connection.
+        You connect each property to your own Beds24 account from the <strong>Channel Manager</strong> page, with an invite code
+        and the property&apos;s Beds24 id. The{" "}
+        <a href="/docs/configuration/property/channel-manager-setup">Connect your channel manager</a> guide walks through it,
+        including the webhook. Uppsolut can also connect a property through its own account if you ask. Once connected, the page
+        shows <strong>Connected</strong>, when it was last checked, and whether the webhook is set. <strong>Check</strong> tests the
+        connection.
       </p>
       <p>Before mapping, set up room types, rate plans and prices (<a href="/docs/configuration/property/rooms">steps 5</a> and <a href="/docs/configuration/property/rates">6</a>), and create the same room types and rates in your channel-manager account.</p>
 

@@ -1,5 +1,10 @@
 # Hub Level + Channel Manager (Beds24) — Plan
 
+> **2026-10-14 — enterprises connect their OWN Beds24 account** (owner; DECISIONS.md). Supersedes
+> "Property admins cannot connect, link, unlink, disconnect or re-authorize" below: they now can,
+> from the property's Channel Manager page (`/api/hub/connections*`). The Osta console path
+> (Uppsolut's own account) remains for properties that opt for it.
+
 > **2026-09-23 — one connection per PROPERTY** (owner; HUB_SETUP_PLAN.md Phase 4). Supersedes
 > the per-enterprise connection throughout this plan. `ChannelConnection.propertyId` is
 > required and unique; Uppsolut creates a property's connection from the Osta console and

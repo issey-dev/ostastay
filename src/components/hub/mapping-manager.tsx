@@ -18,8 +18,9 @@ import { DefaultsTab } from "@/components/hub/mapping/defaults-tab"
 
 // A property's channel-manager Mapping screen (Hub > the property > Channel Manager >
 // Mapping). One connection per property since 2026-09-23 (HUB_SETUP_PLAN.md, Phase 4):
-// Uppsolut connects the property and links its channel-manager property from the Osta
-// console, so there is nothing to link or unlink here — only this property's link, and
+// connecting the property links its channel-manager property (on the Channel Manager page,
+// or by Uppsolut from the Osta console), so there is nothing to link or unlink here — only
+// this property's link, and
 // everything that follows from it:
 //   Sharing    — the sync on/off switch, once mapping is complete.
 //   Room Type  — external room code ↔ our room type.
@@ -94,7 +95,7 @@ export function MappingManager({ propertyId, canManage }: { propertyId: string; 
       <EmptyState
         icon={ArrowLeftRight}
         title="This property is not connected yet"
-        description="Uppsolut connects each property to the channel manager. Once this property is connected, its room types and rates can be mapped here. Contact Uppsolut to request the connection."
+        description="Connect this property to your Beds24 account first (Channel Manager page). Once it is connected, its room types and rates can be mapped here."
       />
     )
   }

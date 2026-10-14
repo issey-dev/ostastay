@@ -17,6 +17,21 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.4",
+    date: "2026-10-14",
+    highlights: "Connect your own channel manager: each enterprise can now link its properties to its own Beds24 account, without asking Uppsolut.",
+    new: [
+      "Channel Manager, Connect to Beds24: paste the invite code and the property's Beds24 id to connect a property yourself. The code is checked before it is used, so a wrong code saves nothing.",
+      "Generate (or replace) the webhook address yourself and paste it into Beds24 so bookings arrive the moment they are made.",
+      "Re-authorize with a new invite code, correct the Beds24 property id, run a Deep resync of recent bookings and disconnect a property, all from the Channel Manager page.",
+      "A new step-by-step guide, Connect your channel manager, in the Configuration guide, with screenshots.",
+    ],
+    improved: [
+      "Your own Beds24 account has its own allowance of requests, so the optional pause setting now protects your account only.",
+      "Uppsolut can still connect a property through its own Beds24 account for customers who prefer it.",
+    ],
+  },
+  {
     version: "8.8.3",
     date: "2026-10-12",
     highlights: "Cashiering: currency exchanges and paid-outs can be linked to an in-house guest, and closing a shift now shows what should be in the drawer before you count it.",

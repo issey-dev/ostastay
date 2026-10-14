@@ -503,17 +503,20 @@ describe("Inbound bookings", () => {
       expect(hashWebhookToken(a)).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it("the Hub cannot mint a webhook URL — Osta installs it in the channel manager", async () => {
+    it("the Hub mints a show-once webhook URL for its own connection", async () => {
       cookieJar.clear();
       await createSession(hubUserId);
 
-      // Since 2026-08-03 the webhook URL is generated from the Osta console, because the
-      // person who pastes it into Beds24 is the app owner (master-account topology). A
-      // tenant minting one would rotate a credential they cannot install, silently
-      // breaking inbound delivery. End-to-end show-once coverage of the Osta route lives
-      // in tests/business-rules/osta-channel-admin.test.ts.
-      const res = await generateWebhookRoute.POST();
-      expect(res.status).toBe(403);
+      // Since 2026-10-14 the enterprise pastes the URL into its own Beds24 account, so it
+      // mints it itself. Only the hash is stored; the plaintext path is returned once.
+      const res = await generateWebhookRoute.POST(new Request("http://localhost/x", { method: "POST" }), {
+        params: Promise.resolve({ id: connectionId }),
+      });
+      expect(res.status).toBe(200);
+      const { path } = await res.json();
+      expect(path).toMatch(/^\/api\/channels\/webhook\/.+/);
+      const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: connectionId } });
+      expect(row.webhookTokenHash).toBe(hashWebhookToken(path.split("/").pop()));
 
       await destroySession();
       cookieJar.clear();

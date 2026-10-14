@@ -32,6 +32,8 @@ const { daysUntilRefreshTokenExpiry, needsKeepAlive, isAccessTokenStale, REFRESH
 );
 const connectionsRoute = await import("@/app/api/hub/connections/route");
 const connectionByIdRoute = await import("@/app/api/hub/connections/[id]/route");
+const webhookRoute = await import("@/app/api/hub/connections/[id]/webhook/route");
+const { hashWebhookToken } = await import("@/lib/channels/webhook-token");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -277,39 +279,102 @@ describe("Channel manager connection (Beds24)", () => {
     await destroySession();
   });
 
-  it("the Hub cannot delete a connection at all — setup is Osta-level", async () => {
-    stubBeds24({ refreshToken: "r-victim", token: "a-victim", expiresIn: 86400 });
-    const existing = await createConnection({
-      ...(await channelTarget(enterpriseAId)),
-      name: `Victim ${Date.now()}`,
-      inviteCode: "y",
-    });
+  // ---------------------------------------------------------------------------
+  // Self-service (2026-10-14): each enterprise connects to its OWN Beds24 account.
+  // ---------------------------------------------------------------------------
+
+  const post = (body: unknown) =>
+    connectionsRoute.POST(
+      new Request("http://localhost/api/hub/connections", { method: "POST", body: JSON.stringify(body) })
+    );
+  const ctxFor = (id: string) => ({ params: Promise.resolve({ id }) });
+
+  it("an enterprise admin connects its own property with its own invite code", async () => {
+    stubBeds24({ refreshToken: "r-self", token: "a-self", expiresIn: 86400 });
+    const target = await channelTarget(enterpriseAId);
 
     cookieJar.clear();
-    // Even the connection's OWN enterprise admin is refused: since 2026-08-03 the Beds24
-    // link is established and removed from the Osta console only, because the invite code
-    // belongs to the app owner's master account (see .agents/docs/DECISIONS.md).
     await createSession(adminAId);
-    const res = await connectionByIdRoute.DELETE();
-    expect(res.status).toBe(403);
+    const res = await post({ ...target, name: "Self connect", inviteCode: "mine" });
+    expect(res.status).toBe(201);
+    const { connection } = await res.json();
+    expect(connection.status).toBe("CONNECTED");
+    expect("refreshToken" in connection).toBe(false);
+    expect(await prisma.channelPropertyLink.count({ where: { propertyId: target.propertyId } })).toBe(1);
+    // The action lands in the enterprise's own activity trail.
+    expect(
+      await prisma.userActivityLog.count({ where: { enterpriseId: enterpriseAId, entityId: connection.id, action: "CREATE" } })
+    ).toBe(1);
     await destroySession();
-
-    // And it really is still there.
-    expect(await prisma.channelConnection.findUnique({ where: { id: existing.id } })).not.toBeNull();
   });
 
-  it("the Hub cannot create or re-authorize a connection — 403 without touching Beds24", async () => {
+  it("a PROPERTY-scoped admin can connect only their own property", async () => {
+    const sibling = await channelTarget(enterpriseAId);
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
 
     cookieJar.clear();
+    await createSession(propertyScopedUserId);
+    const res = await post({ ...sibling, name: "Not mine", inviteCode: "x" });
+    expect(res.status).toBe(403);
+    // Refused before the single-use invite code is spent.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await prisma.channelConnection.findUnique({ where: { propertyId: sibling.propertyId } })).toBeNull();
+    await destroySession();
+  });
+
+  it("another enterprise's admin cannot connect, re-authorize or remove this enterprise's property", async () => {
+    stubBeds24({ refreshToken: "r-x", token: "a-x", expiresIn: 86400 });
+    const existing = await createConnection({ ...(await channelTarget(enterpriseAId)), name: `Guarded ${Date.now()}`, inviteCode: "g" });
+    const foreign = await channelTarget(enterpriseAId);
+
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    cookieJar.clear();
+    await createSession(adminBId);
+    expect((await post({ ...foreign, name: "Intruder", inviteCode: "i" })).status).toBe(403);
+    const patch = await connectionByIdRoute.PATCH(
+      new Request("http://localhost/x", { method: "PATCH", body: JSON.stringify({ inviteCode: "i" }) }),
+      ctxFor(existing.id)
+    );
+    expect(patch.status).toBe(403);
+    expect((await connectionByIdRoute.DELETE(new Request("http://localhost/x"), ctxFor(existing.id))).status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await prisma.channelConnection.findUnique({ where: { id: existing.id } })).not.toBeNull();
+    await destroySession();
+  });
+
+  it("an enterprise admin re-authorizes, corrects the Beds24 id, mints a webhook and disconnects", async () => {
+    stubBeds24({ refreshToken: "r-1", token: "a-1", expiresIn: 86400 });
+    const existing = await createConnection({ ...(await channelTarget(enterpriseAId)), name: `Manage ${Date.now()}`, inviteCode: "m" });
+
+    cookieJar.clear();
     await createSession(adminAId);
 
-    expect((await connectionsRoute.POST()).status).toBe(403);
-    expect((await connectionByIdRoute.PATCH()).status).toBe(403);
+    stubBeds24({ refreshToken: "r-2-new", token: "a-2", expiresIn: 86400 });
+    const reauth = await connectionByIdRoute.PATCH(
+      new Request("http://localhost/x", { method: "PATCH", body: JSON.stringify({ inviteCode: "fresh" }) }),
+      ctxFor(existing.id)
+    );
+    expect(reauth.status).toBe(200);
+    const row = await prisma.channelConnection.findUnique({ where: { id: existing.id } });
+    expect(decryptSecret(row!.refreshToken)).toBe("r-2-new");
 
-    // Refused before any outbound call — the tenant has no invite code to spend anyway.
-    expect(fetchSpy).not.toHaveBeenCalled();
+    const fix = await connectionByIdRoute.PATCH(
+      new Request("http://localhost/x", { method: "PATCH", body: JSON.stringify({ externalPropertyId: "999111" }) }),
+      ctxFor(existing.id)
+    );
+    expect(fix.status).toBe(200);
+    expect((await prisma.channelPropertyLink.findUnique({ where: { propertyId: existing.propertyId } }))?.externalPropertyId).toBe("999111");
+
+    const hook = await webhookRoute.POST(new Request("http://localhost/x", { method: "POST" }), ctxFor(existing.id));
+    expect(hook.status).toBe(200);
+    const { path } = await hook.json();
+    const stored = await prisma.channelConnection.findUnique({ where: { id: existing.id }, select: { webhookTokenHash: true } });
+    expect(stored!.webhookTokenHash).toBe(hashWebhookToken(path.split("/").pop()!));
+
+    expect((await connectionByIdRoute.DELETE(new Request("http://localhost/x"), ctxFor(existing.id))).status).toBe(200);
+    expect(await prisma.channelConnection.findUnique({ where: { id: existing.id } })).toBeNull();
     await destroySession();
   });
 });

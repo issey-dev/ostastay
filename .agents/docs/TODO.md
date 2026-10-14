@@ -3038,3 +3038,16 @@ window shows it and nothing is written until confirmed. Only the outer edges of 
 can be dragged. Open choices: in-house shorten/extend and the folio credit for removed nights, blocking
 the arrival edge for in-house guests, a reason, and quick buttons on Front Desk / the reservation page.
 Reuse: the End of Day extend-stay route, the reservation save's availability checks, the quote.
+
+## Channel manager self-service follow-ups (2026-10-14, 8.8.4)
+
+- [ ] **Keep-alive failure emails still go only to Uppsolut ops** (`alertChannelFailures`,
+  `buildChannelAlertEmail`). Self-connected enterprises can fix a lapsed credential themselves, so
+  the alert should ALSO reach them (Hub Overview already shows the banner). Needs a recipient rule.
+- [ ] **No flag says who set a connection up** (self vs Uppsolut-managed): the Hub shows the same
+  controls for both. Add `ChannelConnection.managedBy` if Uppsolut-managed ones should hide
+  re-authorize/disconnect from the tenant.
+- [ ] Screenshots of Beds24's own screens (invite code, property id, webhook settings) are not in the
+  guide — they are text steps only; add them from a real Beds24 account.
+- [ ] The Beds24 scopes listed in the guide (bookings, inventory read/write, properties read) were
+  written from the integration's endpoints, not tested against a live invite-code screen — verify.

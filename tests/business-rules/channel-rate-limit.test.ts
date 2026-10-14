@@ -154,20 +154,20 @@ describe("Beds24 rate-limit handling", () => {
     });
   });
 
-  it("the Hub cannot change the self-throttle floor — it protects Osta's shared pool", async () => {
+  it("the Hub sets its own self-throttle floor — the credit pool is the enterprise's own Beds24 account", async () => {
     stubBeds24WithHeaders({ refreshToken: "r5", token: "a5", expiresIn: 86400 }, null);
     const created = await createConnection({ ...(await channelTarget(enterpriseId)), name: `RL Route ${Date.now()}`, inviteCode: "v" });
 
     cookieJar.clear();
     await createSession(adminId);
-    // Since 2026-08-03 the threshold is Osta-level: under the master-account topology
-    // every tenant drains ONE Beds24 credit pool, so a tenant raising their own floor
-    // would spend everyone else's credits. Set it from /api/osta/channels/connections.
-    const res = await connectionByIdRoute.PATCH();
-    expect(res.status).toBe(403);
-
-    const row = await prisma.channelConnection.findUniqueOrThrow({ where: { id: created.id } });
-    expect(row.rateLimitPauseThreshold).toBeNull();
+    const patch = (body: unknown) =>
+      connectionByIdRoute.PATCH(new Request("http://localhost/x", { method: "PATCH", body: JSON.stringify(body) }), {
+        params: Promise.resolve({ id: created.id }),
+      });
+    expect((await patch({ rateLimitPauseThreshold: 25 })).status).toBe(200);
+    expect((await prisma.channelConnection.findUniqueOrThrow({ where: { id: created.id } })).rateLimitPauseThreshold).toBe(25);
+    // A floor that can never be reached is refused rather than silently disabling the feature.
+    expect((await patch({ rateLimitPauseThreshold: -1 })).status).toBe(400);
     await destroySession();
   });
 

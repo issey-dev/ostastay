@@ -2,7 +2,8 @@
 
 Status: **DONE** (branch `feat/hub-setup-separation`, release 7.0.0) — Phases 0–6 built
 2026-09-23. Phase 5b (Allocations, Spa and Excursion catalogues) done 2026-09-26 in 8.4.2.
-Open follow-up: O-1 (richer dropdown fields) — see TODO.md and "Decisions taken without
+Update 2026-10-14: the channel manager connect/re-authorize/disconnect is no longer Osta-only —
+see DECISIONS.md. Open follow-up: O-1 (richer dropdown fields) — see TODO.md and "Decisions taken without
 asking" below.
 Owner decisions are recorded in [DECISIONS.md](DECISIONS.md) ("2026-09-23 — Setup moves to
 the Hub, separated by Enterprise and Property"). This file is the build plan.
