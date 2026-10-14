@@ -49,7 +49,7 @@ export default function GoLive() {
       <ul>
         <Check>Excursions have prices, schedules and generated departures; spa has treatments, qualified therapists with hours, rooms and settings.</Check>
         <Check>Online booking: the rate plan to sell is chosen and priced; a test booking made from the website appears at the desk.</Check>
-        <Check>Channel manager: every room type mapped, default rate plan chosen, preview checked, sharing on.</Check>
+        <Check>Channel manager: <a href="/docs/configuration/property/channel-manager-setup">connected to your Beds24 account</a>, webhook set, every room type mapped, default rate plan chosen, preview checked, sharing on.</Check>
       </ul>
 
       <H2>A dry run</H2>

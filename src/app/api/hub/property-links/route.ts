@@ -17,12 +17,11 @@ export async function GET(request: Request) {
   }
 }
 
-// Linking a property is part of CONNECTING it, which Uppsolut does from the Osta console
-// (one connection per property, created together with its link — owner, 2026-09-23).
-// Refused here rather than only hidden in the Hub UI.
+// Linking a property is part of CONNECTING it (one connection per property, created together
+// with its link — owner, 2026-09-23), done through POST /api/hub/connections.
 export async function POST() {
   return NextResponse.json(
-    { error: "A property is linked to the channel manager when Uppsolut connects it. Contact Uppsolut to connect a property." },
+    { error: "A property is linked to the channel manager when it is connected. Use Connect on the Channel Manager page." },
     { status: 403 }
   );
 }

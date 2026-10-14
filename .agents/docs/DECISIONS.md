@@ -3513,3 +3513,27 @@ App-owner direction for the Revenue module and stop sale.
   the default). It is a link only: the guest's name and room show on the shift list and the
   exchange receipt, nothing is posted to their folio. Only an in-house reservation at the same
   property can be linked (`CurrencyExchange.reservationId`, `CashierPaidOut.reservationId`).
+
+## 2026-10-14 — Each enterprise connects its own Beds24 account (owner, 8.8.4)
+
+**Supersedes** "Beds24 topology — ONE master account" (2026-08-02) and "Beds24 is administered by
+Uppsolut" (2026-09-23) as the ONLY route. Owner: enterprises must be able to hold their own Beds24
+connection and set it up themselves; Uppsolut's own-account setup stays **for properties that opt
+for it**.
+
+- **Self-service (default).** A property admin with INTEGRATIONS create/update/delete at the
+  property connects (invite code + Beds24 property id), re-authorizes, corrects the Beds24 id,
+  mints/replaces the webhook URL, runs a deep resync, sets the rate-limit floor / poll window and
+  disconnects, all from `Hub › property › Channel Manager`. Routes: `POST /api/hub/connections`,
+  `PATCH|DELETE /api/hub/connections/[id]`, `.../[id]/webhook`, `.../[id]/resync`, authorised by
+  `src/lib/channels/hub-access.ts` (own enterprise; a PROPERTY-scoped user only their own property).
+  Both paths end in `createConnection()` (property + one-connection + licence cap checked BEFORE the
+  single-use invite code is spent).
+- **Managed by Uppsolut (opt-in).** The Osta console routes (`/api/osta/channels/**`) are unchanged:
+  Uppsolut connects the property through its own master account. The result looks the same in the
+  customer's Hub (already connected).
+- The API-credit pool is per Beds24 ACCOUNT, so for self-connected properties the pause threshold
+  protects the enterprise's own pool; the Osta console's "shared pool" card still only describes the
+  master account.
+- Not changed: one connection per property; mapping, sharing switch and defaults as before.
+- Docs: new guide `/docs/configuration/property/channel-manager-setup` (with screenshots).

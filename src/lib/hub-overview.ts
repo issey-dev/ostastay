@@ -146,7 +146,7 @@ export async function loadHubOverview(ctx: AuthContext, slug: string): Promise<H
           id: `${p.id}:channel-token`,
           severity: daysLeft <= 0 ? "critical" : "warning",
           title: daysLeft <= 0 ? "Channel manager credential has lapsed" : `Channel manager credential lapses in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
-          detail: "It has not been refreshed recently. Run a check on the connection to refresh it; if that fails, contact Uppsolut.",
+          detail: "It has not been refreshed recently. Run a check on the connection to refresh it; if that fails, re-authorize it with a new invite code.",
           path: "channel-manager",
           actionLabel: "Check the connection",
         })

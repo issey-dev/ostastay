@@ -70,10 +70,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 }
 
-// Unlinking is DISCONNECTING the property, which only Uppsolut does (Osta console).
+// Unlinking is DISCONNECTING the property: DELETE /api/hub/connections/[id].
 export async function DELETE() {
   return NextResponse.json(
-    { error: "Only Uppsolut can disconnect a property from the channel manager. Contact Uppsolut." },
+    { error: "A property is disconnected from the channel manager by removing its connection on the Channel Manager page." },
     { status: 403 }
   );
 }

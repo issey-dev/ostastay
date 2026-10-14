@@ -17,6 +17,7 @@ import { prisma } from "../src/lib/db";
 import { goLiveDate } from "../src/lib/business-date";
 import { chartModulesFor, ensureChargeTree, ensureFeeRules } from "../src/lib/posting/ensure-charge-tree";
 import { expandScheduleDates } from "../src/lib/excursions";
+import { generateWebhookToken, hashWebhookToken } from "../src/lib/channels/webhook-token";
 import { seedTransport } from "./seed/seed-transport";
 
 if (process.env.NODE_ENV === "production") {
@@ -512,6 +513,28 @@ async function main() {
     await findOrCreate(() => prisma.spaRoom.findFirst({ where: { propertyId: P, name: r.name } }), () => prisma.spaRoom.create({ data: { propertyId: P, ...r } }));
   }
   await prisma.spaSettings.upsert({ where: { propertyId: P }, update: {}, create: { propertyId: P, defaultOpeningTime: "09:00", defaultClosingTime: "20:00" } });
+
+  // ── Channel manager ─────────────────────────────────────────────────────────────
+  // The resort is connected (fictional Beds24 property id, placeholder credential — never a
+  // real token) so the Channel Manager guide can show the connected screen; the lodge stays
+  // unconnected for the "Connect to Beds24" screens.
+  if (!(await prisma.channelConnection.findUnique({ where: { propertyId: P } }))) {
+    const now = new Date();
+    await prisma.channelConnection.create({
+      data: {
+        enterpriseId: enterprise.id,
+        propertyId: P,
+        provider: "BEDS24",
+        name: "Beds24 — Coral Bay Resort",
+        refreshToken: "docs-demo-placeholder",
+        status: "CONNECTED",
+        lastTokenRefreshAt: now,
+        lastHealthCheckAt: now,
+        webhookTokenHash: hashWebhookToken(generateWebhookToken()),
+        propertyLinks: { create: { propertyId: P, externalPropertyId: "482915", syncEnabled: false } },
+      },
+    });
+  }
 
   // ── Transportation ──────────────────────────────────────────────────────────────
   const resortNow = await prisma.property.findUniqueOrThrow({ where: { id: P }, select: { businessDate: true } });

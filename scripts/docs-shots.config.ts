@@ -112,6 +112,10 @@ export const SHOTS: Shot[] = [
   { name: "ops-daily-reports-download", path: (ids) => `/e/${ids.slug}/dashboard/reports?report=res-availability&q=${encodeURIComponent(JSON.stringify({ range: { from: "2026-09-24", to: "2026-10-07" } }))}`, dialog: true, before: async ({ page }) => { await settle(2500); await click(page, "Download as") } },
   { name: "ops-transportation-board", path: (ids) => `/e/${ids.slug}/dashboard/transportation`, maxHeight: 1000 },
   { name: "prop-online-booking", path: resort("online-booking") },
+  { name: "prop-channel-not-connected", path: lodge("channel-manager"), maxHeight: 700 },
+  { name: "prop-channel-connect-dialog", path: lodge("channel-manager"), dialog: true, maxHeight: 900, before: ({ page }) => click(page, "Connect to Beds24") },
+  { name: "prop-channel-connected", path: resort("channel-manager"), maxHeight: 1400 },
+  { name: "prop-channel-webhook-dialog", path: resort("channel-manager"), dialog: true, maxHeight: 700, before: ({ page }) => click(page, "Replace webhook URL").then(() => click(page, "Replace URL")) },
   { name: "prop-channel-mapping", path: resort("channel-manager/mapping") },
   { name: "prop-green-tax", path: resort("green-tax") },
 ];

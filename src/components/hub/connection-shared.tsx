@@ -41,6 +41,64 @@ export type Connection = {
   pollLookbackHours: number | null
 }
 
+// The scheduled poll's lookback window — the outage self-heal horizon. Blank = the built-in
+// 48h default; the API bounds stored values at 30 days (a routine poll wider than that is a
+// standing bulk export — use Deep resync for one-off catch-ups instead). Shared by the Osta
+// console and the property Hub.
+export function PollWindowRow({
+  c,
+  canManage,
+  onSave,
+}: {
+  c: Connection
+  canManage: boolean
+  onSave: (hours: number | null) => Promise<boolean>
+}) {
+  const [draft, setDraft] = useState(c.pollLookbackHours?.toString() ?? "")
+
+  useEffect(() => {
+    setDraft(c.pollLookbackHours?.toString() ?? "")
+  }, [c.pollLookbackHours])
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <span className="text-sm font-medium">Booking poll window</span>
+      <p className="text-sm text-muted-foreground">
+        Each scheduled poll re-reads the last {c.pollLookbackHours ?? 48} hours
+        {c.pollLookbackHours === null && " (default)"} — any outage shorter than this self-heals automatically.
+      </p>
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Label htmlFor={`poll-window-${c.id}`} className="text-xs text-muted-foreground">
+            Look back
+          </Label>
+          <Input
+            id={`poll-window-${c.id}`}
+            type="number"
+            min={1}
+            step={1}
+            value={draft}
+            placeholder="48"
+            className="h-8 w-24"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => {
+              const trimmed = draft.trim()
+              const parsed = trimmed === "" ? null : Number(trimmed)
+              if (parsed !== null && (!Number.isInteger(parsed) || parsed < 1)) {
+                setDraft(c.pollLookbackHours?.toString() ?? "")
+                return
+              }
+              if (parsed === (c.pollLookbackHours ?? null)) return
+              void onSave(parsed)
+            }}
+          />
+          <span className="text-xs text-muted-foreground">hours (blank = 48h default, max 720)</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function formatDateTime(iso: string | null) {
   if (!iso) return "Never"
   return new Date(iso).toLocaleString()

@@ -99,6 +99,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/configuration/property/spa", title: "Spa", summary: "Add-on: treatments, therapists, treatment rooms and spa policies." },
           { href: "/docs/configuration/property/transportation", title: "Transportation", summary: "Transfer types, locations, routes, boats, providers and rates." },
           { href: "/docs/configuration/property/online-booking", title: "Online booking", summary: "What the property's own website shows and sells." },
+          { href: "/docs/configuration/property/channel-manager-setup", title: "Connect your channel manager", summary: "Connect a property to your own Beds24 account, step by step." },
           { href: "/docs/configuration/property/channel-manager", title: "Channel manager", summary: "Mapping rooms and rates to online travel agencies." },
           { href: "/docs/configuration/property/green-tax", title: "Green Tax register", summary: "Checking and filing the monthly Green Tax register." },
         ],
