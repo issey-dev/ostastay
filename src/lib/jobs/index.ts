@@ -9,7 +9,8 @@ import { convertEligibleBookings } from "@/lib/channels/inbound/convert";
 import { redactErrorMessage } from "@/lib/channels/redact";
 import { getPlatformAlertRecipients, isPlatformSmtpConfigured } from "@/lib/mailer";
 import { sendPlatformMail, MAIL_KINDS } from "@/lib/mail-sender";
-import { buildChannelAlertEmail, type ChannelAlertConnection } from "@/lib/email-templates";
+import { buildChannelAlertEmail, buildChannelOwnerAlertEmail, type ChannelAlertConnection } from "@/lib/email-templates";
+import { getChannelAlertRecipients } from "@/lib/channels/alert-recipients";
 import { isIdleExpired, revokeSession } from "@/lib/session-store";
 import type { Job } from "@/lib/jobs/runner";
 import { processDueWebhooks } from "@/lib/website-api/webhooks";
@@ -54,6 +55,45 @@ async function alertChannelFailures(connections: ChannelAlertConnection[]): Prom
 }
 
 /**
+ * Tell the enterprise's own admins (Integrations update rights, scoped to the property)
+ * that their connections just broke — they connect their own Beds24 account, so they can
+ * fix it. Same never-throws, silent-without-platform-SMTP rules as the ops alert; one
+ * recipient failing must not stop the others.
+ */
+async function alertEnterpriseOfChannelFailures(
+  enterpriseId: string,
+  enterpriseName: string,
+  failures: { propertyId: string; propertyName: string; connectionName: string; error: string | null }[]
+): Promise<void> {
+  if (failures.length === 0 || !isPlatformSmtpConfigured()) return;
+  try {
+    const recipients = await getChannelAlertRecipients(
+      enterpriseId,
+      failures.map((f) => f.propertyId)
+    );
+    for (const r of recipients) {
+      try {
+        const mine = failures.filter((f) => r.propertyIds.includes(f.propertyId));
+        if (mine.length === 0) continue;
+        const mail = buildChannelOwnerAlertEmail({ firstName: r.firstName, enterpriseName, connections: mine });
+        await sendPlatformMail({
+          kind: MAIL_KINDS.CHANNEL_ALERT,
+          enterpriseId,
+          to: r.email,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
+      } catch (e) {
+        console.error("Failed to send channel-manager alert to an enterprise user:", e);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to send channel-manager alerts to the enterprise:", e);
+  }
+}
+
+/**
  * Keep channel-manager credentials alive.
  *
  * This closes the real operational gap from the connection screen: Beds24 refresh tokens
@@ -71,7 +111,7 @@ export const channelKeepAliveJob: Job = {
   run: async (enterpriseId) => {
     const connections = await prisma.channelConnection.findMany({
       where: { enterpriseId, refreshToken: { not: null } },
-      select: { id: true, name: true, lastTokenRefreshAt: true, provider: true, status: true },
+      select: { id: true, name: true, lastTokenRefreshAt: true, provider: true, status: true, propertyId: true, property: { select: { name: true } } },
     });
 
     const due = connections.filter((c) => getProvider(c.provider).needsKeepAlive(c.lastTokenRefreshAt));
@@ -85,7 +125,7 @@ export const channelKeepAliveJob: Job = {
     // Alerting on "is currently failing" instead would re-send every sweep for as long as
     // the fault lasts, which is how an alert mailbox becomes one nobody reads. A
     // connection that was already ERROR is a known problem and stays silent.
-    const newlyFailed: { name: string; provider: string; error: string | null }[] = [];
+    const newlyFailed: { name: string; provider: string; error: string | null; propertyId: string; propertyName: string }[] = [];
 
     for (const c of due) {
       // testConnection records its own outcome on the connection and never throws — a
@@ -99,6 +139,8 @@ export const channelKeepAliveJob: Job = {
           newlyFailed.push({
             name: c.name,
             provider: c.provider,
+            propertyId: c.propertyId,
+            propertyName: c.property.name,
             // Redacted again on the way out: lastError is short and operator-readable, but
             // it can quote a provider message, and email leaves the system entirely.
             error: result.lastError ? redactErrorMessage(result.lastError) : null,
@@ -119,6 +161,11 @@ export const channelKeepAliveJob: Job = {
           provider: f.provider,
           error: f.error,
         }))
+      );
+      await alertEnterpriseOfChannelFailures(
+        enterpriseId,
+        enterprise?.name ?? "your enterprise",
+        newlyFailed.map((f) => ({ propertyId: f.propertyId, propertyName: f.propertyName, connectionName: f.name, error: f.error }))
       );
     }
 

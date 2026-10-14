@@ -3041,9 +3041,9 @@ Reuse: the End of Day extend-stay route, the reservation save's availability che
 
 ## Channel manager self-service follow-ups (2026-10-14, 8.8.4)
 
-- [ ] **Keep-alive failure emails still go only to Uppsolut ops** (`alertChannelFailures`,
-  `buildChannelAlertEmail`). Self-connected enterprises can fix a lapsed credential themselves, so
-  the alert should ALSO reach them (Hub Overview already shows the banner). Needs a recipient rule.
+- [x] **Keep-alive failure emails now also reach the enterprise** (done): active users who can update
+  Integrations, limited to the failing property (`src/lib/channels/alert-recipients.ts`,
+  `buildChannelOwnerAlertEmail`), sent from the platform sender; ops still gets its own alert.
 - [ ] **No flag says who set a connection up** (self vs Uppsolut-managed): the Hub shows the same
   controls for both. Add `ChannelConnection.managedBy` if Uppsolut-managed ones should hide
   re-authorize/disconnect from the tenant.

@@ -123,7 +123,7 @@ export default function ChannelManagerSetup() {
       <Callout title="The 30-day rule" tone="warn">
         <p>
           Beds24 cancels a credential that goes 30 days without being used. Uppsolut Stay refreshes it automatically well before
-          then, and the page warns you if it is getting close. If it ever lapses the page says so: choose{" "}
+          then, and the page warns you if it is getting close. If a connection stops working, the people with Integrations rights for the property are emailed. If it ever lapses the page says so: choose{" "}
           <strong>Re-authorize</strong>, paste a new invite code from Beds24, and everything else stays as it was.
         </p>
       </Callout>

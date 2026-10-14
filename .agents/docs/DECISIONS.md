@@ -3537,3 +3537,7 @@ for it**.
   master account.
 - Not changed: one connection per property; mapping, sharing switch and defaults as before.
 - Docs: new guide `/docs/configuration/property/channel-manager-setup` (with screenshots).
+- **Channel failure alerts also go to the enterprise** (owner, 2026-10-14). On the same CONNECTED → failed
+  transition, active users whose role can update INTEGRATIONS are emailed — enterprise-scope users for any
+  failing property, property-scope users only for their own — from the platform sender (not billed). The
+  Osta ops mailbox keeps its own alert. Supersedes "Channel alerts go to Uppsolut ops, not to the hotel".

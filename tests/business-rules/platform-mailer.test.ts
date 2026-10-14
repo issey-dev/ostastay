@@ -12,6 +12,7 @@ import {
   escapeHtml,
   buildEnterpriseWelcomeEmail,
   buildChannelAlertEmail,
+  buildChannelOwnerAlertEmail,
   appBaseUrl,
 } from "@/lib/email-templates";
 import { encryptSecret } from "@/lib/secret-crypto";
@@ -285,5 +286,20 @@ describe("email templates", () => {
     });
     expect(mail.html).not.toContain("<script>");
     expect(mail.html).toContain("&lt;script&gt;");
+  });
+
+  it("tells the hotel which property failed and how to fix it, escaping provider text", () => {
+    const mail = buildChannelOwnerAlertEmail({
+      firstName: "Aisha",
+      enterpriseName: "Coral Bay",
+      connections: [{ propertyName: "Resort", connectionName: "Beds24", error: `<b>expired</b>` }],
+    });
+    expect(mail.subject).toContain("Coral Bay");
+    for (const body of [mail.html, mail.text]) {
+      expect(body).toContain("Aisha");
+      expect(body).toContain("Resort");
+      expect(body).toContain("Re-authorize");
+    }
+    expect(mail.html).not.toContain("<b>expired</b>");
   });
 });

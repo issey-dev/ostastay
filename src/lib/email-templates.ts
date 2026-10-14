@@ -220,6 +220,64 @@ export function buildChannelAlertEmail(params: { connections: ChannelAlertConnec
   }
 }
 
+export type ChannelOwnerAlertConnection = { propertyName: string; connectionName: string; error: string | null }
+
+/**
+ * The same failure, told to the HOTEL. Since 2026-10-14 an enterprise connects its own Beds24
+ * account, so a lapsed credential is something its own admins can fix (Check, or Re-authorize
+ * with a new invite code) — this goes to the users who hold Integrations update rights.
+ * The ops mailbox still gets the platform alert (buildChannelAlertEmail).
+ */
+export function buildChannelOwnerAlertEmail(params: {
+  firstName: string
+  enterpriseName: string
+  connections: ChannelOwnerAlertConnection[]
+}): BuiltEmail {
+  const { firstName, enterpriseName, connections } = params
+  const count = connections.length
+  const plural = count === 1 ? "connection" : "connections"
+
+  const items = connections
+    .map(
+      (c) => `<li style="margin: 0 0 8px; font-size: 14px; line-height: 1.6; color: #374151;">
+        <strong>${escapeHtml(c.propertyName)}</strong> (${escapeHtml(c.connectionName)}):
+        <span style="color: #b91c1c;">${escapeHtml(c.error ?? "Unknown error")}</span>
+      </li>`
+    )
+    .join("\n")
+
+  const bodyHtml = `
+    <p style="margin: 0 0 14px; font-size: 14px; line-height: 1.6; color: #374151;">Hello ${escapeHtml(firstName)},</p>
+    <p style="margin: 0 0 14px; font-size: 14px; line-height: 1.6; color: #374151;">
+      The channel manager ${plural} below stopped working for ${escapeHtml(enterpriseName)}. Until it is fixed,
+      availability and prices are not being sent to the booking channels and new bookings may not arrive.
+    </p>
+    <ul style="margin: 0 0 18px; padding-left: 20px;">${items}</ul>
+    <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #374151;">
+      To fix it, open the Hub, choose the property, then <strong>Channel Manager</strong>. Choose <strong>Check</strong>; if the
+      credentials have lapsed, choose <strong>Re-authorize</strong> and paste a new invite code from Beds24. Beds24 cancels a
+      credential that goes 30 days unused and it cannot be revived.
+    </p>`
+
+  const text = [
+    `Hello ${firstName},`,
+    ``,
+    `The channel manager ${plural} below stopped working for ${enterpriseName}. Until it is fixed,`,
+    `availability and prices are not being sent to the booking channels and new bookings may not arrive.`,
+    ``,
+    ...connections.map((c) => `- ${c.propertyName} (${c.connectionName}): ${c.error ?? "Unknown error"}`),
+    ``,
+    `To fix it: open the Hub, choose the property, then Channel Manager. Choose Check; if the credentials`,
+    `have lapsed, choose Re-authorize and paste a new invite code from Beds24.`,
+  ].join("\n")
+
+  return {
+    subject: `[${PRODUCT_NAME}] Channel manager ${plural} need attention — ${enterpriseName}`,
+    html: layout({ title: `Channel manager: ${count} ${plural} failing`, bodyHtml }),
+    text,
+  }
+}
+
 /** The message behind the "Send test email" buttons — proves an end-to-end delivery, not just auth. */
 export function buildSmtpTestEmail(params: { sender: string }): BuiltEmail {
   const bodyHtml = `
