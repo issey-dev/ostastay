@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { destroySession } from "@/lib/auth";
 
 // A Server Component that finds requireSession() failing can't clear the auth_token
@@ -11,7 +10,15 @@ import { destroySession } from "@/lib/auth";
 // straight back to /dashboard — which failed the same requireSession() check and
 // redirected back here, forever: the "too many redirects" crash. Route Handlers CAN clear
 // cookies, so every one of those redirect("/login") call sites points here instead.
-export async function GET(request: Request) {
+//
+// The Location is deliberately RELATIVE. In the standalone server (Dockerfile sets
+// HOSTNAME=0.0.0.0 so it listens on every interface behind Caddy), a Route Handler's
+// request.url is built from that bind address, not the browser's Host header — so the
+// old `NextResponse.redirect(new URL("/login", request.url))` sent users to
+// https://0.0.0.0:3000/login on every session timeout. A relative Location is resolved
+// by the browser against the public URL it actually requested (RFC 9110 §10.2.2), which
+// is also what proxy.ts's redirects already emit. Don't build an absolute URL here.
+export async function GET() {
   await destroySession();
-  return NextResponse.redirect(new URL("/login", request.url));
+  return new Response(null, { status: 307, headers: { Location: "/login" } });
 }
