@@ -17,6 +17,26 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.6",
+    date: "2026-11-07",
+    highlights: "Small touches across the daily screens: a dashboard that tells you how to fill it, check-in buttons that say what they will do, a warning that names exactly what is missing, a Tape Chart that is easier to read and keeps its room names in view, and tidier page buttons.",
+    improved: [
+      "Dashboard: when no tiles are showing, the page now says so and offers a Customise dashboard button. Before, only the status chips appeared and the rest of the page looked empty.",
+      "Dashboard: the status chips that open another page (Night Audit, Cashier shifts) now end in an arrow and show where they lead when you hover over them.",
+      "Front Desk and Reservations: when an arrival has no room yet, the Check in button now reads Assign & check in, because the first step is choosing a room. A hint explains it.",
+      "Front Desk: the warning beside an arrival's name now says exactly what is missing from the guest's profile (nationality, date of birth, ID document), not just that something is.",
+      "Tape Chart: booking cards show the guest name and the full confirmation number with nothing cut off (hover a card for the status, the colour and the key above still show it). Weekends are shaded, today's column is highlighted, and the room names are easier to read.",
+      "Tape Chart: the date row and the room column stay in view as you scroll sideways or down.",
+      "Reservations: the list shows row-shaped placeholders while it loads, so it no longer jumps when the bookings appear, and the Actions column has room for the longer Assign & check in button.",
+      "Housekeeping: a room whose guest leaves today now has a tinted card and a highlighted Due out tag, so it stands out from the other occupied rooms.",
+      "Reservations and Housekeeping: each page now has one main button and a More menu for the rest. Reservations: New booking, with Tape Chart and Auto-Assign under More (now also reachable on a phone). Housekeeping: Select, with Task sheets and Refresh under More; while rooms are ticked it shows Done and Select all.",
+      "A new guide, Dashboard and Housekeeping, in the Operations guide, and updated Front Desk, Reservations and Tape Chart guide with a section on reading the Tape Chart.",
+    ],
+    fixed: [
+      "Tape Chart: when you scrolled the chart sideways, booking cards slid over the room names. The room names now stay on top and the cards slide underneath.",
+    ],
+  },
+  {
     version: "8.8.4",
     date: "2026-10-14",
     highlights: "Connect your own channel manager: each enterprise can now link its properties to its own Beds24 account, without asking Uppsolut.",

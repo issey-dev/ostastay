@@ -17,6 +17,7 @@ import {
   BedDouble,
   Calculator,
   CalendarDays,
+  ChevronRight,
   ClipboardList,
   Compass,
   Contact,
@@ -322,6 +323,10 @@ export function OperationsDashboard({
   const onThisPage = layout.widgets.filter((w) => !w.hidden && w.pageId === activePage.id && availableIds.has(w.id))
   const hiddenHere = layout.widgets.filter((w) => w.hidden && availableIds.has(w.id)).length
   const insightCount = onThisPage.filter((w) => PHONE_INSIGHT_IDS.has(w.id)).length
+  // The status ribbon is a header strip, not a tile: a page holding only the ribbon still
+  // reads as empty, so it must not suppress the "Customise dashboard" prompt below.
+  const ribbonOnPage = onThisPage.some((w) => w.id === "ribbon") && nodes.ribbon != null
+  const hasTiles = onThisPage.some((w) => w.id !== "ribbon")
 
   return (
     <div className={cn("space-y-5 transition-opacity duration-200", refreshing && "opacity-70")}>
@@ -384,19 +389,28 @@ export function OperationsDashboard({
         </div>
       )}
 
-      {onThisPage.length === 0 ? (
-        // One quiet line, not a big card (DESKTOP_PLAN Phase 3 — clean over convenient).
-        <EmptyState
-          size="inline"
-          icon={LayoutDashboard}
-          title={layout.pages.length > 1 ? `Nothing on "${activePage.name}" yet` : "Nothing on this dashboard yet"}
-          description={hiddenHere > 0 ? `· ${hiddenHere} tile${hiddenHere === 1 ? "" : "s"} available` : undefined}
-          action={
-            <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setSettingsOpen(true)}>
-              Customise
-            </Button>
-          }
-        />
+      {!hasTiles ? (
+        <>
+          {ribbonOnPage && nodes.ribbon}
+          <div className="rounded-2xl bg-card ring-1 ring-foreground/5">
+            <EmptyState
+              icon={LayoutDashboard}
+              className="py-10"
+              title={layout.pages.length > 1 ? `Nothing on "${activePage.name}" yet` : "Nothing on this dashboard yet"}
+              description={
+                hiddenHere > 0
+                  ? `${hiddenHere} tile${hiddenHere === 1 ? " is" : "s are"} available — pick the figures, charts and lists you want to see here.`
+                  : "Add tiles to see the figures, charts and lists you want here."
+              }
+              action={
+                <Button onClick={() => setSettingsOpen(true)}>
+                  <Settings className="h-4 w-4" />
+                  Customise dashboard
+                </Button>
+              }
+            />
+          </div>
+        </>
       ) : (
         /* One dense 12-column grid for everything. `dense` is what makes a hidden or
            resized widget close its own gap instead of leaving a hole — the auto-fit the
@@ -1117,6 +1131,7 @@ function OpsRibbon({ data, dash }: { data: DashboardOverview; dash: string }) {
         icon={Calculator}
         tone={tone}
         href={`${dash}/financials/night-audit`}
+        hint={na.daysBehind > 1 && !na.inProgress ? "Open Night Audit to close the days still open" : "Open Night Audit"}
         label={
           na.inProgress
             ? `Night Audit running — step ${na.stepsDone + 1} of ${na.totalSteps}`
@@ -1135,6 +1150,7 @@ function OpsRibbon({ data, dash }: { data: DashboardOverview; dash: string }) {
         icon={Wallet}
         tone={data.cashiering.openShifts > 0 ? "info" : "neutral"}
         href={`${dash}/cashiering`}
+        hint="Open Cashiering"
         label={`${data.cashiering.openShifts} cashier shift${data.cashiering.openShifts === 1 ? "" : "s"} open`}
       />
     )
@@ -1171,11 +1187,13 @@ const CHIP_TONES: Record<string, string> = {
   neutral: "bg-muted text-muted-foreground ring-border",
 }
 
-function Chip({ icon: Icon, label, tone, href }: { icon: React.ComponentType<{ className?: string }>; label: string; tone: string; href?: string }) {
+function Chip({ icon: Icon, label, tone, href, hint }: { icon: React.ComponentType<{ className?: string }>; label: string; tone: string; href?: string; hint?: string }) {
+  // A linked chip ends in a chevron so it reads as a shortcut, not just a status.
   const content = (
     <>
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {label}
+      {href && <ChevronRight aria-hidden className="-mr-1 h-3 w-3 shrink-0 opacity-60" />}
     </>
   )
   const className = cn(
@@ -1184,7 +1202,7 @@ function Chip({ icon: Icon, label, tone, href }: { icon: React.ComponentType<{ c
     href && "transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
   )
   return href ? (
-    <Link href={href} className={className}>
+    <Link href={href} title={hint} className={className}>
       {content}
     </Link>
   ) : (

@@ -127,6 +127,9 @@ export function RoomStatusCard({
     <div
       className={cn(
         "group relative flex min-w-0 flex-col gap-1 border border-border bg-card py-2.5 pr-3 pl-4 text-xs transition-colors hover:border-foreground/25",
+        // A guest leaving today is the room the desk will want next: warm border and wash so
+        // it stands out from the other occupied rooms at a glance.
+        f.isDueOut && "border-warning/50 bg-warning-muted/30",
         loading && "opacity-60",
         isSelected && "border-primary ring-2 ring-primary/40"
       )}
@@ -232,7 +235,7 @@ export function RoomStatusCard({
       {/* Occupancy */}
       {occ ? (
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-foreground">
-          <span className={cn(f.isDueOut ? "font-semibold text-warning" : "text-muted-foreground")}>
+          <span className={cn(f.isDueOut ? "rounded bg-warning-muted px-1.5 py-0.5 font-bold text-warning ring-1 ring-inset ring-warning/30" : "text-muted-foreground")}>
             {f.isDueOut ? "Due out" : "Occupied"}
           </span>
           <span aria-hidden className="text-muted-foreground">·</span>

@@ -1,11 +1,12 @@
 "use client"
 
 import { GoldStar } from "@/components/ui/gold-star"
-import { AutoAssignButton } from "@/components/front-office/auto-assign-button"
+import { useAutoAssign } from "@/components/front-office/auto-assign-button"
+import { ActionBar } from "@/components/ui/action-bar"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship, Wand2 } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -111,6 +112,11 @@ type Reservation = {
     }
   }[]
 }
+
+// No room on the first stay segment yet — the check-in wizard then asks for one first, so the
+// button says so instead of promising a plain "Check in".
+const hasNoRoom = (res: Reservation) => !res.assignments?.[0]?.room
+const checkInLabel = (res: Reservation) => (hasNoRoom(res) ? "Assign & check in" : "Check in")
 
 const getActiveTasks = (res: Reservation) => {
   return res.assignments?.flatMap(a => a.room?.housekeepingTasks || []).filter(t => t.status !== 'COMPLETED') || []
@@ -290,6 +296,8 @@ function ReservationsList() {
   const confirm = useConfirm()
   const propertyId = currentProperty?.id ?? ""
   const enterpriseId = currentProperty?.enterpriseId ?? ""
+  // Started from the header's "More" menu; its review dialog is rendered with the header.
+  const autoAssign = useAutoAssign({ propertyId, onDone: () => void fetchData() })
 
   const viewUrl = (id: string) => `/e/${slug}/dashboard/reservations/${id}`
 
@@ -643,8 +651,14 @@ function ReservationsList() {
     return (
       <div className="flex items-center justify-end gap-1.5">
         {canCheckIn(res.status, res.checkInDate, currentProperty?.businessDate) && (
-          <Button size="sm" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" variant="outline" onClick={() => handleCheckIn(res)}>
-            <Key className="h-3.5 w-3.5 mr-1.5" /> Check in
+          <Button
+            size="sm"
+            className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30"
+            variant="outline"
+            title={hasNoRoom(res) ? "No room yet — you pick one first, then check in" : undefined}
+            onClick={() => handleCheckIn(res)}
+          >
+            <Key className="h-3.5 w-3.5 mr-1.5" /> {checkInLabel(res)}
           </Button>
         )}
         {res.status === "IN_HOUSE" && (
@@ -733,7 +747,7 @@ function ReservationsList() {
     }
     more.push({ label: "Edit", icon: Pencil, onSelect: () => router.push(editUrl) })
     const primary = canCheckIn(res.status, res.checkInDate, businessDate)
-      ? { label: "Check in", icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
+      ? { label: checkInLabel(res), icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
       : res.status === "IN_HOUSE"
         ? { label: "Check out", icon: LogOut, onSelect: () => handleCheckOut(res) }
         : undefined
@@ -800,10 +814,8 @@ function ReservationsList() {
 
   return (
     <div className="space-y-6">
-      {/* Auto-Assign and Tape Chart are desk-at-a-desk tools — a room grid and a bulk
-          assignment sweep are not phone work, and side by side they pushed the title
-          into two lines. Hidden below sm; New Booking stays, since that is the one
-          thing you do reach for on a phone. */}
+      {/* One primary (New booking) and a "More" menu for the rest (UX round 1: one primary,
+          one secondary). Auto-Assign and Tape Chart are desk tools, so they cost a click. */}
       <PageHeader
         title="Reservations"
         hint={
@@ -815,15 +827,18 @@ function ReservationsList() {
         }
         actions={
           <>
-            <AutoAssignButton propertyId={propertyId} onDone={() => fetchData()} className="hidden shadow-sm sm:inline-flex" />
-            <Link href={`/e/${slug}/dashboard/reservations/tape-chart`} className="hidden sm:block">
-              <Button variant="outline" className="shadow-sm">
-                <CalendarDays className="mr-2 h-4 w-4" /> Tape Chart
-              </Button>
-            </Link>
-            <Link href={`/e/${slug}/dashboard/reservations/new`}>
-              <Button><Plus className="mr-2 h-4 w-4" /> New booking</Button>
-            </Link>
+            <ActionBar
+              primary={
+                <Link href={`/e/${slug}/dashboard/reservations/new`}>
+                  <Button><Plus className="mr-2 h-4 w-4" /> New booking</Button>
+                </Link>
+              }
+              more={[
+                { label: "Tape Chart", icon: CalendarDays, onSelect: () => router.push(`/e/${slug}/dashboard/reservations/tape-chart`) },
+                { label: autoAssign.loading ? "Checking..." : "Auto-Assign", icon: Wand2, disabled: !propertyId || autoAssign.loading, onSelect: autoAssign.start },
+              ]}
+            />
+            {autoAssign.dialog}
           </>
         }
       />
@@ -1042,18 +1057,27 @@ function ReservationsList() {
             <Table className="table-fixed w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[26%]">Guest</TableHead>
-                  <TableHead className="w-[19%]">Stay</TableHead>
-                  <TableHead className="w-[13%]">Room</TableHead>
-                  <TableHead className="w-[20%]">Includes</TableHead>
+                  <TableHead className="w-[20%]">Guest</TableHead>
+                  <TableHead className="w-[22%]">Stay</TableHead>
+                  <TableHead className="w-[11%]">Room</TableHead>
+                  <TableHead className="w-[11%]">Includes</TableHead>
                   <TableHead className="w-[10%]">Status</TableHead>
-                  <TableHead className="w-[150px] text-right pr-4">Actions</TableHead>
+                  <TableHead className="w-[190px] text-right pr-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                  // Row-shaped (two-line guest/stay cells, a status pill, the action buttons) so the
+                  // list does not jump when the real rows land.
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i} aria-hidden>
+                      <TableCell><Skeleton className="h-4 w-32" /><Skeleton className="mt-1.5 h-3 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-36" /><Skeleton className="mt-1.5 h-3 w-14" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-14" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16 rounded-md" /></TableCell>
+                      <TableCell className="pr-4"><Skeleton className="ml-auto h-8 w-28" /></TableCell>
+                    </TableRow>
                   ))
                 ) : loadError ? (
                   <TableRow><TableCell colSpan={6} className="py-0">

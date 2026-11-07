@@ -17,9 +17,13 @@ function reservationBalance(folios: BalanceFolio[]): number {
 // An arrival's guest profile is "incomplete" (front desk should complete it before
 // check-in) when nationality, date of birth, OR any identification document is missing.
 // Only meaningful for individual guests — company/agent primaries have no such fields.
-function isProfileIncomplete(g: { profileType: string; nationality: string | null; dateOfBirth: Date | null; documents: { id: string }[] } | null): boolean {
-  if (!g || g.profileType !== "GUEST") return false;
-  return !g.nationality || !g.dateOfBirth || (g.documents?.length ?? 0) === 0;
+function missingProfileFields(g: { profileType: string; nationality: string | null; dateOfBirth: Date | null; documents: { id: string }[] } | null): string[] {
+  if (!g || g.profileType !== "GUEST") return [];
+  const missing: string[] = [];
+  if (!g.nationality) missing.push("nationality");
+  if (!g.dateOfBirth) missing.push("date of birth");
+  if ((g.documents?.length ?? 0) === 0) missing.push("ID document");
+  return missing;
 }
 
 export async function GET(request: Request) {
@@ -186,7 +190,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       businessDate: startOfToday,
       // Each row carries its outstanding balance; arrivals also carry a profile-completeness flag.
-      arrivals: arrivals.map(r => ({ ...r, balance: reservationBalance(r.folios), profileIncomplete: isProfileIncomplete(r.primaryGuest) })),
+      arrivals: arrivals.map(r => {
+        const profileMissing = missingProfileFields(r.primaryGuest);
+        return { ...r, balance: reservationBalance(r.folios), profileIncomplete: profileMissing.length > 0, profileMissing };
+      }),
       departures: departures.map(r => ({ ...r, balance: reservationBalance(r.folios) })),
       inHouse: inHouse.map(r => ({ ...r, balance: reservationBalance(r.folios) })),
       roomMovesToday,

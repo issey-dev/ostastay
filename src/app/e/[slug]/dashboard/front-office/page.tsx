@@ -57,6 +57,15 @@ const nightsBetween = (ci: string, co: string) =>
 const getActiveTasks = (res: any) =>
   (res.assignments ?? []).flatMap((a: any) => a.room?.housekeepingTasks ?? []).filter((t: any) => t.status !== "COMPLETED")
 
+// "Profile incomplete — missing nationality and ID document". Names exactly what the guest
+// lacks (the summary API sends `profileMissing`), so the desk knows what to ask for.
+const profileMissingLabel = (res: any) => {
+  const m: string[] = res.profileMissing ?? []
+  if (m.length === 0) return "Guest profile incomplete"
+  const list = m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0]
+  return `Profile incomplete — missing ${list}`
+}
+
 const FLAG_TONE: Record<string, string> = {
   info: "bg-info-muted text-info ring-info/20",
   warning: "bg-warning-muted text-warning ring-warning/20",
@@ -365,7 +374,11 @@ function FrontOfficeDashboardContent() {
         </Link>
         {(res.primaryGuest?.vipLevel || res.primaryGuest?.classification === "VIP") && <span title="VIP" className="shrink-0"><GoldStar className="h-4 w-4" /></span>}
         {warn && res.profileIncomplete && (
-          <span title="Guest profile incomplete — missing nationality, date of birth, or ID">
+          <span
+            role="img"
+            aria-label={profileMissingLabel(res)}
+            title={`${profileMissingLabel(res)} — complete it at check-in`}
+          >
             <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           </span>
         )}
@@ -530,7 +543,15 @@ function FrontOfficeDashboardContent() {
     const can = canCheckIn(res.status, res.checkInDate, bd)
     return {
       actions: [
-        { key: "in", label: "Check in", icon: Key, tone: "success" as const, disabled: !can, title: can ? undefined : "Not available to check in yet", onClick: () => setCheckInRes(res) },
+        {
+          key: "in",
+          label: unassigned ? "Assign & check in" : "Check in",
+          icon: Key,
+          tone: "success" as const,
+          disabled: !can,
+          title: !can ? "Not available to check in yet" : unassigned ? "No room yet — you pick one first, then check in" : undefined,
+          onClick: () => setCheckInRes(res),
+        },
         { key: "reg", label: "Register", icon: FileText, title: "Print the registration card", onClick: () => openRegCard(res.id) },
       ] as DeskAction[],
       more: [
@@ -738,7 +759,7 @@ function FrontOfficeDashboardContent() {
                           primary={
                             canCheckIn(res.status, res.checkInDate, bd) ? (
                               <Button variant="outline" className="h-10 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" onClick={() => setCheckInRes(res)}>
-                                <Key className="h-4 w-4 mr-1.5" /> Check in
+                                <Key className="h-4 w-4 mr-1.5" /> {unassigned ? "Assign & check in" : "Check in"}
                               </Button>
                             ) : unassigned ? (
                               <Button variant="outline" className="h-10" onClick={() => openAssign(res)}>
