@@ -17,6 +17,19 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.9.5",
+    date: "2026-11-07",
+    highlights: "A tidier Front Desk: the card and list switch moves to the end of the toolbar and cards get breathing room.",
+    improved: [
+      "Front Desk: on Arrivals, the card / list switch now sits at the far right, after Auto-Assign.",
+      "Front Desk: in card view the cards no longer touch the edges of the panel.",
+      "Front Desk: the quick-key reminder line is gone. The keys still work.",
+    ],
+    fixed: [
+      "Front Desk: pressing Enter now opens the selected booking even right after you click a tab.",
+    ],
+  },
+  {
     version: "8.9.4",
     date: "2026-11-07",
     highlights: "The Housekeeping board has a cleaner, roomier card, with fewer columns so each room has space to breathe.",

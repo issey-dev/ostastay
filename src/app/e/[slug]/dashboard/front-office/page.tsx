@@ -42,7 +42,7 @@ import { StatTile } from "@/components/ui/stat-tile"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { useUrlState } from "@/lib/use-url-state"
 import { FirstLoadFade } from "@/components/dashboard/motion-kit"
-import { dialogIsOpen, Kbd, useQuickKeys } from "@/components/shell/keyboard-shortcuts"
+import { dialogIsOpen, useQuickKeys } from "@/components/shell/keyboard-shortcuts"
 import { FRONT_DESK_TAB_ORDER, canUseSingleKey } from "@/lib/shortcuts"
 
 const FRONT_DESK_TABS = ["arrivals", "departures", "inhouse", "roommoves"] as const
@@ -443,9 +443,11 @@ function FrontOfficeDashboardContent() {
         if (activeId) setActiveRow(null)
         return
       }
-      // Enter only when nothing is focused — on a focused button or link it keeps its own meaning.
+      // Enter only when nothing is focused (or a tab trigger, which keeps focus after a click) —
+      // on a focused button or link it keeps its own meaning.
       if (k === "Enter") {
-        if (activeRes && e.target === document.body) {
+        const t = e.target as HTMLElement | null
+        if (activeRes && (t === document.body || t?.getAttribute?.("role") === "tab")) {
           e.preventDefault()
           router.push(viewUrl(activeRes.id))
         }
@@ -697,7 +699,7 @@ function FrontOfficeDashboardContent() {
     actions: [tracesAction(res), folioAction(res)] as DeskAction[],
     more: [{ key: "move", label: "Move room", icon: ArrowLeftRight, tone: "warning" as const, onClick: () => openRoomMove(res) }, viewAction(res)] as DeskAction[],
   })
-  const deskGrid = "grid gap-3 pb-1 md:grid-cols-2 2xl:grid-cols-3"
+  const deskGrid = "grid gap-3 md:grid-cols-2 md:p-4 2xl:grid-cols-3"
 
   if (loading && !data) {
     return (
@@ -824,18 +826,6 @@ function FrontOfficeDashboardContent() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Quick keys: a one-line reminder on desktop; the full list is behind "?". */}
-        {quickKeys && tab !== "roommoves" && (
-          <p className="-mt-1 hidden items-center gap-x-3 gap-y-1 text-xs text-muted-foreground lg:flex">
-            <span><Kbd>J</Kbd> <Kbd>K</Kbd> select</span>
-            {tab === "arrivals" && <span><Kbd>C</Kbd> check in</span>}
-            {tab !== "arrivals" && <span><Kbd>O</Kbd> check out</span>}
-            <span><Kbd>F</Kbd> folio</span>
-            <span><Kbd>Enter</Kbd> open</span>
-            <span><Kbd>?</Kbd> all shortcuts</span>
-          </p>
-        )}
-
         {/* Phone: no card chrome — the guest cards sit straight on the page rather than
             a card inside a card. */}
         <Card className="shadow-elevation-1 max-md:gap-0 max-md:overflow-visible max-md:rounded-none max-md:bg-transparent max-md:py-0 max-md:shadow-none max-md:ring-0">
@@ -850,8 +840,9 @@ function FrontOfficeDashboardContent() {
                 className="pl-8"
               />
             </div>
+            {tab === "arrivals" && <AutoAssignButton propertyId={propertyId} onDone={() => fetchSummary(true)} className="shrink-0 shadow-sm max-md:ml-auto md:ml-auto" />}
             {/* Desktop-only: the phone always gets its own cards. */}
-            <div className="hidden shrink-0 items-center rounded-md border border-border p-0.5 md:flex">
+            <div className={`hidden shrink-0 items-center rounded-md border border-border p-0.5 md:flex ${tab === "arrivals" ? "" : "md:ml-auto"}`}>
               <button
                 type="button"
                 onClick={() => chooseView("table")}
@@ -871,7 +862,6 @@ function FrontOfficeDashboardContent() {
                 <LayoutGrid className="h-4 w-4" />
               </button>
             </div>
-            {tab === "arrivals" && <AutoAssignButton propertyId={propertyId} onDone={() => fetchSummary(true)} className="shrink-0 shadow-sm" />}
           </CardHeader>
 
           <CardContent className="p-0">
