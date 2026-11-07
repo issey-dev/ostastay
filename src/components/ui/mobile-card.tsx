@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { FirstLoadFade } from "@/components/dashboard/motion-kit"
 
 // The phone version of a table row — one shared look for every list on a phone
 // (.agents/docs/MOBILE_PLAN.md, R12). A screen keeps its desktop <Table> untouched and renders
@@ -30,9 +31,9 @@ export function MobileCardList({
 }) {
   const hasItems = React.Children.toArray(children).some(Boolean)
   return (
-    <div data-slot="mobile-card-list" className={cn("space-y-3 md:hidden", className)}>
+    <FirstLoadFade data-slot="mobile-card-list" hasItems={hasItems} className={cn("space-y-3 md:hidden", className)}>
       {hasItems ? children : empty}
-    </div>
+    </FirstLoadFade>
   )
 }
 

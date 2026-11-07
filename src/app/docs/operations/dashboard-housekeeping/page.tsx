@@ -27,6 +27,20 @@ export default function DashboardHousekeepingGuide() {
       />
       <p>A chip that opens another page ends in a small arrow, and shows where it leads when you hover over it.</p>
 
+      <H2>Figures, charts and movement</H2>
+      <p>
+        Each tile shows its key figure large, with a small pill for the change (for example against the same day last week). The first time a screen opens, the figures
+        count up to their values, lines draw in, bars rise, doughnuts sweep round and the tiles lift in one after another; lists and tables show their rows one after
+        another. This plays once when you open the screen. Refreshing, filtering, sorting and paging do not replay it, and a refresh only moves a figure from its old
+        value to its new one.
+      </p>
+      <Callout>
+        <p>
+          If your computer or phone is set to <strong>reduce motion</strong> (in the system&apos;s accessibility settings), nothing moves: you see the finished screen at
+          once. Printouts and PDF downloads never animate. Screens you work in all shift, such as forms, settings, the Housekeeping board and the menu, stay still.
+        </p>
+      </Callout>
+
       <H2>Customising the dashboard</H2>
       <p>
         Use the cog beside <strong>Refresh</strong>, or the <strong>Customise dashboard</strong> button that appears when no tiles are showing. Changes apply straight

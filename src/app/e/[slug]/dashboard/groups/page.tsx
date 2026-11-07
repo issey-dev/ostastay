@@ -16,6 +16,7 @@ import { FilterBar } from "@/components/ui/filter-bar"
 import { useUrlState } from "@/lib/use-url-state"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FirstLoadFade } from "@/components/dashboard/motion-kit"
 import { ErrorState } from "@/components/ui/error-state"
 
 type Group = {
@@ -303,7 +304,7 @@ function GroupsList() {
                 description={groups.length === 0 ? "Create a block to reserve inventory for an event." : undefined}
               />
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <FirstLoadFade hasItems className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                 {shown.map((g) => {
                   const held = g.totalRoomsHeld
                   const picked = pickedUpCount(g)
@@ -340,7 +341,7 @@ function GroupsList() {
                     </div>
                   )
                 })}
-              </div>
+              </FirstLoadFade>
             )}
           </div>
         )}

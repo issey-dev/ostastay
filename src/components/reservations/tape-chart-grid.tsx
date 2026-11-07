@@ -200,6 +200,15 @@ export function TapeChartGrid() {
     e.dataTransfer.effectAllowed = "move";
   };
 
+  // After a successful move the booking pulses once in its new slot, so the eye finds where
+  // it went. Deliberately not a layout animation: bars are HTML5-draggable grid items, and
+  // sliding every bar on every scroll or window change would be noise on the busiest screen.
+  const [landedId, setLandedId] = useState<string | null>(null);
+  const markLanded = (id: string) => {
+    setLandedId(id);
+    setTimeout(() => setLandedId((cur) => (cur === id ? null : cur)), 1800);
+  };
+
   const handleDragEnd = () => {
     setDraggedAssignmentId(null);
     setDragOverRoom(undefined);
@@ -269,7 +278,10 @@ export function TapeChartGrid() {
             if (/occupied|booked|fit/i.test(json.error ?? "") && dragged) {
               setBlocked({ title: "It doesn't fit in that room", message: json.error, reservationId: dragged.reservationId, canEditDates: true });
             } else toast.error(json.error || "Failed to move the guest.");
-          } else await fetchData(startDate);
+          } else {
+            await fetchData(startDate);
+            markLanded(assignmentId);
+          }
         } catch {
           toast.error("An error occurred while moving the guest.");
         } finally {
@@ -297,6 +309,7 @@ export function TapeChartGrid() {
         } else toast.error(json.error || "Failed to reassign room.");
       } else {
         await fetchData(startDate);
+        markLanded(assignmentId);
       }
     } catch (error) {
       console.error("Reassign error:", error);
@@ -575,8 +588,9 @@ export function TapeChartGrid() {
       </ul>
     </div>
 
-    {/* Scrolls both ways inside the card so the date row and the room column stay pinned. */}
-    <div className="w-full overflow-auto relative bg-card max-h-[calc(100dvh-15rem)] min-h-80">
+    {/* Scrolls both ways inside the card so the date row and the room column stay pinned.
+        Fades in on load (motion branch); reduced-motion users get no animation. */}
+    <div className="w-full overflow-auto relative bg-card max-h-[calc(100dvh-15rem)] min-h-80 animate-in fade-in-0 duration-300 motion-reduce:animate-none">
     {/* w-max + min-w-full: every row shares one width, so the last day is never clipped and
         wide windows scroll cleanly with the room column pinned. */}
     <div className="w-max min-w-full">
@@ -631,7 +645,7 @@ export function TapeChartGrid() {
                   onDragStart={(e) => handleDragStart(e, res.id)}
                   onDragEnd={handleDragEnd}
                   title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}`}
-                  className={`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}`}
+                  className={`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`}
                   style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
                 >
                   <span className="font-bold text-xs leading-tight truncate">{res.primaryGuest.lastName}</span>
@@ -694,7 +708,7 @@ export function TapeChartGrid() {
                         onDragStart={(e) => handleDragStart(e, res.id)}
                         onDragEnd={handleDragEnd}
                         title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}`}
-                        className={`absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}`}
+                        className={`absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`}
                         style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
                       >
                         <span className="font-bold text-xs leading-tight truncate">{res.primaryGuest.lastName}</span>

@@ -87,6 +87,11 @@ read `.agents/docs/`:
   `@/lib/input-presets` and `PageHeader`. Check a change with `npm run mobile:audit` (captures at
   phone/tablet/desktop widths + a pixel diff against a baseline — desktop must not change).
 
+- [`.agents/docs/MOTION_PLAN.md`](.agents/docs/MOTION_PLAN.md) — how animation works in the app
+  (the `motion` package via `src/components/dashboard/motion-kit.tsx`): principles that keep it
+  restrained, what is animated, what must stay still, and the next steps. Read before adding any
+  animation.
+
 [`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
 theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
 it plus a status correction (its own header is stale — treat it as partially-to-mostly

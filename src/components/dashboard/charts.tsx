@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
+import { CountUp, DUR, EASE_DRAW, EASE_OUT, SPRING_POP, STAGGER, useReveal } from "@/components/dashboard/motion-kit"
 
 // Dependency-free SVG chart primitives for the Operations Dashboard.
 //
@@ -267,6 +269,7 @@ export function ColumnChart({
   xLabels?: boolean
 }) {
   const [ref, width] = useMeasuredWidth<HTMLDivElement>()
+  const { show, ok, delay } = useReveal(ref)
   const [hover, setHover] = React.useState<number | null>(null)
   const onKeyDown = useKeyboardCursor(points.length, setHover)
   const clipId = React.useId()
@@ -333,12 +336,17 @@ export function ColumnChart({
                 const x = cx - groupW / 2 + si * (barW + GAP)
                 const r = Math.min(4, barW / 2, h)
                 return (
-                  <path
+                  <motion.path
                     key={s.key}
                     // 4px rounded data-end, square at the baseline.
                     d={`M${x} ${padT + plotH} v${-(h - r)} a${r} ${r} 0 0 1 ${r} ${-r} h${barW - 2 * r} a${r} ${r} 0 0 1 ${r} ${r} v${h - r} z`}
                     fill={s.color}
                     opacity={p.muted ? 0.4 : active ? 1 : 0.9}
+                    // Bars rise from the baseline, each a beat after its neighbour.
+                    style={{ transformBox: "fill-box", transformOrigin: "50% 100%" }}
+                    initial={ok ? { scaleY: 0 } : false}
+                    animate={show ? { scaleY: 1 } : undefined}
+                    transition={{ duration: DUR.bar, ease: EASE_OUT, delay: delay + 0.2 + Math.min(i * STAGGER.item, 0.5) + si * 0.04 }}
                   />
                 )
               })}
@@ -410,6 +418,7 @@ export function LineChart({
   seriesLabel: string
 }) {
   const [ref, width] = useMeasuredWidth<HTMLDivElement>()
+  const { show, ok, delay } = useReveal(ref)
   const [hover, setHover] = React.useState<number | null>(null)
   const onKeyDown = useKeyboardCursor(points.length, setHover)
   const clipId = React.useId()
@@ -472,13 +481,44 @@ export function LineChart({
 
         <g clipPath={`url(#${clipId})`}>
           {/* Area wash at ~10% — a hint of mass under the line, never a saturated block. */}
-          {areaPath && <path d={areaPath} fill={color} opacity={0.1} />}
-          {path && <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+          {areaPath && (
+            <motion.path
+              d={areaPath}
+              fill={color}
+              initial={ok ? { opacity: 0 } : false}
+              animate={show ? { opacity: 0.1 } : undefined}
+              transition={{ duration: DUR.enter, ease: "easeOut", delay: delay + DUR.draw * 0.7 }}
+            />
+          )}
+          {path && (
+            <motion.path
+              d={path}
+              fill="none"
+              stroke={color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={ok ? { pathLength: 0 } : false}
+              animate={show ? { pathLength: 1 } : undefined}
+              transition={{ duration: DUR.draw, ease: EASE_DRAW, delay: delay + 0.2 }}
+            />
+          )}
 
           {last && (
             <>
-              <circle cx={px(last.i)} cy={py(last.value as number)} r={4} fill={color} stroke={SURFACE} strokeWidth={2} />
-              <text
+              <motion.circle
+                cx={px(last.i)}
+                cy={py(last.value as number)}
+                r={4}
+                fill={color}
+                stroke={SURFACE}
+                strokeWidth={2}
+                style={{ transformBox: "fill-box", transformOrigin: "center" }}
+                initial={ok ? { scale: 0, opacity: 0 } : false}
+                animate={show ? { scale: 1, opacity: 1 } : undefined}
+                transition={{ ...SPRING_POP, delay: delay + 0.2 + DUR.draw * 0.9 }}
+              />
+              <motion.text
                 x={Math.min(px(last.i), padL + plotW - 2)}
                 y={py(last.value as number) - 10}
                 textAnchor="end"
@@ -486,9 +526,12 @@ export function LineChart({
                 fontWeight={600}
                 fill="var(--foreground)"
                 className="tabular-nums"
+                initial={ok ? { opacity: 0 } : false}
+                animate={show ? { opacity: 1 } : undefined}
+                transition={{ duration: 0.4, delay: delay + 0.2 + DUR.draw }}
               >
                 {format(last.value as number)}
-              </text>
+              </motion.text>
             </>
           )}
         </g>
@@ -556,6 +599,7 @@ export function DonutChart({
   format?: (n: number) => string
   ariaLabel: string
 }) {
+  const { ref, show, ok, delay } = useReveal<HTMLDivElement>()
   const [hover, setHover] = React.useState<number | null>(null)
   const total = slices.reduce((s, x) => s + Math.max(0, x.value), 0)
   const r = size / 2 - 8
@@ -568,7 +612,7 @@ export function DonutChart({
   let offset = 0
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+    <div ref={ref} className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} role="img" aria-label={ariaLabel} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--muted)" strokeWidth={stroke} />
         {total > 0 &&
@@ -577,7 +621,7 @@ export function DonutChart({
             const len = Math.max(0, frac * c - GAP_PX)
             const dash = `${len} ${c - len}`
             const el = (
-              <circle
+              <motion.circle
                 key={s.label}
                 cx={size / 2}
                 cy={size / 2}
@@ -585,8 +629,11 @@ export function DonutChart({
                 fill="none"
                 stroke={s.color}
                 strokeWidth={hover === i ? stroke + 3 : stroke}
-                strokeDasharray={dash}
                 strokeDashoffset={-offset}
+                // Segments sweep clockwise in sequence; on refresh they re-measure smoothly.
+                initial={ok ? { strokeDasharray: `0 ${c}` } : false}
+                animate={{ strokeDasharray: show ? dash : `0 ${c}` }}
+                transition={{ duration: DUR.draw, ease: EASE_DRAW, delay: delay + 0.2 + i * 0.15 }}
                 className="transition-[stroke-width] duration-150"
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
@@ -597,7 +644,7 @@ export function DonutChart({
           })}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-xl font-semibold leading-none text-foreground">{centerValue}</span>
+        <CountUp value={centerValue} className="text-xl font-semibold leading-none text-foreground" />
         <span className="mt-1 max-w-[70%] text-[11px] leading-tight text-muted-foreground">{centerLabel}</span>
       </div>
       {hover !== null && slices[hover] && (
@@ -625,22 +672,25 @@ export function RankedBars({
   color?: string
   ordinal?: boolean
 }) {
+  const { ref, show, ok, delay } = useReveal<HTMLUListElement>()
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)))
   return (
-    <ul className="space-y-2.5">
+    <ul ref={ref} className="space-y-2.5">
       {rows.map((r, i) => (
         <li key={r.label} className="grid grid-cols-[minmax(0,7rem)_1fr_auto] items-center gap-3">
           <span className="truncate text-xs text-muted-foreground" title={r.label}>
             {r.label}
           </span>
           <span className="relative h-2.5 overflow-hidden rounded-full bg-muted">
-            <span
+            <motion.span
               className="absolute inset-y-0 left-0 rounded-full"
               style={{
-                width: `${Math.max(2, (Math.abs(r.value) / max) * 100)}%`,
                 background: color,
                 opacity: ordinal ? 0.35 + (0.65 * (rows.length - i)) / rows.length : 1,
               }}
+              initial={ok ? { width: "0%" } : false}
+              animate={{ width: show ? `${Math.max(2, (Math.abs(r.value) / max) * 100)}%` : "0%" }}
+              transition={{ duration: DUR.grow, ease: EASE_OUT, delay: delay + 0.2 + Math.min(i * STAGGER.item, 0.5) }}
             />
           </span>
           <span className="text-xs font-medium tabular-nums text-foreground">{r.hint ?? format(r.value)}</span>
@@ -659,18 +709,22 @@ export function StackedBar({
   segments: { label: string; value: number; color: string }[]
   ariaLabel: string
 }) {
+  const { ref, show, ok, delay } = useReveal<HTMLDivElement>()
   const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0)
   if (total <= 0) return <div className="h-3 rounded-full bg-muted" role="img" aria-label={`${ariaLabel}: none`} />
   return (
-    <div className="flex h-3 gap-0.5" role="img" aria-label={`${ariaLabel}: ${segments.map((s) => `${s.label} ${s.value}`).join(", ")}`}>
+    <div ref={ref} className="flex h-3 gap-0.5" role="img" aria-label={`${ariaLabel}: ${segments.map((s) => `${s.label} ${s.value}`).join(", ")}`}>
       {segments
         .filter((s) => s.value > 0)
-        .map((s) => (
-          <span
+        .map((s, i) => (
+          <motion.span
             key={s.label}
             title={`${s.label}: ${s.value}`}
             className="h-full first:rounded-l-full last:rounded-r-full"
-            style={{ width: `${(s.value / total) * 100}%`, background: s.color }}
+            style={{ background: s.color }}
+            initial={ok ? { width: "0%" } : false}
+            animate={{ width: show ? `${(s.value / total) * 100}%` : "0%" }}
+            transition={{ duration: DUR.grow, ease: EASE_OUT, delay: delay + 0.2 + i * 0.1 }}
           />
         ))}
     </div>
@@ -679,21 +733,68 @@ export function StackedBar({
 
 // ── Sparkline (stat-tile companion) ───────────────────────────────────────────────
 
-export function Sparkline({ values, color = "var(--chart-2)", width = 96, height = 26 }: { values: number[]; color?: string; width?: number; height?: number }) {
+export function Sparkline({
+  values,
+  color = "var(--chart-2)",
+  width = 96,
+  height = 26,
+  fluid = false,
+  className,
+}: {
+  values: number[]
+  color?: string
+  width?: number
+  height?: number
+  /** Fill the parent's width instead of using `width` (measured, so the stroke stays 2px). */
+  fluid?: boolean
+  className?: string
+}) {
+  const [ref, measured] = useMeasuredWidth<HTMLDivElement>(width)
+  const { show, ok, delay } = useReveal(ref)
+  const w = fluid ? measured : width
   const clean = values.filter((v) => Number.isFinite(v))
   if (clean.length < 2) return null
   const max = Math.max(...clean)
   const min = Math.min(...clean)
   const span = max - min || 1
-  const step = width / (clean.length - 1)
+  const step = w / (clean.length - 1)
   const y = (v: number) => height - 3 - ((v - min) / span) * (height - 6)
   const d = clean.map((v, i) => `${i === 0 ? "M" : "L"}${i * step} ${y(v)}`).join(" ")
   return (
-    <svg width={width} height={height} aria-hidden className="overflow-visible">
-      <path d={`${d} L${width} ${height} L0 ${height} Z`} fill={color} opacity={0.1} />
-      <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={width} cy={y(clean[clean.length - 1])} r={3} fill={color} stroke={SURFACE} strokeWidth={2} />
-    </svg>
+    <div ref={ref} className={cn(fluid ? "w-full" : "shrink-0", className)} style={fluid ? { height } : { width, height }}>
+      <svg width={w} height={height} aria-hidden className="block overflow-visible">
+        <motion.path
+          d={`${d} L${w} ${height} L0 ${height} Z`}
+          fill={color}
+          initial={ok ? { opacity: 0 } : false}
+          animate={show ? { opacity: 0.1 } : undefined}
+          transition={{ duration: DUR.enter, delay: delay + DUR.draw * 0.7 }}
+        />
+        <motion.path
+          d={d}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={ok ? { pathLength: 0 } : false}
+          animate={show ? { pathLength: 1 } : undefined}
+          transition={{ duration: DUR.draw, ease: EASE_DRAW, delay: delay + 0.3 }}
+        />
+        <motion.circle
+          cx={w}
+          cy={y(clean[clean.length - 1])}
+          r={3}
+          fill={color}
+          stroke={SURFACE}
+          strokeWidth={2}
+          style={{ transformBox: "fill-box", transformOrigin: "center" }}
+          initial={ok ? { scale: 0, opacity: 0 } : false}
+          animate={show ? { scale: 1, opacity: 1 } : undefined}
+          transition={{ ...SPRING_POP, delay: delay + 0.3 + DUR.draw * 0.9 }}
+        />
+      </svg>
+    </div>
   )
 }
 
@@ -701,8 +802,10 @@ export function Sparkline({ values, color = "var(--chart-2)", width = 96, height
 
 export function Meter({ value, max, tone = "var(--chart-2)", label }: { value: number; max: number; tone?: string; label: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0
+  const { ref, show, ok, delay } = useReveal<HTMLDivElement>()
   return (
     <div
+      ref={ref}
       role="progressbar"
       aria-label={label}
       aria-valuenow={value}
@@ -710,7 +813,13 @@ export function Meter({ value, max, tone = "var(--chart-2)", label }: { value: n
       aria-valuemax={Math.max(max, value)}
       className="h-2 w-full overflow-hidden rounded-full bg-muted"
     >
-      <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: tone }} />
+      <motion.div
+        className="h-full rounded-full"
+        style={{ background: tone }}
+        initial={ok ? { width: "0%" } : false}
+        animate={{ width: show ? `${pct}%` : "0%" }}
+        transition={{ duration: DUR.grow, ease: EASE_OUT, delay: delay + 0.2 }}
+      />
     </div>
   )
 }
