@@ -2,12 +2,12 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
-## Notifications + PWA push (2026-11-07) — PLAN WRITTEN, not started
+## Notifications + PWA push (2026-11-07) — N0 + N1 BUILT (8.10.0), N2+ open
 
 See [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md). Waiting on the owner's answers (section 12)
 before N1.
-- [ ] N0 PWA foundation (manifest fields, install prompt, service worker shell, CSP `worker-src`)
-- [ ] N1 In-app bell replacing the header Setup button (move Setup to account menu + palette)
+- [x] N0 PWA foundation (manifest fields, install prompt, service worker shell, CSP `worker-src`) — real installs on Android/iPhone still to be checked over HTTPS
+- [x] N1 In-app bell replacing Setup/Operations (both stay in the Account menu); 5 producers. Open: full `/notifications` page, a Hub "who is notified" setting
 - [ ] N2 Web Push (VAPID, subscriptions, outbox job)
 - [ ] N3 Full producer catalogue, preferences, Hub announcements
 - [ ] N4 Optional: quiet hours, email digest, SSE, reminders

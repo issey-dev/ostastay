@@ -1,4 +1,12 @@
-# Notifications — plan (drafted 2026-11-07, status: PLAN ONLY, nothing built)
+# Notifications — plan (drafted 2026-11-07)
+
+> **Status 2026-11-07 (8.10.0, PR #93):** N0 and N1 are BUILT. N0: manifest, push-only service worker,
+> install prompt. N1: `Notification`/`NotificationRecipient` tables, `src/lib/notifications/`
+> (catalogue, audience by permission, `notify()` with dedupe, producers), `/api/notifications`
+> (list, mark read), the bell in both headers, five producers (business date rolled, Night Audit
+> failed, channel booking received/failed, channel connection failed). NOT built yet: the full
+> `/notifications` page (the bell has "Show older" instead), preferences, push (N2), the rest of
+> section 4's catalogue (N3). Setup/Operations were NOT moved: both were already in the Account menu.
 
 > Owner ask: replace the header's **Setup** button with a **notification bell**; have personal and
 > global notifications; and, because staff will install the app as a PWA, deliver them as **phone

@@ -19,13 +19,15 @@ export const RELEASES: Release[] = [
   {
     version: "8.10.0",
     date: "2026-11-07",
-    highlights: "Install Uppsolut Stay on your phone or computer and open it like an app.",
+    highlights: "A notification bell, and install Uppsolut Stay on your phone or computer like an app.",
     new: [
+      "Notification bell: a bell in the header, in the dashboard and in the Hub, with a count of what you have not opened. It tells you when the business date moves on, when a Night Audit does not finish, when an online booking arrives or could not be added, and when a channel connection stops working. You only receive what your role gives you access to.",
       "Install the app: on Android and on Windows or Mac a card offers a one-tap install; on iPhone it shows the Share, Add to Home Screen steps. The installed app opens full screen, straight to your dashboard.",
       "Home screen shortcuts: press and hold the installed app's icon to jump to the Front Desk or Reservations.",
       "A new Install the app guide in the Operations documentation.",
     ],
     improved: [
+      "Setup and Operations buttons are replaced by the bell. Both are still in the Account menu at the bottom of the left-hand menu.",
       "This prepares the app to send notifications to your phone in a coming release.",
     ],
   },
