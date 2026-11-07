@@ -42,6 +42,8 @@ import { StatTile } from "@/components/ui/stat-tile"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { useUrlState } from "@/lib/use-url-state"
 import { FirstLoadFade } from "@/components/dashboard/motion-kit"
+import { dialogIsOpen, Kbd, useQuickKeys } from "@/components/shell/keyboard-shortcuts"
+import { FRONT_DESK_TAB_ORDER, canUseSingleKey } from "@/lib/shortcuts"
 
 const FRONT_DESK_TABS = ["arrivals", "departures", "inhouse", "roommoves"] as const
 type FrontDeskTab = (typeof FRONT_DESK_TABS)[number]
@@ -362,6 +364,125 @@ function FrontOfficeDashboardContent() {
 
   // Shared row cells so every tab's table reads like the Reservations list.
   const bd = currentProperty?.businessDate
+
+  // ── Keyboard (UX round 2, 8.9.0) ───────────────────────────────────────────────────────
+  // Check-out from a key or the command palette is never silent: it asks first, and then the
+  // usual early-check-out / balance prompts of handleCheckOut still apply.
+  const askCheckOut = async (id: string) => {
+    const row = [...(data?.inHouse ?? []), ...(data?.departures ?? [])].find((r: any) => r.id === id)
+    if (!row) {
+      toast.error("Only a guest who is in-house can be checked out.")
+      return
+    }
+    const room = row.assignments?.[0]?.room?.roomNumber
+    const owing = typeof row.balance === "number" && row.balance > 0.005 ? ` ${money(row.balance)} is still due on the folio.` : ""
+    if (await confirm({
+      title: `Check out ${guestDisplayName(row.primaryGuest) || "this guest"}?`,
+      description: `${room ? `Room ${room}.` : ""}${owing || " You will be asked about anything still owing."}`.trim(),
+      confirmLabel: "Check out",
+    })) {
+      await handleCheckOut(id)
+    }
+  }
+
+  // Palette links: ?folio=<id>, ?move=<id>, ?checkout=<id> (check-in is ?checkin= above). Each opens
+  // the screen that already does the job, then the param is dropped so a refresh does not repeat it.
+  const folioParam = searchParams.get("folio")
+  const moveParam = searchParams.get("move")
+  const checkoutParam = searchParams.get("checkout")
+  const deepHandled = useRef<string | null>(null)
+  useEffect(() => {
+    const key = folioParam ? `folio:${folioParam}` : moveParam ? `move:${moveParam}` : checkoutParam ? `checkout:${checkoutParam}` : null
+    if (!key || !data || deepHandled.current === key) return
+    deepHandled.current = key
+    if (folioParam) {
+      openFolio(folioParam)
+    } else if (moveParam) {
+      const row = [...(data.inHouse ?? []), ...(data.arrivals ?? [])].find((r: any) => r.id === moveParam)
+      if (row) openRoomMove(row)
+      else toast.error("Open that booking to move its room.")
+    } else if (checkoutParam) {
+      void askCheckOut(checkoutParam)
+    }
+    const sp = new URLSearchParams(window.location.search)
+    for (const k of ["folio", "move", "checkout"]) sp.delete(k)
+    const qs = sp.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folioParam, moveParam, checkoutParam, data, pathname, router])
+
+  // List keys: J/K select a row, C / O / F / A / M act on it, 1-4 switch tab, Enter opens it.
+  // Only while nothing is focused or typed into, no window is open and no Ctrl/⌘/Alt is held
+  // (canUseSingleKey) — and only when the person has quick keys on.
+  const quickKeys = useQuickKeys()
+  const [activeRow, setActiveRow] = useState<{ tab: string; id: string } | null>(null)
+  const tabRows: any[] = tab === "arrivals" ? arrivals : tab === "departures" ? departures : tab === "inhouse" ? inHouse : []
+  const activeId = activeRow && activeRow.tab === tab && tabRows.some((r) => r.id === activeRow.id) ? activeRow.id : null
+  const activeRes = activeId ? tabRows.find((r) => r.id === activeId) : null
+
+  useEffect(() => {
+    if (!quickKeys) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!canUseSingleKey(e, dialogIsOpen())) return
+      const k = e.key
+      const tabIndex = ["1", "2", "3", "4"].indexOf(k)
+      if (tabIndex >= 0) {
+        e.preventDefault()
+        setTab(FRONT_DESK_TAB_ORDER[tabIndex])
+        return
+      }
+      if (k === "j" || k === "k") {
+        if (tabRows.length === 0) return
+        e.preventDefault()
+        const at = activeId ? tabRows.findIndex((r) => r.id === activeId) : -1
+        const next = k === "j" ? Math.min(tabRows.length - 1, at + 1) : Math.max(0, at < 0 ? 0 : at - 1)
+        setActiveRow({ tab, id: tabRows[next].id })
+        return
+      }
+      if (k === "Escape") {
+        if (activeId) setActiveRow(null)
+        return
+      }
+      // Enter only when nothing is focused — on a focused button or link it keeps its own meaning.
+      if (k === "Enter") {
+        if (activeRes && e.target === document.body) {
+          e.preventDefault()
+          router.push(viewUrl(activeRes.id))
+        }
+        return
+      }
+      if (!["c", "o", "f", "a", "m"].includes(k)) return
+      if (!activeRes) {
+        if (tabRows.length > 0) toast.info("Select a booking first — J and K move down and up the list.")
+        return
+      }
+      e.preventDefault()
+      if (k === "c") {
+        if (tab !== "arrivals") return
+        if (canCheckIn(activeRes.status, activeRes.checkInDate, bd)) setCheckInRes(activeRes)
+        else toast.info("Not available to check in yet.")
+      } else if (k === "o") {
+        if (tab === "departures" || tab === "inhouse") void askCheckOut(activeRes.id)
+      } else if (k === "f") {
+        openFolio(activeRes.id)
+      } else if (k === "a") {
+        if (tab === "arrivals" && !activeRes.assignments?.[0]?.room) openAssign(activeRes)
+      } else if (k === "m") {
+        if (tab === "inhouse") openRoomMove(activeRes)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickKeys, tab, tabRows, activeId, activeRes, bd])
+
+  // Keep the selected row on screen (the table, cards and phone list all carry data-row-id).
+  useEffect(() => {
+    if (!activeId) return
+    const el = [...document.querySelectorAll<HTMLElement>(`[data-row-id="${activeId}"]`)].find((n) => n.offsetParent !== null)
+    el?.scrollIntoView({ block: "nearest" })
+  }, [activeId])
+  const rowKeyClass = (id: string) => (activeId === id ? "bg-muted ring-2 ring-inset ring-primary/60" : "")
   const renderStatus = (res: any) => {
     const st = deriveReservationState(res.status, res.checkInDate, res.checkOutDate, bd)
     return <StatusBadge label={reservationStateLabel(st)} status={st} />
@@ -517,7 +638,8 @@ function FrontOfficeDashboardContent() {
   )
   const DeskResCard = ({ res, balance, actions, more }: { res: any; balance?: number; actions: DeskAction[]; more: DeskAction[] }) => (
     <div
-      className="flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30"
+      data-row-id={res.id}
+      className={`flex cursor-pointer flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-elevation-1 transition-colors hover:bg-muted/30 ${activeId === res.id ? "ring-2 ring-primary/60" : ""}`}
       onClick={() => router.push(viewUrl(res.id))}
     >
       <div className="flex items-start justify-between gap-3">
@@ -702,6 +824,18 @@ function FrontOfficeDashboardContent() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Quick keys: a one-line reminder on desktop; the full list is behind "?". */}
+        {quickKeys && tab !== "roommoves" && (
+          <p className="-mt-1 hidden items-center gap-x-3 gap-y-1 text-xs text-muted-foreground lg:flex">
+            <span><Kbd>J</Kbd> <Kbd>K</Kbd> select</span>
+            {tab === "arrivals" && <span><Kbd>C</Kbd> check in</span>}
+            {tab !== "arrivals" && <span><Kbd>O</Kbd> check out</span>}
+            <span><Kbd>F</Kbd> folio</span>
+            <span><Kbd>Enter</Kbd> open</span>
+            <span><Kbd>?</Kbd> all shortcuts</span>
+          </p>
+        )}
+
         {/* Phone: no card chrome — the guest cards sit straight on the page rather than
             a card inside a card. */}
         <Card className="shadow-elevation-1 max-md:gap-0 max-md:overflow-visible max-md:rounded-none max-md:bg-transparent max-md:py-0 max-md:shadow-none max-md:ring-0">
@@ -804,7 +938,7 @@ function FrontOfficeDashboardContent() {
                     ) : arrivals.map((res: any) => {
                       const unassigned = !res.assignments?.[0]?.room
                       return (
-                        <TableRow key={res.id} className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                        <TableRow key={res.id} data-row-id={res.id} className={`cursor-pointer ${rowKeyClass(res.id)}`} onClick={() => router.push(viewUrl(res.id))}>
                           <TableCell className="pl-6 align-middle">{guestCell(res, true)}</TableCell>
                           <TableCell className="align-middle">{stayCell(res)}</TableCell>
                           <TableCell className="align-middle">{roomCell(res)}</TableCell>
@@ -882,7 +1016,7 @@ function FrontOfficeDashboardContent() {
                     ) : departures.length === 0 ? (
                       <TableRow><TableCell colSpan={7} className="py-0"><EmptyState icon={LogOut} title="No departures scheduled for today" /></TableCell></TableRow>
                     ) : departures.map((res: any) => (
-                      <TableRow key={res.id} className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                      <TableRow key={res.id} data-row-id={res.id} className={`cursor-pointer ${rowKeyClass(res.id)}`} onClick={() => router.push(viewUrl(res.id))}>
                         <TableCell className="pl-6 align-middle">{guestCell(res)}</TableCell>
                         <TableCell className="align-middle">{stayCell(res)}</TableCell>
                         <TableCell className="align-middle">{roomCell(res)}</TableCell>
@@ -960,7 +1094,7 @@ function FrontOfficeDashboardContent() {
                     ) : inHouse.length === 0 ? (
                       <TableRow><TableCell colSpan={7} className="py-0"><EmptyState icon={CheckCircle} title="No guests currently in-house" /></TableCell></TableRow>
                     ) : inHouse.map((res: any) => (
-                      <TableRow key={res.id} className="cursor-pointer" onClick={() => router.push(viewUrl(res.id))}>
+                      <TableRow key={res.id} data-row-id={res.id} className={`cursor-pointer ${rowKeyClass(res.id)}`} onClick={() => router.push(viewUrl(res.id))}>
                         <TableCell className="pl-6 align-middle">{guestCell(res)}</TableCell>
                         <TableCell className="align-middle">{stayCell(res)}</TableCell>
                         <TableCell className="align-middle">{roomCell(res)}</TableCell>

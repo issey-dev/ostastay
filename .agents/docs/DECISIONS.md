@@ -3538,9 +3538,9 @@ for it**.
 - Not changed: one connection per property; mapping, sharing switch and defaults as before.
 - Docs: new guide `/docs/configuration/property/channel-manager-setup` (with screenshots).
 
-## 2026-11-07 — UX polish round 1 (owner, 8.8.5)
+## 2026-11-07 — UX polish round 1 (owner, 8.8.6)
 
-Patch release, no schema change, release notes written. Owner approved four first-glance items:
+Patch release 8.8.6 (first numbered 8.8.5, renumbered by the owner so the PRs merge as 8.8.6 → 8.9.0 → 8.9.1), no schema change, release notes written. Owner approved four first-glance items:
 
 - **Dashboard empty state.** The status ribbon no longer counts as a tile: a dashboard page showing
   only the ribbon now shows "Nothing on this dashboard yet" with a **Customise dashboard** button
@@ -3554,7 +3554,7 @@ Patch release, no schema change, release notes written. Owner approved four firs
 - **Dashboard status chips** that link elsewhere (Night Audit, Cashier shifts) now end in a chevron
   and have a hover hint. They were already links; the first suggestion missed that.
 
-**Round 1, second batch (same 8.8.5 PR, owner-approved items 5–8):**
+**Round 1, second batch (same 8.8.6 PR, owner-approved items 5–8):**
 - **Tape Chart.** Cards show guest name + full confirmation number only (status stays in the
   colour, legend and hover title). The pinned room column now sits above the cards (z-20 vs 10;
   header 30) — cards used to paint over it when scrolling sideways. The grid scrolls both ways
@@ -3569,3 +3569,47 @@ Patch release, no schema change, release notes written. Owner approved four firs
   Auto-Assign) and Housekeeping (Select | More: Task sheets, Refresh; while rooms are ticked:
   Done + Select all). `useAutoAssign()` splits Auto-Assign's flow from its button. Other pages'
   toolbars are not yet converted — see TODO.
+
+## 2026-11-07 — Keyboard-first front desk (owner, 8.9.0)
+
+Owner approved the "keyboard first front desk" idea after a design discussion; asked for quick keys
+**and** a cheat sheet that shows everything, documented for users, **existing functionality must not
+stop**, check-out allowed "as long as we are being cautious", and Reports / Close shift / Fast Post
+taken into account. Role-based landing page: **not wanted for now** (parked).
+
+- **One list, three readers.** `src/lib/shortcuts.ts` is THE shortcut list; the cheat sheet (`?`),
+  the key handlers and the Operations guide page (`/docs/operations/keyboard-shortcuts`) all read
+  it. `tests/business-rules/shortcuts.test.ts` fails if two shortcuts share a key, a "go to" target
+  is not a real sidebar page / has a different module, or a no-show / cancel / void key appears.
+- **Additive, never subtractive.** Single letters act only when nothing is focused or typed into,
+  no dialog **or alertdialog** is open, and no Ctrl/⌘/Alt is held (`canUseSingleKey`). Ctrl+K, `/` and
+  Ctrl+B are untouched. A per-device **Quick keys** switch (localStorage `quick-keys`, default on) turns
+  the letters off; `?` and Ctrl+K always work. Enter on a palette result still just opens it.
+- **Palette: Tab / → on a booking lists its actions** (`src/lib/palette-actions.ts`, pure and tested):
+  due-in → (Assign room &) check in, Folio; in-house → Folio, Post a charge, Move room, Check out;
+  always "Open the booking". Every action is a link into the screen that already does it, with its
+  own checks — Front Desk understands `?checkin=`, `?folio=`, `?move=`, `?checkout=`; Fast Post
+  understands `?reservation=&room=` (room searched, guest selected); Cashiering `?closeShift=1`
+  (opens the close-shift dialog if a shift is open; the count + confirmation still happen there).
+- **Check-out is always confirmed**, from the key (`O`) and from the palette: "Check out <guest>?" with
+  the room and any balance, then `handleCheckOut`'s own early-check-out / balance prompts apply. No
+  key for no-show, cancel or void.
+- **New palette actions:** Close shift, Fast Post, Run a report, Keyboard shortcuts.
+- **`g` then a letter** goes to a sidebar page (19 pages, module-gated like the sidebar); a small
+  "G then a letter" note shows while it waits (1.5 s). Front Desk list keys: J/K select, Enter open,
+  C check in, O check out, F folio, A assign room, M move room, 1–4 tabs (screen order: Arrivals,
+  In-House, Room moves, Departures), Esc clears.
+- Not done (see TODO): the same list keys on Reservations, Housekeeping and Tape Chart; verb-first
+  typing ("in williams"); per-user (server-side) storage of the Quick keys setting.
+
+## 2026-11-07 — Release order and numbering for the three open PRs (owner)
+
+Owner re-numbered the open PRs and set the merge order: **8.8.6 = UX polish (PR #85) → 8.9.0 = keyboard-first
+front desk (PR #87) → 8.9.1 = dashboard motion (PR #86), last.** There is no 8.8.5. The branches are stacked
+in that order (#87's base is `release/8.8.5` — the branch keeps its first name, the version inside is 8.8.6 —
+and #86 is stacked on `release/8.9.0`), and each carries its own release-notes entry and Operations-guide changes:
+- 8.8.6: Front Desk / Reservations / Tape Chart guide updated, new "Dashboard and Housekeeping" page.
+- 8.9.0: new "Keyboard shortcuts" page; the Front Desk and Dashboard guides link to it.
+- 8.9.1: "Figures, charts and movement" section; Tape Chart pulse noted; MOTION_PLAN.md says 8.9.1.
+Do NOT rename a branch that is the head of an open PR on GitHub — it closes the PR (it happened to #85 and was
+reopened). Merge in order; after each merge retarget the next PR to `master`.

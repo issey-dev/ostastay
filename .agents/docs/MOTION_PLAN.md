@@ -18,7 +18,7 @@ Motion in the app is built on the `motion` package through ONE kit:
 
 ## Done
 
-- Dashboard (8.8.5+): `StatTile` "instrument" tile (corner glow kept at 5%), count-up figures,
+- Dashboard (8.9.1): `StatTile` "instrument" tile (corner glow kept at 5%), count-up figures,
   drawn lines / rising bars / sweeping donut / growing ranked + stacked bars + meters, widget
   stagger, worklist rows rising in.
 - `ui/stat-tile` re-exports the dashboard tile, so Reports KPI strip, Front Office, Group detail,
