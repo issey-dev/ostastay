@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
 import { decryptSecret, encryptSecret } from "@/lib/secret-crypto";
 import { activityBookingResult } from "@/lib/website-api/activity-bookings";
+import { notifyActivityBookingReceived } from "@/lib/notifications/producers";
 
 // Signed webhooks for the Booking API (BOOKING_API_ADDONS_PLAN.md Phase 5, B-8).
 //
@@ -110,7 +111,7 @@ function newSecret() {
 async function recordForExcursionBooking(bookingId: string) {
   let id = bookingId;
   for (let hops = 0; hops < 10; hops++) {
-    const record = await prisma.apiActivityBooking.findUnique({ where: { excursionBookingId: id }, select: { id: true, keyId: true, enterpriseId: true } });
+    const record = await prisma.apiActivityBooking.findUnique({ where: { excursionBookingId: id }, select: { id: true, keyId: true, enterpriseId: true, propertyId: true, module: true } });
     if (record) return record;
     const previous = await prisma.excursionBooking.findUnique({ where: { movedToBookingId: id }, select: { id: true } });
     if (!previous) return null;
@@ -132,8 +133,13 @@ export async function emitBookingEvent(
     const record =
       "excursionBookingId" in source
         ? await recordForExcursionBooking(source.excursionBookingId)
-        : await prisma.apiActivityBooking.findUnique({ where: { spaAppointmentId: source.spaAppointmentId }, select: { id: true, keyId: true, enterpriseId: true } });
+        : await prisma.apiActivityBooking.findUnique({ where: { spaAppointmentId: source.spaAppointmentId }, select: { id: true, keyId: true, enterpriseId: true, propertyId: true, module: true } });
     if (!record) return;
+    // The property's own staff hear about a new website booking in the bell, whether or not
+    // the website registered a webhook endpoint.
+    if (event === "booking.confirmed") {
+      await notifyActivityBookingReceived({ enterpriseId: record.enterpriseId, propertyId: record.propertyId, module: record.module, recordId: record.id });
+    }
     const endpoints = await prisma.apiWebhookEndpoint.findMany({
       where: { keyId: record.keyId, status: "ACTIVE", events: { has: event } },
       select: { id: true },

@@ -125,3 +125,91 @@ export async function notifyChannelConnectionFailed(a: { enterpriseId: string; c
     console.error("[notifications] channel connection failure", e)
   }
 }
+
+/** A maintenance task was assigned to someone — tell them (personal). */
+export async function notifyTaskAssigned(a: { enterpriseId: string; propertyId: string; assigneeId: string; actorUserId: string; taskId: string; roomNumber: string }) {
+  try {
+    const where = await whereIs(a.propertyId)
+    if (!where) return
+    await notify({
+      type: "TASK_ASSIGNED",
+      enterpriseId: a.enterpriseId,
+      propertyId: a.propertyId,
+      title: "A maintenance task was assigned to you",
+      body: `${where.name}: room ${a.roomNumber}`,
+      url: `/e/${where.slug}/dashboard/maintenance`,
+      entityType: "RoomMaintenance",
+      entityId: a.taskId,
+      // Giving the same person the task again after someone else had it is a new assignment;
+      // the minute only stops a double click.
+      dedupeKey: `TASK_ASSIGNED:${a.taskId}:${a.assigneeId}:${new Date().toISOString().slice(0, 16)}`,
+      audience: { userIds: [a.assigneeId] },
+      excludeUserId: a.actorUserId,
+      createdByUserId: a.actorUserId,
+    })
+  } catch (e) {
+    console.error("[notifications] task assigned", e)
+  }
+}
+
+/** Someone signed in from a browser or device this account has not used before — tell the account's owner (personal). */
+export async function notifyNewDeviceSignIn(a: { enterpriseId: string; userId: string; device: string }) {
+  try {
+    const ent = await prisma.enterprise.findUnique({ where: { id: a.enterpriseId }, select: { slug: true } })
+    await notify({
+      type: "NEW_DEVICE_SIGN_IN",
+      enterpriseId: a.enterpriseId,
+      propertyId: null,
+      title: "New sign-in to your account",
+      body: `${a.device}. If this was not you, tell your administrator.`,
+      url: ent ? `/e/${ent.slug}/dashboard/notifications` : undefined,
+      dedupeKey: `NEW_DEVICE_SIGN_IN:${a.userId}:${a.device}:${new Date().toISOString().slice(0, 13)}`,
+      audience: { userIds: [a.userId] },
+    })
+  } catch (e) {
+    console.error("[notifications] new device sign-in", e)
+  }
+}
+
+/** Osta support opened a session inside this enterprise — tell the people who manage users. */
+export async function notifySupportSessionOpened(a: { enterpriseId: string; grantId: string }) {
+  try {
+    const ent = await prisma.enterprise.findUnique({ where: { id: a.enterpriseId }, select: { slug: true } })
+    if (!ent) return
+    await notify({
+      type: "SUPPORT_SESSION_OPENED",
+      enterpriseId: a.enterpriseId,
+      propertyId: null,
+      title: "Osta support opened a session",
+      body: "Support is working in your enterprise under an access grant you approved. Everything they do is logged.",
+      url: `/e/${ent.slug}/hub/enterprise/support-access`,
+      dedupeKey: `SUPPORT_SESSION_OPENED:${a.grantId}:${new Date().toISOString().slice(0, 13)}`,
+      audience: { need: { module: "USERS" } },
+    })
+  } catch (e) {
+    console.error("[notifications] support session", e)
+  }
+}
+
+/** A guest booked an excursion or spa treatment through the Booking API — tell the people who run that service. */
+export async function notifyActivityBookingReceived(a: { enterpriseId: string; propertyId: string; module: string; recordId: string }) {
+  try {
+    const where = await whereIs(a.propertyId)
+    if (!where) return
+    const spa = a.module === "SPA"
+    await notify({
+      type: "ACTIVITY_BOOKING_RECEIVED",
+      enterpriseId: a.enterpriseId,
+      propertyId: a.propertyId,
+      title: spa ? "New spa booking from the website" : "New excursion booking from the website",
+      body: where.name,
+      url: `/e/${where.slug}/dashboard/${spa ? "spa" : "excursions"}`,
+      entityType: "ApiActivityBooking",
+      entityId: a.recordId,
+      dedupeKey: `ACTIVITY_BOOKING_RECEIVED:${a.recordId}`,
+      audience: { need: { module: spa ? "SPA" : "EXCURSIONS", action: "create" } },
+    })
+  } catch (e) {
+    console.error("[notifications] activity booking", e)
+  }
+}

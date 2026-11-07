@@ -70,13 +70,6 @@ export const NOTIFICATION_TYPES = {
     group: "Account and security",
     locked: true,
   },
-  PASSWORD_CHANGED: {
-    label: "Your password was changed",
-    description: "The password of your account was changed. If it was not you, tell your administrator at once.",
-    severity: SEVERITY.INFO,
-    group: "Account and security",
-    locked: true,
-  },
   SUPPORT_SESSION_OPENED: {
     label: "Osta support opened a session",
     description: "Osta support started working in your enterprise under an approved access grant. Sent to people who manage users.",

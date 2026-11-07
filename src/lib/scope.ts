@@ -7,6 +7,7 @@ import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
 import { MODULES, MODULE_LABELS, HUB_MODULES, PROPERTY_SETUP_MODULES, ENTERPRISE_ONLY_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
 import { mergeRolePermissions } from "@/lib/role-permissions";
 import { findLiveSession, touchSession, revokeSession, isIdleExpired } from "@/lib/session-store";
+import { notifySupportSessionOpened } from "@/lib/notifications/producers";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
 
 export { MODULES, HUB_MODULES, PROPERTY_SETUP_MODULES, ENTERPRISE_ONLY_MODULES, type Module, type Action };
@@ -127,6 +128,9 @@ export async function mintSupportSession(
     path: "/",
     expires: new Date(expMs),
   });
+
+  // The enterprise's own administrators are told support is in (never throws).
+  await notifySupportSessionOpened({ enterpriseId: targetEnterpriseId, grantId });
 }
 
 export async function clearSupportSession() {
