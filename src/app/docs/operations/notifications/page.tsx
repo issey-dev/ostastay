@@ -25,6 +25,16 @@ export default function NotificationsGuide() {
         <li>The bell updates when you come back to the window. It does not need the page to be refreshed.</li>
       </ul>
 
+      <H2>All notifications and your settings</H2>
+      <p>
+        Choose <strong>All notifications and settings</strong> at the bottom of the bell. The page has two tabs:
+      </p>
+      <ul>
+        <li><strong>Inbox</strong>: everything you have received. Switch on <strong>Unread only</strong> to filter, <strong>Mark all read</strong> to clear, <strong>Show older</strong> to go back further.</li>
+        <li><strong>Settings</strong>: for each kind of notification, whether it shows in the <strong>Bell</strong> and whether it also goes to your <strong>Phone</strong>. Turning the bell off for a kind also turns its phone notifications off. Security notices and announcements always show in the bell.</li>
+      </ul>
+      <p>Your choices are yours alone. They do not change what anyone else receives.</p>
+
       <H2>Notifications on your phone</H2>
       <p>
         Once the app is <a href="/docs/operations/install-the-app">installed</a>, the bell can also send urgent and action-needed notifications to your phone
@@ -53,6 +63,11 @@ export default function NotificationsGuide() {
           ["A new online booking arrived from a booking channel", "People who can create reservations"],
           ["An online booking could not be added and needs a person", "People who can create reservations"],
           ["A channel connection stopped working", "People who manage integrations"],
+          ["A guest booked an excursion or spa treatment on the website", "People who can create bookings for that service"],
+          ["A maintenance task was assigned to you", "The person it was assigned to"],
+          ["A sign-in from a browser or device your account has not used before", "You, about your own account"],
+          ["Osta support opened a session in your enterprise", "People who manage users"],
+          ["An announcement from your administrators", "Everyone, or the property it was sent to"],
         ]}
       />
       <Callout title="Good to know">

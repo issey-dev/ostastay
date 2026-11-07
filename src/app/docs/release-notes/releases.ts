@@ -22,6 +22,9 @@ export const RELEASES: Release[] = [
     highlights: "A notification bell with phone notifications, and install Uppsolut Stay on your phone or computer like an app.",
     new: [
       "Notification bell: a bell in the header, in the dashboard and in the Hub, with a count of what you have not opened. It tells you when the business date moves on, when a Night Audit does not finish, when an online booking arrives or could not be added, and when a channel connection stops working. You only receive what your role gives you access to.",
+      "Notifications page and settings: the full list of what you have received, with an Unread only filter, and a Settings tab where you choose, for each kind of notification, whether it shows in the bell and whether it also goes to your phone. Security notices and announcements always show in the bell.",
+      "Announcements: administrators can send a message to everyone, or to one property, from the Hub. It arrives in the bell and on phones, and the Hub shows how many people have read it.",
+      "More notifications: a guest books an excursion or spa treatment on the website, a maintenance task is assigned to you, your account is signed in on a new browser or device, and Osta support opens a session in your enterprise.",
       "Phone notifications: from the bell, turn on notifications for this phone or computer. Urgent and action-needed ones (a Night Audit that did not finish, a new online booking) arrive even when the app is closed. Signing out turns them off for that device. Needs the app to be installed, and on iPhone to be opened from the Home Screen.",
       "Install the app: on Android and on Windows or Mac a card offers a one-tap install; on iPhone it shows the Share, Add to Home Screen steps. The installed app opens full screen, straight to your dashboard.",
       "Home screen shortcuts: press and hold the installed app's icon to jump to the Front Desk or Reservations.",

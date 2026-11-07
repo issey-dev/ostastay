@@ -78,6 +78,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/configuration/enterprise/people", title: "People & roles", summary: "Staff accounts, roles, permissions and work locations." },
           { href: "/docs/configuration/enterprise/security", title: "Sessions & support access", summary: "Who is signed in, signing people out, and letting Uppsolut support in." },
           { href: "/docs/configuration/enterprise/email", title: "Email & SFTP", summary: "The mail account guest emails are sent from." },
+          { href: "/docs/configuration/enterprise/announcements", title: "Announcements", summary: "Send a message to everyone, or one property, in the notification bell." },
           { href: "/docs/configuration/enterprise/guest-lists", title: "Guest lists", summary: "Nationalities, titles, VIP levels and the other guest-profile lists." },
           { href: "/docs/configuration/enterprise/booking-api", title: "Booking API keys", summary: "Keys and webhooks for your own website." },
         ],
