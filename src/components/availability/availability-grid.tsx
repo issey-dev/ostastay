@@ -384,7 +384,7 @@ export function AvailabilityGrid() {
       </div>
 
       {/* Grid */}
-      <div className="w-full overflow-x-auto relative bg-card">
+      <div className="w-full overflow-x-auto relative bg-card animate-in fade-in-0 duration-300 motion-reduce:animate-none">
         {/* Date header */}
         <div className="flex border-b border-border bg-muted sticky top-0 z-20">
           <div className="w-52 shrink-0 border-r border-border p-2 flex items-center font-semibold text-foreground bg-muted z-30 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">

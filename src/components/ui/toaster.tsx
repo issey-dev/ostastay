@@ -25,7 +25,7 @@ function ToastList() {
         className={cn(
           "relative flex items-start gap-3 rounded-lg bg-popover p-3 pr-9 text-sm text-popover-foreground shadow-elevation-4 ring-1",
           style.ring,
-          "transition-all duration-150 data-[starting-style]:translate-x-4 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"
+          "transition-all duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] data-[starting-style]:translate-x-4 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"
         )}
       >
         <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", style.iconColor)} />

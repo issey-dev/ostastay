@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FilterBar } from "@/components/ui/filter-bar"
+import { FirstLoadFade } from "@/components/dashboard/motion-kit"
 
 type Profile = {
   upid: string
@@ -382,7 +383,7 @@ function ProfilesDashboard() {
               <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
             </Button>
           </div>
-          <div className="grid gap-3 grid-cols-1">
+          <FirstLoadFade hasItems className="grid gap-3 grid-cols-1">
             {sorted.map((p) => {
               const email = primaryEmail(p.communications)
               const mobile = primaryMobile(p.communications)
@@ -441,7 +442,7 @@ function ProfilesDashboard() {
                 </div>
               )
             })}
-          </div>
+          </FirstLoadFade>
           <p className="mt-3 text-xs text-muted-foreground">
             {total !== undefined && total > profiles.length ? `${profiles.length} of ${total} - refine the search to see the rest` : `${profiles.length} ${profiles.length === 1 ? "result" : "results"}`}
           </p>

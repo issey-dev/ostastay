@@ -41,6 +41,7 @@ import { toast } from "@/lib/toast"
 import { StatTile } from "@/components/ui/stat-tile"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { useUrlState } from "@/lib/use-url-state"
+import { FirstLoadFade } from "@/components/dashboard/motion-kit"
 
 const FRONT_DESK_TABS = ["arrivals", "departures", "inhouse", "roommoves"] as const
 type FrontDeskTab = (typeof FRONT_DESK_TABS)[number]
@@ -749,7 +750,7 @@ function FrontOfficeDashboardContent() {
                 ) : arrivals.length === 0 ? (
                   <EmptyState icon={LogIn} title="No arrivals scheduled for today" />
                 ) : (
-                  <div className="space-y-3 pb-1">
+                  <FirstLoadFade hasItems scope="front-office:arrivals" className="space-y-3 pb-1">
                     {arrivals.map((res: any) => {
                       const unassigned = !res.assignments?.[0]?.room
                       return (
@@ -779,7 +780,7 @@ function FrontOfficeDashboardContent() {
                         />
                       )
                     })}
-                  </div>
+                  </FirstLoadFade>
                 )}
               </div>
 
@@ -841,7 +842,7 @@ function FrontOfficeDashboardContent() {
                 ) : departures.length === 0 ? (
                   <EmptyState icon={LogOut} title="No departures scheduled for today" />
                 ) : (
-                  <div className="space-y-3 pb-1">
+                  <FirstLoadFade hasItems scope="front-office:departures" className="space-y-3 pb-1">
                     {departures.map((res: any) => (
                       <MobileResCard
                         key={res.id}
@@ -858,7 +859,7 @@ function FrontOfficeDashboardContent() {
                         ]}
                       />
                     ))}
-                  </div>
+                  </FirstLoadFade>
                 )}
               </div>
 
@@ -919,7 +920,7 @@ function FrontOfficeDashboardContent() {
                 ) : inHouse.length === 0 ? (
                   <EmptyState icon={CheckCircle} title="No guests currently in-house" />
                 ) : (
-                  <div className="space-y-3 pb-1">
+                  <FirstLoadFade hasItems scope="front-office:inhouse" className="space-y-3 pb-1">
                     {inHouse.map((res: any) => (
                       <MobileResCard
                         key={res.id}
@@ -936,7 +937,7 @@ function FrontOfficeDashboardContent() {
                         ]}
                       />
                     ))}
-                  </div>
+                  </FirstLoadFade>
                 )}
               </div>
 
@@ -1000,7 +1001,7 @@ function FrontOfficeDashboardContent() {
                 ) : (data?.roomMovesToday?.length ?? 0) === 0 ? (
                   <EmptyState icon={ArrowLeftRight} title="No room moves scheduled for today" />
                 ) : (
-                  <div className="space-y-3 pb-1">
+                  <FirstLoadFade hasItems scope="front-office:moves" className="space-y-3 pb-1">
                     {data.roomMovesToday.map((mv: any) => {
                       const res = (data?.inHouse ?? []).find((r: any) => r.id === mv.reservationId)
                       const unassigned = !mv.toRoomNumber
@@ -1032,7 +1033,7 @@ function FrontOfficeDashboardContent() {
                         </div>
                       )
                     })}
-                  </div>
+                  </FirstLoadFade>
                 )}
               </div>
 
