@@ -112,6 +112,11 @@ type Reservation = {
   }[]
 }
 
+// No room on the first stay segment yet — the check-in wizard then asks for one first, so the
+// button says so instead of promising a plain "Check in".
+const hasNoRoom = (res: Reservation) => !res.assignments?.[0]?.room
+const checkInLabel = (res: Reservation) => (hasNoRoom(res) ? "Assign & check in" : "Check in")
+
 const getActiveTasks = (res: Reservation) => {
   return res.assignments?.flatMap(a => a.room?.housekeepingTasks || []).filter(t => t.status !== 'COMPLETED') || []
 }
@@ -643,8 +648,14 @@ function ReservationsList() {
     return (
       <div className="flex items-center justify-end gap-1.5">
         {canCheckIn(res.status, res.checkInDate, currentProperty?.businessDate) && (
-          <Button size="sm" className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30" variant="outline" onClick={() => handleCheckIn(res)}>
-            <Key className="h-3.5 w-3.5 mr-1.5" /> Check in
+          <Button
+            size="sm"
+            className="h-8 bg-success-muted text-success hover:bg-success-muted/70 border border-success/30"
+            variant="outline"
+            title={hasNoRoom(res) ? "No room yet — you pick one first, then check in" : undefined}
+            onClick={() => handleCheckIn(res)}
+          >
+            <Key className="h-3.5 w-3.5 mr-1.5" /> {checkInLabel(res)}
           </Button>
         )}
         {res.status === "IN_HOUSE" && (
@@ -733,7 +744,7 @@ function ReservationsList() {
     }
     more.push({ label: "Edit", icon: Pencil, onSelect: () => router.push(editUrl) })
     const primary = canCheckIn(res.status, res.checkInDate, businessDate)
-      ? { label: "Check in", icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
+      ? { label: checkInLabel(res), icon: Key, onSelect: () => handleCheckIn(res), tone: "success" as const }
       : res.status === "IN_HOUSE"
         ? { label: "Check out", icon: LogOut, onSelect: () => handleCheckOut(res) }
         : undefined

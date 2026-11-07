@@ -17,6 +17,17 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.8.5",
+    date: "2026-11-07",
+    highlights: "Small touches at the front desk and on the dashboard: clearer check-in buttons, a warning that says exactly what is missing, and a dashboard that tells you how to fill it.",
+    improved: [
+      "Dashboard: when no tiles are showing, the page now says so and offers a Customise dashboard button. Before, only the status chips appeared and the rest of the page looked empty.",
+      "Front Desk and Reservations: when an arrival has no room yet, the Check in button now reads Assign & check in, because the first step is choosing a room. A hint explains it.",
+      "Front Desk: the warning beside an arrival's name now says exactly what is missing from the guest's profile (nationality, date of birth, ID document), not just that something is.",
+      "Dashboard: the status chips that open another page (Night Audit, Cashier shifts) now end in an arrow and show where they lead when you hover over them.",
+    ],
+  },
+  {
     version: "8.8.4",
     date: "2026-10-14",
     highlights: "Connect your own channel manager: each enterprise can now link its properties to its own Beds24 account, without asking Uppsolut.",

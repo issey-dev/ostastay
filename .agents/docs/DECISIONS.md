@@ -3537,3 +3537,19 @@ for it**.
   master account.
 - Not changed: one connection per property; mapping, sharing switch and defaults as before.
 - Docs: new guide `/docs/configuration/property/channel-manager-setup` (with screenshots).
+
+## 2026-11-07 — UX polish round 1 (owner, 8.8.5)
+
+Patch release, no schema change, release notes written. Owner approved four first-glance items:
+
+- **Dashboard empty state.** The status ribbon no longer counts as a tile: a dashboard page showing
+  only the ribbon now shows "Nothing on this dashboard yet" with a **Customise dashboard** button
+  (opens the same settings panel as the header cog). Before, the page looked blank with no prompt.
+- **Check in with no room.** On Front Desk (table, card, phone) and the Reservations list the
+  button reads **Assign & check in** while the first stay segment has no room, with a hint. The
+  check-in wizard already forces a room first ("A room must be assigned…"), so no flow change.
+- **Incomplete-profile warning.** Already had a hover title; it now names what is missing
+  (nationality / date of birth / ID document) via `profileMissing` on the summary API's arrivals,
+  and carries an `aria-label`. `profileIncomplete` is kept (derived from it).
+- **Dashboard status chips** that link elsewhere (Night Audit, Cashier shifts) now end in a chevron
+  and have a hover hint. They were already links; the first suggestion missed that.

@@ -22,7 +22,7 @@ export default function DeskGuide() {
       <Table
         head={["Tab", "Buttons", "In the … menu"]}
         rows={[
-          ["Arrivals", "Check in, Register (prints the registration card)", "Assign room, eRegistration link, Traces, View details, Mark no-show"],
+          ["Arrivals", "Check in (reads Assign & check in while the booking has no room yet), Register (prints the registration card)", "Assign room, eRegistration link, Traces, View details, Mark no-show"],
           ["In-House", "Traces, Folio", "Move room, View details"],
           ["Room moves", "Traces, Folio", "Move room"],
           ["Departures", "Check out, Folio", "Traces, View details"],
