@@ -17,6 +17,7 @@ export default function OperationsOverview() {
       <Cards
         items={[
           { href: "/docs/operations/desk", title: "Front Desk, Reservations and Tape Chart →", body: "The daily screens, badges and buttons, moving guests between rooms and split stays." },
+          { href: "/docs/operations/dashboard-housekeeping", title: "Dashboard and Housekeeping →", body: "The dashboard and its status chips, customising it, and running the Housekeeping board." },
           { href: "/docs/operations/groups-and-clients", title: "Group blocks and Client Relations →", body: "The group's Posting Master, profiles, deactivating and eRegistration." },
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk →", body: "Where bookings from the property's website appear and how to handle them." },
           { href: "/docs/operations/keyboard-shortcuts", title: "Keyboard shortcuts →", body: "Search and act on a booking from the keyboard, jump to any page with G then a letter, Front Desk list keys and the cheat sheet (press ?)." },
