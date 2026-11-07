@@ -3601,3 +3601,15 @@ taken into account. Role-based landing page: **not wanted for now** (parked).
   In-House, Room moves, Departures), Esc clears.
 - Not done (see TODO): the same list keys on Reservations, Housekeeping and Tape Chart; verb-first
   typing ("in williams"); per-user (server-side) storage of the Quick keys setting.
+
+## 2026-11-07 — Release order and numbering for the three open PRs (owner)
+
+Owner re-numbered the open PRs and set the merge order: **8.8.6 = UX polish (PR #85) → 8.9.0 = keyboard-first
+front desk (PR #87) → 8.9.1 = dashboard motion (PR #86), last.** There is no 8.8.5. The branches are stacked
+in that order (#87's base is `release/8.8.5` — the branch keeps its first name, the version inside is 8.8.6 —
+and #86 is stacked on `release/8.9.0`), and each carries its own release-notes entry and Operations-guide changes:
+- 8.8.6: Front Desk / Reservations / Tape Chart guide updated, new "Dashboard and Housekeeping" page.
+- 8.9.0: new "Keyboard shortcuts" page; the Front Desk and Dashboard guides link to it.
+- 8.9.1: "Figures, charts and movement" section; Tape Chart pulse noted; MOTION_PLAN.md says 8.9.1.
+Do NOT rename a branch that is the head of an open PR on GitHub — it closes the PR (it happened to #85 and was
+reopened). Merge in order; after each merge retarget the next PR to `master`.

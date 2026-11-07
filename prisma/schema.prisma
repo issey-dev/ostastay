@@ -1738,6 +1738,15 @@ model Payment {
   referenceNumber String?
   isRefund        Boolean @default(false)
 
+  // Set when this refund reverses a specific earlier payment (Folio → select payment →
+  // Refund). The original row is never edited or deleted — the reversal is a second row
+  // pointing back at it, with the reason the desk gave. Null on ordinary payments and on
+  // free-standing refunds.
+  refundOfPaymentId String?
+  refundOfPayment   Payment?  @relation("PaymentReversal", fields: [refundOfPaymentId], references: [id])
+  reversals         Payment[] @relation("PaymentReversal")
+  refundReason      String?
+
   // What kind of money-in this is, for pre-arrival collections made through the
   // Deposit module: DEPOSIT | PRE_ARRIVAL_FEE | CANCELLATION_FEE | NO_SHOW_FEE.
   // Null for an ordinary in-stay folio payment. Purely a reporting/identification
@@ -1761,6 +1770,7 @@ model Payment {
   @@index([chargeCodeId])
   @@index([folioId])
   @@index([paymentMethodId])
+  @@index([refundOfPaymentId])
   @@index([shiftId])
 }
 

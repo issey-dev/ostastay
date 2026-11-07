@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useIntro, usePageScope } from "@/components/dashboard/motion-kit"
 import { ArrowUp, Download } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -83,6 +84,8 @@ export function ListTable<T>({
 }) {
   const router = useRouter()
   const [sort, setSort] = React.useState<SortState>(defaultSort)
+  // Rows pop in one by one on first load only (.cascade in globals.css).
+  const intro = useIntro(rows.length > 0, usePageScope("rows"))
 
   const sorted = React.useMemo(() => {
     const col = sort && columns.find((c) => c.key === sort.key)
@@ -173,7 +176,7 @@ export function ListTable<T>({
                 })}
               </tr>
             </thead>
-            <tbody>
+            <tbody className={cn(intro && "cascade")}>
               {sorted.map((row) => (
                 <tr
                   key={rowKey(row)}

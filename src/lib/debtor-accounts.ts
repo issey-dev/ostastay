@@ -57,6 +57,17 @@ export function isCityLedgerPayment(p: BalancePayment): boolean {
   return p.paymentMethod?.type === CITY_LEDGER_METHOD_TYPE;
 }
 
+// The City-Ledger payments that still settle a folio to an account: not a refund, and
+// not one the desk has since reversed (a reversal is a refund row with refundOfPaymentId
+// pointing at the original). A reversed transfer must stop counting, or check-out would
+// keep demanding an AR account for a bill that was taken back.
+export function activeCityLedgerPayments<
+  T extends { id?: string; isRefund: boolean; refundOfPaymentId?: string | null; paymentMethod?: { type: string } | null },
+>(payments: T[]): T[] {
+  const reversed = new Set(payments.map((p) => p.refundOfPaymentId).filter((x): x is string => !!x));
+  return payments.filter((p) => !p.isRefund && p.paymentMethod?.type === CITY_LEDGER_METHOD_TYPE && !(p.id && reversed.has(p.id)));
+}
+
 // What the ACCOUNT still owes: charges, less every payment except the City-Ledger
 // transfer that moved the balance here in the first place. Callers must select the
 // payment method's type — a payments list without it cannot distinguish a transfer from

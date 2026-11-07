@@ -17,6 +17,36 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.9.3",
+    date: "2026-11-07",
+    highlights: "A payment can no longer be sent to a City Ledger account that does not exist, and a wrong payment can now be refunded straight from the folio.",
+    new: [
+      "Folio: tick a payment line and press Refund to reverse it. You must give a reason. The original payment stays on the folio, marked Refunded, and a refund line takes it back out. If you tick charges as well, only Move to folio is offered.",
+    ],
+    fixed: [
+      "Folio payments: paying with the City Ledger method is now blocked when the guest, or the company or agent the bill is routed to, has no AR (credit) account. Before, the payment went through and the problem only appeared at check-out, with no way to undo it.",
+      "Check-out and Night Audit: refunding a City Ledger payment now stops the folio from being treated as a City Ledger bill, so the reservation can check out again.",
+      "Check-out: a company the folio was routed to can now serve as the AR account when the booking has no travel agent.",
+    ],
+  },
+  {
+    version: "8.9.1",
+    date: "2026-11-07",
+    highlights: "The dashboard and the lists come alive: figures count up, charts draw themselves and rows arrive one after another the first time you open a screen. It is short, it plays once per screen, and it switches itself off if your device asks for reduced motion.",
+    improved: [
+      "Dashboard: the key figures are redesigned. Each tile has a larger figure that counts up to its value, a soft glow in the corner, a ring or a line where that helps, and a small coloured pill showing the change. The same tiles are used on Daily Reports, Front Office, group pages and Night Audit reports.",
+      "Dashboard and Daily Reports charts: lines draw in, bars rise, doughnut segments sweep round and the ranked and stacked bars and meters grow into place. Tiles lift in one after another.",
+      "Lists and tables (Reservations, Front Desk, Client Relations, Group Blocks and others): the first time a list opens, its rows or cards pop in one after another. Filtering, sorting, paging and refreshing never replay it.",
+      "Moving between pages in the dashboard has a very short fade, so the page reads as having arrived.",
+      "Tape Chart and Availability: the grid fades in once when it first appears. After you move a booking on the Tape Chart, it pulses twice in its new place so you can see where it went.",
+      "Cashiering: the figures on the Shift closed summary count up. The live summary of an open shift does not animate, because its numbers change as payments are taken.",
+      "Side panels and notifications ease in with the same smooth curve as everything else.",
+      "If your computer or phone is set to reduce motion, none of this animates: you see the final screen straight away. Printouts and PDFs never animate.",
+      "Screens you work in all shift (forms, settings, the Housekeeping board, the menu and header) stay still; only their first appearance moves.",
+      "Operations guide: the Dashboard and Housekeeping guide has a new section on figures, charts and movement, and the Tape Chart guide mentions the moved-booking pulse.",
+    ],
+  },
+  {
     version: "8.9.0",
     date: "2026-11-07",
     highlights: "Work faster from the keyboard: do things to a booking straight from the search box, jump to any page with two keys, and run the Front Desk lists without the mouse. A cheat sheet (press ?) lists everything, and everything that worked before still works.",

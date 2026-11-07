@@ -99,6 +99,7 @@ export default function DeskGuide() {
         <li>Dropping on a red room is blocked straight away. The message says who has the room and when, and offers <strong>Adjust the dates</strong>, which opens the booking.</li>
         <li>A room of the <strong>same type</strong> is simply a move.</li>
         <li>A room of a <strong>different type</strong> affects the rate: choose to recalculate at the new type or keep the current rate. A reason is needed for an in-house guest and optional before arrival.</li>
+        <li>After a move, the booking <strong>pulses twice</strong> in its new place so you can see where it went (not when your device is set to reduce motion).</li>
         <li>An in-house guest moves from the business date onward, the old room is marked dirty, and a guest due out today has nothing left to move. Only reserved and in-house bookings can be dragged.</li>
       </ul>
       <p>
