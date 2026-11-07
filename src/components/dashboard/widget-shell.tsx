@@ -3,6 +3,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { GripVertical } from "@/components/icons"
+import { WidgetReveal } from "@/components/dashboard/motion-kit"
 
 // The drag wrapper every dashboard widget is rendered inside.
 //
@@ -24,6 +25,7 @@ import { GripVertical } from "@/components/icons"
 
 export function WidgetShell({
   id,
+  index = 0,
   title,
   className,
   dragging,
@@ -35,6 +37,8 @@ export function WidgetShell({
   children,
 }: {
   id: string
+  /** Position in the grid — sets this widget's place in the entrance stagger. */
+  index?: number
   title: string
   className?: string
   dragging: boolean
@@ -98,7 +102,7 @@ export function WidgetShell({
       >
         <GripVertical className="h-3.5 w-3.5" />
       </button>
-      {children}
+      <WidgetReveal index={index}>{children}</WidgetReveal>
     </div>
   )
 }

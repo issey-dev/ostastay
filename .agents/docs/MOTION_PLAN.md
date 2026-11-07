@@ -1,0 +1,46 @@
+# Motion plan
+
+Motion in the app is built on the `motion` package through ONE kit:
+`src/components/dashboard/motion-kit.tsx` (easing, durations, stagger, `WidgetReveal`,
+`CountUp`, `RiseItem`, `useReveal`). Do not hand-roll another animation approach; extend the kit.
+
+## Principles (the rule that keeps it from looking over-engineered)
+
+- One easing curve (out-expo `[0.22, 1, 0.36, 1]`; ease-in-out only for line draws) and the same
+  durations everywhere, taken from `DUR` / `STAGGER` in the kit.
+- Plays ONCE per mount. Never replay on refresh, filter, sort or paging. After first reveal, only
+  `CountUp` reacts to new data (tween old → new).
+- Only the first screen animates; whole entrance stays under ~1.2 s (stagger capped at 0.6 s).
+- Reduced motion → final state immediately (`useMotionOk()` / `useReducedMotion`).
+- Print / PDF views never animate.
+- Motion is for arrival and for explaining a change (a moved booking). Never for screens people
+  work in all shift: forms, settings, housekeeping cards, Front Desk worklists, sidebar/header.
+
+## Done
+
+- Dashboard (8.8.5+): `StatTile` "instrument" tile (corner glow kept at 5%), count-up figures,
+  drawn lines / rising bars / sweeping donut / growing ranked + stacked bars + meters, widget
+  stagger, worklist rows rising in.
+- `ui/stat-tile` re-exports the dashboard tile, so Reports KPI strip, Front Office, Group detail,
+  Night Audit reports and the Osta admin screens already get the new tile and count-up.
+- Reports charts (`report-visuals.tsx`) use the animated chart primitives.
+- Cashiering "Shift closed" reconciliation figures count up (a one-off moment). The live open-shift
+  summary is deliberately NOT animated: its numbers change as payments post.
+
+## Findings
+
+- Revenue, Debtors and Payments pages have no headline figure strips (tables / forms), so there is
+  nothing to animate there. Adding strips would be a product decision, not a motion one.
+
+## Also done
+
+- List tables (`ui/list-table.tsx`): first ~10 rows fade in 30 ms apart on first load only; an `intro`
+  window closes after 1 s so filter / page / refresh rows never animate; sorting never remounts rows.
+- Page transition: `src/app/e/[slug]/dashboard/template.tsx`, 180 ms fade + 6 px rise, no exit.
+
+## Next (not started)
+
+1. Tape Chart / Availability grid: one soft fade-in of the grid; bars do not animate in; a moved
+   booking tweens to its new slot.
+2. Align toast / dialog / sheet easing and duration with the kit.
+3. `MobileCardList` (phone) row fade, same first-load-only rule as the table.

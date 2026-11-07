@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { useParams } from "next/navigation";
 import { Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, HandCoins, ChevronDown } from "@/components/icons";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { CountUp } from "@/components/dashboard/motion-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -391,16 +392,16 @@ function CashieringContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center tabular-nums">
               <div className="p-4 bg-muted">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Expected system cash</p>
-                <p className="text-2xl font-bold font-mono text-foreground">{money(reconciliation.expectedCash)}</p>
+                <p className="text-2xl font-bold font-mono text-foreground"><CountUp value={money(reconciliation.expectedCash)} /></p>
               </div>
               <div className="p-4 bg-muted">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Actual physical drop</p>
-                <p className="text-2xl font-bold font-mono text-foreground">{money(reconciliation.actualDrop)}</p>
+                <p className="text-2xl font-bold font-mono text-foreground"><CountUp value={money(reconciliation.actualDrop)} /></p>
               </div>
               <div className={`p-4 ${reconciliation.discrepancy === 0 ? "bg-success-muted" : "bg-destructive-muted"}`}>
                 <p className="text-sm font-medium mb-1">Discrepancy (short/over)</p>
                 <p className={`text-2xl font-bold font-mono ${reconciliation.discrepancy === 0 ? "text-success" : "text-destructive"}`}>
-                  {reconciliation.discrepancy === 0 ? "Balanced" : `${money(Math.abs(reconciliation.discrepancy))} ${reconciliation.discrepancy < 0 ? "Short" : "Over"}`}
+                  <CountUp value={reconciliation.discrepancy === 0 ? "Balanced" : `${money(Math.abs(reconciliation.discrepancy))} ${reconciliation.discrepancy < 0 ? "Short" : "Over"}`} />
                 </p>
               </div>
             </div>

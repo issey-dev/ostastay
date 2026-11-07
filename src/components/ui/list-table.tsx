@@ -3,7 +3,9 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
+import { DUR, EASE_OUT, useMotionOk } from "@/components/dashboard/motion-kit"
 import { ArrowUp, Download } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -83,6 +85,15 @@ export function ListTable<T>({
 }) {
   const router = useRouter()
   const [sort, setSort] = React.useState<SortState>(defaultSort)
+  const motionOk = useMotionOk()
+  // True for ~1 s after the first rows appear — see the row's `initial`.
+  const [intro, setIntro] = React.useState(true)
+  const hasRows = rows.length > 0
+  React.useEffect(() => {
+    if (!hasRows) return
+    const t = setTimeout(() => setIntro(false), 1000)
+    return () => clearTimeout(t)
+  }, [hasRows])
 
   const sorted = React.useMemo(() => {
     const col = sort && columns.find((c) => c.key === sort.key)
@@ -174,9 +185,15 @@ export function ListTable<T>({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row) => (
-                <tr
+              {sorted.map((row, i) => (
+                <motion.tr
                   key={rowKey(row)}
+                  // First load only: the first ~10 rows ease in a beat apart. `intro` closes
+                  // shortly after, so rows that arrive from a filter, page or refresh never
+                  // animate, and sorting (same keys) never remounts a row.
+                  initial={intro && motionOk && i < 10 ? { opacity: 0, y: 6 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: DUR.enter * 0.7, ease: EASE_OUT, delay: 0.05 + i * 0.03 }}
                   onClick={clickable ? () => open(row) : undefined}
                   className={cn("border-b border-border last:border-0 transition-colors hover:bg-muted/50", clickable && "cursor-pointer")}
                 >
@@ -199,7 +216,7 @@ export function ListTable<T>({
                       )}
                     </td>
                   ))}
-                </tr>
+                </motion.tr>
               ))}
             </tbody>
           </table>

@@ -49,6 +49,7 @@ import {
   type SeriesDef,
 } from "@/components/dashboard/charts"
 import { DataRow, Panel, PanelLink, StatTile, TileEmpty, axisLabel, fullDateLabel, makeMoneyFormatter, pct } from "@/components/dashboard/tiles"
+import { CountUp, RiseItem } from "@/components/dashboard/motion-kit"
 import { WidgetShell } from "@/components/dashboard/widget-shell"
 import { DashboardSettings } from "@/components/dashboard/dashboard-settings"
 import { toast } from "@/lib/toast"
@@ -405,13 +406,14 @@ export function OperationsDashboard({
           className="grid grid-flow-row-dense auto-rows-min grid-cols-1 gap-3 max-md:grid-cols-2 md:grid-cols-6 xl:grid-cols-12"
           onDragEnd={onDragEnd}
         >
-          {onThisPage.map((w) => {
+          {onThisPage.map((w, index) => {
             const def = CATALOG_BY_ID.get(w.id)
             if (!def) return null
             return (
               <WidgetShell
                 key={w.id}
                 id={w.id}
+                index={index}
                 title={def.title}
                 className={cn(
                   SIZE_CLASS[w.size],
@@ -500,6 +502,7 @@ function buildWidgetNodes({
         value={pct(data.occupancy.occupancyPct)}
         footnote={`${data.occupancy.roomsSold} of ${data.occupancy.totalRooms} rooms sold`}
         icon={Percent}
+        ring={data.occupancy.occupancyPct}
         href={`${dash}/front-office?tab=inhouse`}
         delta={
           data.occupancy.occupancyPctLastWeek !== null
@@ -1210,7 +1213,9 @@ function MovementMeter({ label, done, total, pending, tone }: { label: string; d
 function Figure({ value, label, tone }: { value: number; label: string; tone?: "warning" | "danger" }) {
   return (
     <div>
-      <p className={cn("text-lg font-semibold leading-none", tone === "danger" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-foreground")}>{value}</p>
+      <p className={cn("text-lg font-semibold leading-none", tone === "danger" ? "text-destructive" : tone === "warning" ? "text-warning" : "text-foreground")}>
+        <CountUp value={String(value)} />
+      </p>
       <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{label}</p>
     </div>
   )
@@ -1232,8 +1237,8 @@ function WorklistRows({
   if (rows.length === 0) return <TileEmpty>{empty}</TileEmpty>
   return (
     <ul className="space-y-1.5">
-      {rows.map((r) => (
-        <li key={r.id} className="flex items-center justify-between gap-2 border-b border-border/50 pb-1.5 text-xs last:border-0">
+      {rows.map((r, i) => (
+        <RiseItem key={r.id} i={i} className="flex items-center justify-between gap-2 border-b border-border/50 pb-1.5 text-xs last:border-0">
           <span className="min-w-0">
             <Link
               href={`${dash}/reservations/${r.id}`}
@@ -1249,7 +1254,7 @@ function WorklistRows({
           {showBalance && (
             <span className={cn("shrink-0 tabular-nums", r.balance > 0.005 ? "font-medium text-destructive" : "text-success")}>{money.short(r.balance)}</span>
           )}
-        </li>
+        </RiseItem>
       ))}
     </ul>
   )
