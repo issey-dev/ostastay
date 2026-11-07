@@ -38,9 +38,15 @@ Motion in the app is built on the `motion` package through ONE kit:
   window closes after 1 s so filter / page / refresh rows never animate; sorting never remounts rows.
 - Page transition: `src/app/e/[slug]/dashboard/template.tsx`, 180 ms fade + 6 px rise, no exit.
 
+- Tape Chart and Availability grid: one 300 ms fade-in when the grid first appears (tw-animate
+  `animate-in fade-in-0`, off under reduced motion). Bars do not animate in.
+- Tape Chart move: the moved booking pulses twice in its new slot (`.tape-landed` in globals.css)
+  instead of a layout animation. Why: bars are HTML5-draggable grid items (motion's drag props would
+  collide with the handlers) and sliding every bar on each scroll / window change is noise on the
+  busiest screen. Revisit only if the pulse proves too subtle.
+- Sheet and toast easing aligned to the kit curve. Dialog / alert-dialog already fade+zoom in 100 ms,
+  left as they are.
+
 ## Next (not started)
 
-1. Tape Chart / Availability grid: one soft fade-in of the grid; bars do not animate in; a moved
-   booking tweens to its new slot.
-2. Align toast / dialog / sheet easing and duration with the kit.
-3. `MobileCardList` (phone) row fade, same first-load-only rule as the table.
+1. `MobileCardList` (phone) row fade, same first-load-only rule as the table.

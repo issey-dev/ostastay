@@ -200,3 +200,17 @@ body {
     --bottom-nav-offset: 4rem;
   }
 }
+
+/* Tape Chart: a booking that was just moved pulses once in its new slot (two soft rings out
+   from the bar, then gone). Reduced motion: no pulse. */
+@keyframes tape-landed {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 45%, transparent); }
+  60% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.tape-landed {
+  animation: tape-landed 0.9s cubic-bezier(0.22, 1, 0.36, 1) 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tape-landed { animation: none; }
+}
