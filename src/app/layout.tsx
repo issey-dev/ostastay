@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { DarkModeProvider } from "@/components/providers/dark-mode-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
 import { CRIMSON_OS, PRODUCT_NAME } from "@/lib/brand";
 
 // Inter is loaded as a VARIABLE font (no `weight` option), which is what makes the
@@ -94,6 +95,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
         <DarkModeProvider>{children}</DarkModeProvider>
         <Toaster />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
