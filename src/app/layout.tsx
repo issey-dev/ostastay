@@ -4,6 +4,7 @@ import "./globals.css";
 import { DarkModeProvider } from "@/components/providers/dark-mode-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
+import { InstallCapture } from "@/components/pwa/install-capture";
 import { CRIMSON_OS, PRODUCT_NAME } from "@/lib/brand";
 
 // Inter is loaded as a VARIABLE font (no `weight` option), which is what makes the
@@ -96,6 +97,7 @@ export default function RootLayout({
         <DarkModeProvider>{children}</DarkModeProvider>
         <Toaster />
         <ServiceWorkerRegister />
+        <InstallCapture />
       </body>
     </html>
   );

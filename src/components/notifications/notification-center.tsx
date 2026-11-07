@@ -6,7 +6,7 @@ import { Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Bell } from "@/components/icons"
+import { NotificationBell } from "@/components/icons"
 import { PhoneToggle } from "@/components/notifications/phone-toggle"
 import { DOT, ago } from "@/components/notifications/format"
 import { cn } from "@/lib/utils"
@@ -151,7 +151,7 @@ function Inbox() {
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : items.length === 0 ? (
-        <EmptyState icon={Bell} title={unreadOnly ? "Nothing unread" : "No notifications yet"} description="You are all caught up." />
+        <EmptyState icon={NotificationBell} title={unreadOnly ? "Nothing unread" : "No notifications yet"} description="You are all caught up." />
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {items.map((it) => (

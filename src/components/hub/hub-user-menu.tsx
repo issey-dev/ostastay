@@ -1,6 +1,7 @@
 "use client"
 
 import { signOutCleanup } from "@/lib/notifications/push-client"
+import { InstallAppRow } from "@/components/pwa/install-app-row"
 import { useState } from "react"
 import { Check, ChevronsUpDown, Loader2, LogOut } from "@/components/icons"
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
@@ -90,6 +91,9 @@ export function HubUserMenu({
               {email && <div className="text-xs text-muted-foreground truncate">{email}</div>}
             </div>
           </div>
+
+          {/* Only after the person has read the one-time install invitation. */}
+          <InstallAppRow open={open} />
 
           {properties.length > 0 && (
             <div className="space-y-2">

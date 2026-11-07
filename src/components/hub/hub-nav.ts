@@ -2,7 +2,7 @@ import type { ComponentType } from "react"
 import type { Module } from "@/lib/modules"
 import {
   ArrowLeftRight,
-  Bell,
+  NotificationBell,
   Boxes,
   Building2,
   CalendarDays,
@@ -68,7 +68,7 @@ export const ENTERPRISE_NAV: HubNavItem[] = [
   { key: "sessions", title: "Sessions", path: "sessions", icon: Shield, modules: ["USERS"] },
   { key: "email", title: "Email & SFTP", path: "email", icon: Mail, modules: ["CONTROLS"] },
   { key: "booking-api", title: "Booking API Keys", path: "booking-api", icon: Key, modules: ["INTEGRATIONS"] },
-  { key: "announcements", title: "Announcements", path: "announcements", icon: Bell, modules: ["CONTROLS"] },
+  { key: "announcements", title: "Announcements", path: "announcements", icon: NotificationBell, modules: ["CONTROLS"] },
   { key: "support-access", title: "Support Access", path: "support-access", icon: ShieldCheck, modules: ["CONTROLS"] },
   // Guest-profile lists, nationalities included — a guest profile is shared by every
   // property. Every other dropdown list is the property's own (src/lib/system-code-scope.ts).

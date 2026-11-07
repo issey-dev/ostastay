@@ -94,6 +94,12 @@ export const NOTIFICATION_TYPES = {
     group: "Account and security",
     locked: true,
   },
+  INSTALL_APP: {
+    label: "Invitation to install the app",
+    description: "A one-time note that Uppsolut Stay can be installed on your phone or computer. Once you have read it, Install app appears in your Account menu.",
+    severity: SEVERITY.INFO,
+    group: "Account and security",
+  },
   SUPPORT_SESSION_OPENED: {
     label: "Osta support opened a session",
     description: "Osta support started working in your enterprise under an approved access grant. Sent to people who manage users.",

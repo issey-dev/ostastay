@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bell, Loader2 } from "@/components/icons"
+import { Loader2, NotificationBell as BellIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { PhoneToggle } from "@/components/notifications/phone-toggle"
@@ -139,7 +139,7 @@ export function NotificationBell({ className, allHref }: { className?: string; a
           />
         }
       >
-        <Bell className="h-5 w-5" />
+        <BellIcon className="h-5 w-5" />
         {unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-destructive px-1 text-center text-[10px] font-semibold leading-4 text-white">
             {unread > 9 ? "9+" : unread}

@@ -27,7 +27,7 @@ export const RELEASES: Release[] = [
       "More notifications: a guest books an excursion or spa treatment on the website, a maintenance task is assigned to you, your account is signed in on a new browser or device, and Osta support opens a session in your enterprise.",
       "Time-based notifications: rooms assigned to you to clean, a transfer in the next two days that has a problem (a boat that leaves before the flight lands, or a flight time that changed), a cashier shift left open for over 16 hours, and a group whose cut-off date is today or tomorrow with rooms still not picked up.",
       "Phone notifications: from the bell, turn on notifications for this phone or computer. Urgent and action-needed ones (a Night Audit that did not finish, a new online booking) arrive even when the app is closed. Signing out turns them off for that device. Needs the app to be installed, and on iPhone to be opened from the Home Screen.",
-      "Install the app: on Android and on Windows or Mac a card offers a one-tap install; on iPhone it shows the Share, Add to Home Screen steps. The installed app opens full screen, straight to your dashboard.",
+      "Install the app: you get one notification inviting you to install Uppsolut Stay, and once you have read it, Install app appears in your Account menu (one tap on Android, Windows and Mac; the Share, Add to Home Screen steps on iPhone). Nothing pops up on its own. The installed app opens full screen, straight to your dashboard.",
       "Home screen shortcuts: press and hold the installed app's icon to jump to the Front Desk or Reservations.",
       "A new Install the app guide in the Operations documentation.",
     ],

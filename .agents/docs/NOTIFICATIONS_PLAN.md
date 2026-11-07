@@ -1,5 +1,7 @@
 # Notifications — plan (drafted 2026-11-07)
 
+> **Install prompt (owner, 2026-11-07):** the floating "Install" card was removed. The invitation is a one-time INSTALL_APP notification (personal, INFO, dedupe key per user, sent at sign-in); `Install app` shows in the Account dialog only after it was read (`/api/notifications/install-offer`). `beforeinstallprompt` is kept by `InstallCapture` (root layout) in `src/lib/pwa/install-store.ts` until the person asks.
+
 > **Status 2026-11-07 (8.10.0, PR #93):** N0, N1, N2 N3 are BUILT (plus the four clock-based alerts). N0: manifest, push-only service worker,
 > install prompt. N1: `Notification`/`NotificationRecipient` tables, `src/lib/notifications/`
 > (catalogue, audience by permission, `notify()` with dedupe, producers), `/api/notifications`

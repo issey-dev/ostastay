@@ -8,6 +8,7 @@ import { getOstaEnterpriseId } from "@/lib/scope";
 import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
 import { deviceLabel, isNewDevice } from "@/lib/notifications/device";
 import { notifyNewDeviceSignIn } from "@/lib/notifications/producers";
+import { inviteToInstall } from "@/lib/notifications/install-offer";
 
 const GENERIC_ERROR = "Incorrect enterprise code, email, or password.";
 
@@ -155,6 +156,8 @@ export async function POST(request: Request) {
       userAgent,
     });
     if (newDevice) await notifyNewDeviceSignIn({ enterpriseId: user.enterpriseId, userId: user.id, device: deviceLabel(userAgent) });
+    // The one-time "install the app" invitation (once per person, ever; see install-offer.ts).
+    await inviteToInstall({ enterpriseId: user.enterpriseId, userId: user.id });
     await logAuthActivity({
       action: "LOGIN",
       email,
