@@ -11,6 +11,7 @@ import { SupportSessionNotice } from "@/components/ui/support-session-notice"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { EodSessionWatch } from "@/components/providers/eod-session-watch"
 import { IdleSessionWatch } from "@/components/providers/idle-session-watch"
+import { InstallAppPrompt } from "@/components/pwa/install-app-prompt"
 import { SupportSessionExitButton } from "@/components/controls/support-session-exit-button"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { CommandPaletteTrigger } from "@/components/shell/command-palette"
@@ -124,6 +125,7 @@ export default async function DashboardLayout({
             {/* Ends the session after this property's configured idle timeout — a local
                 clock in the browser, not another background poll. See the component. */}
             <IdleSessionWatch loginPath={loginPath} />
+            <InstallAppPrompt />
 
             {ctx?.isActingAsSupport && (
               <SupportSessionNotice
