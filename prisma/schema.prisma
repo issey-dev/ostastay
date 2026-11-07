@@ -318,6 +318,7 @@ model User {
   dashboardLayouts         UserDashboardLayout[]
   transportRepBookings     TransportBooking[]      @relation("TransportAirportRep")
   notifications            NotificationRecipient[]
+  pushSubscriptions        PushSubscription[]
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -4653,4 +4654,26 @@ model NotificationRecipient {
   @@unique([notificationId, userId])
   // The unread-count and the list queries.
   @@index([userId, readAt, createdAt])
+}
+
+// One installed browser/phone that agreed to receive push notifications for a user. Tied to
+// the USER, not the session, so it survives a re-login; removed when the device signs out,
+// when the push service reports it gone (404/410), or when the user turns it off.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enterpriseId  String
+  // The push service URL for this device. Unique: re-subscribing the same device replaces it.
+  endpoint      String    @unique
+  // Browser-generated public key and auth secret; the auth secret is encrypted at rest.
+  p256dh        String
+  authEncrypted String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime?
+  // Consecutive failed sends; the row is dropped after a few.
+  failureCount  Int       @default(0)
+
+  @@index([userId])
 }
