@@ -17,6 +17,25 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.9.0",
+    date: "2026-11-07",
+    highlights: "Work faster from the keyboard: do things to a booking straight from the search box, jump to any page with two keys, and run the Front Desk lists without the mouse. A cheat sheet (press ?) lists everything, and everything that worked before still works.",
+    new: [
+      "Keyboard shortcuts cheat sheet: press ? on any page to see every shortcut for your role. A Quick keys switch at the top turns the single-letter keys off, if you prefer.",
+      "Search and commands (Ctrl K, or / when you are not typing): press Tab or → on a booking to see what you can do with it. A due-in booking offers Check in (or Assign room & check in when it has no room yet) and Folio. An in-house guest offers Folio, Post a charge, Move room and Check out. Enter on the booking still just opens it.",
+      "Post a charge from the search box opens Fast Post with that guest's room already chosen.",
+      "Check out from the keyboard always asks you to confirm first, and the usual messages about an early check-out or an outstanding balance still appear afterwards.",
+      "More commands in the search box: Close shift (opens Cashiering with the close-shift window ready), Fast Post, Run a report and Keyboard shortcuts.",
+      "Go to a page with G then a letter, for example G F for Front Desk, G R for Reservations, G H for Housekeeping, G P for Fast Post, G W for Cashiering and G N for Night Audit. You only reach the pages your role can open, and the letter shows beside each page in the search box.",
+      "Front Desk list keys: J and K to move down and up the list, C to check in, O to check out, F for the folio, A to assign a room, M to move room, Enter to open the booking, 1 to 4 to switch tab and Esc to clear the selection.",
+      "A new guide, Keyboard shortcuts, in the Operations guide, with every shortcut and what each one does.",
+    ],
+    improved: [
+      "The single-letter keys never interfere with typing: they do nothing in a text box, while a window is open, or when Ctrl, ⌘ or Alt is held. Ctrl K, / and Ctrl B work exactly as before.",
+      "There is no key for no-show, cancel or void. Those stay behind their menus and confirmations.",
+    ],
+  },
+  {
     version: "8.8.5",
     date: "2026-11-07",
     highlights: "Small touches at the front desk and on the dashboard: clearer check-in buttons, a warning that says exactly what is missing, and a dashboard that tells you how to fill it.",

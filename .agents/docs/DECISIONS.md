@@ -3569,3 +3569,35 @@ Patch release, no schema change, release notes written. Owner approved four firs
   Auto-Assign) and Housekeeping (Select | More: Task sheets, Refresh; while rooms are ticked:
   Done + Select all). `useAutoAssign()` splits Auto-Assign's flow from its button. Other pages'
   toolbars are not yet converted — see TODO.
+
+## 2026-11-07 — Keyboard-first front desk (owner, 8.9.0)
+
+Owner approved the "keyboard first front desk" idea after a design discussion; asked for quick keys
+**and** a cheat sheet that shows everything, documented for users, **existing functionality must not
+stop**, check-out allowed "as long as we are being cautious", and Reports / Close shift / Fast Post
+taken into account. Role-based landing page: **not wanted for now** (parked).
+
+- **One list, three readers.** `src/lib/shortcuts.ts` is THE shortcut list; the cheat sheet (`?`),
+  the key handlers and the Operations guide page (`/docs/operations/keyboard-shortcuts`) all read
+  it. `tests/business-rules/shortcuts.test.ts` fails if two shortcuts share a key, a "go to" target
+  is not a real sidebar page / has a different module, or a no-show / cancel / void key appears.
+- **Additive, never subtractive.** Single letters act only when nothing is focused or typed into,
+  no dialog **or alertdialog** is open, and no Ctrl/⌘/Alt is held (`canUseSingleKey`). Ctrl+K, `/` and
+  Ctrl+B are untouched. A per-device **Quick keys** switch (localStorage `quick-keys`, default on) turns
+  the letters off; `?` and Ctrl+K always work. Enter on a palette result still just opens it.
+- **Palette: Tab / → on a booking lists its actions** (`src/lib/palette-actions.ts`, pure and tested):
+  due-in → (Assign room &) check in, Folio; in-house → Folio, Post a charge, Move room, Check out;
+  always "Open the booking". Every action is a link into the screen that already does it, with its
+  own checks — Front Desk understands `?checkin=`, `?folio=`, `?move=`, `?checkout=`; Fast Post
+  understands `?reservation=&room=` (room searched, guest selected); Cashiering `?closeShift=1`
+  (opens the close-shift dialog if a shift is open; the count + confirmation still happen there).
+- **Check-out is always confirmed**, from the key (`O`) and from the palette: "Check out <guest>?" with
+  the room and any balance, then `handleCheckOut`'s own early-check-out / balance prompts apply. No
+  key for no-show, cancel or void.
+- **New palette actions:** Close shift, Fast Post, Run a report, Keyboard shortcuts.
+- **`g` then a letter** goes to a sidebar page (19 pages, module-gated like the sidebar); a small
+  "G then a letter" note shows while it waits (1.5 s). Front Desk list keys: J/K select, Enter open,
+  C check in, O check out, F folio, A assign room, M move room, 1–4 tabs (screen order: Arrivals,
+  In-House, Room moves, Departures), Esc clears.
+- Not done (see TODO): the same list keys on Reservations, Housekeeping and Tape Chart; verb-first
+  typing ("in williams"); per-user (server-side) storage of the Quick keys setting.

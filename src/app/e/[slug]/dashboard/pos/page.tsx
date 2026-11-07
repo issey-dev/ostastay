@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useUrlState } from "@/lib/use-url-state"
+import { useSearchParams } from "next/navigation"
 import { chargeCodeOptions } from "@/lib/charge-code-options"
 import { useProperty } from "@/components/providers/property-provider"
 import { Search, Send, Clock, Store, Coffee, ReceiptText, UserRound, Receipt, History } from "@/components/icons"
@@ -58,7 +59,11 @@ function POSDashboard() {
   const [pageTab, setPageTab] = useUrlState<"charges" | "history">("tab", "charges", ["charges", "history"])
   const [historyRefresh, setHistoryRefresh] = useState(0)
   const [mode, setMode] = useState<"guest" | "walkin">("guest")
-  const [searchQuery, setSearchQuery] = useState("")
+  // From the command palette (Tab on an in-house booking, "Post a charge"): the room is searched
+  // for you and its guest is selected once the list answers. Without the params nothing changes.
+  const searchParams = useSearchParams()
+  const presetReservation = searchParams.get("reservation")
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("room") ?? "")
   const [guests, setGuests] = useState<any[]>([])
   const [selectedGuest, setSelectedGuest] = useState<any>(null)
 
@@ -194,6 +199,16 @@ function POSDashboard() {
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, mode, currentProperty?.id])
+
+  const presetHandled = useRef(false)
+  useEffect(() => {
+    if (!presetReservation || presetHandled.current || guests.length === 0) return
+    const match = guests.find((g: any) => g.reservationId === presetReservation)
+    if (match) {
+      presetHandled.current = true
+      setSelectedGuest(match)
+    }
+  }, [guests, presetReservation])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()

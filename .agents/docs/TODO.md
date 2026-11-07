@@ -3066,3 +3066,16 @@ Still open from that review:
 - [ ] Housekeeping due-out rooms are tinted but not sorted first; decide if the desk wants that.
 - [ ] Sub-pixel sliver of a Tape Chart card can show at the room column's left edge at fractional
   scroll positions (hit-testing is correct; cosmetic only).
+
+## Keyboard-first front desk (2026-11-07, branch `release/8.9.0`)
+
+Shipped as 8.9.0 (see DECISIONS 2026-11-07 "Keyboard-first front desk"). Still open:
+- [ ] List keys (J/K, Enter, action letters) on **Reservations**, **Housekeeping** and **Tape Chart**,
+  using the same pattern as Front Desk (`useQuickKeys`, `canUseSingleKey`, `data-row-id`). Add each key
+  to `FRONT_DESK_KEYS`-style lists in `src/lib/shortcuts.ts` so the cheat sheet and docs follow.
+- [ ] Verb-first typing in the palette (`in williams`, `out 204`) — only if people ask.
+- [ ] The Quick keys setting lives in this browser (localStorage). Move it to the user profile if
+  desks share a login across machines and want it to follow them.
+- [ ] Docs screenshots of the cheat sheet / palette actions are not in the guide yet
+  (`scripts/docs-shots.config.ts`); the guide is text + key tables only.
+- [ ] Parked by the owner: role-based landing page (Housekeeping → task sheet, Cashier → open shift).
