@@ -1,3 +1,4 @@
+import { notifyChannelConnectionFailed } from "@/lib/notifications/producers"
 import { prisma } from "@/lib/db";
 import { runScheduledAudits } from "@/lib/night-audit/scheduled";
 import { getProvider } from "@/lib/channels/providers/registry";
@@ -85,7 +86,7 @@ export const channelKeepAliveJob: Job = {
     // Alerting on "is currently failing" instead would re-send every sweep for as long as
     // the fault lasts, which is how an alert mailbox becomes one nobody reads. A
     // connection that was already ERROR is a known problem and stays silent.
-    const newlyFailed: { name: string; provider: string; error: string | null }[] = [];
+    const newlyFailed: { id: string; name: string; provider: string; error: string | null }[] = [];
 
     for (const c of due) {
       // testConnection records its own outcome on the connection and never throws — a
@@ -97,6 +98,7 @@ export const channelKeepAliveJob: Job = {
         failures.push(c.name);
         if (c.status === CONNECTION_STATUS.CONNECTED) {
           newlyFailed.push({
+            id: c.id,
             name: c.name,
             provider: c.provider,
             // Redacted again on the way out: lastError is short and operator-readable, but
@@ -108,6 +110,7 @@ export const channelKeepAliveJob: Job = {
     }
 
     if (newlyFailed.length > 0) {
+      for (const f of newlyFailed) await notifyChannelConnectionFailed({ enterpriseId, connectionId: f.id, connectionName: f.name });
       const enterprise = await prisma.enterprise.findUnique({
         where: { id: enterpriseId },
         select: { name: true },

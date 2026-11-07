@@ -1,3 +1,4 @@
+import { notifyChannelBookingReceived, notifyChannelBookingFailed } from "@/lib/notifications/producers"
 import { prisma } from "@/lib/db";
 import { createReservation } from "@/lib/reservations/create-reservation";
 import { systemContext } from "@/lib/reservations/system-context";
@@ -103,6 +104,7 @@ export async function convertInboundBooking(bookingId: string): Promise<ConvertR
     // the sweep. The Hub can still expose a manual retry, since nothing here is destructive.
     const reason = e instanceof Error ? e.message : "Unknown error";
     await prisma.channelInboundBooking.update({ where: { id: bookingId }, data: { status: "FAILED", problem: reason } });
+    await notifyChannelBookingFailed({ enterpriseId: booking.enterpriseId, propertyId: booking.propertyId, inboundBookingId: bookingId, reason });
     return { bookingId, status: "FAILED", reason };
   }
 
@@ -117,6 +119,7 @@ export async function convertInboundBooking(bookingId: string): Promise<ConvertR
     where: { id: bookingId },
     data: { status: "CONVERTED", reservationId: result.reservation.id, problem: null },
   });
+  await notifyChannelBookingReceived({ enterpriseId: booking.enterpriseId, propertyId: booking.propertyId, reservationId: result.reservation.id, channelName: booking.channelName });
   return { bookingId, status: "CONVERTED", reservationId: result.reservation.id };
 }
 

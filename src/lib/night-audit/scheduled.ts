@@ -1,3 +1,4 @@
+import { notifyNightAuditFailed } from "@/lib/notifications/producers"
 import { prisma } from "@/lib/db"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { getPropertySettings } from "@/lib/property-settings"
@@ -58,7 +59,7 @@ export function minutesPastAuditTime(businessDate: Date, auditTime: string, loca
 const SCHEDULER_USER_ID = "scheduled-night-audit"
 const ymd = (d: Date) => d.toISOString().slice(0, 10)
 
-export type ScheduledAuditOutcome = { propertyName: string; status: "RAN" | "STOPPED" | "BEHIND"; detail: string }
+export type ScheduledAuditOutcome = { propertyName: string; status: "RAN" | "STOPPED" | "BEHIND"; detail: string; propertyId?: string }
 
 export async function runScheduledAudits(enterpriseId: string, now: Date = new Date()): Promise<JobResult> {
   const properties = await prisma.property.findMany({
@@ -76,12 +77,17 @@ export async function runScheduledAudits(enterpriseId: string, now: Date = new D
       const outcome = await auditProperty(ctx, property, now)
       if (outcome) outcomes.push(outcome)
     } catch (err) {
-      outcomes.push({ propertyName: property.name, status: "STOPPED", detail: `failed: ${err instanceof Error ? err.message : String(err)}` })
+      outcomes.push({ propertyName: property.name, propertyId: property.id, status: "STOPPED", detail: `failed: ${err instanceof Error ? err.message : String(err)}` })
     }
   }
 
   const ran = outcomes.filter((o) => o.status === "RAN")
   const problems = outcomes.filter((o) => o.status !== "RAN")
+  // Tell the people who run Night Audit (once per property per business date — see the producer).
+  for (const o of problems) {
+    const p = properties.find((x) => x.id === o.propertyId)
+    if (p) await notifyNightAuditFailed({ enterpriseId, propertyId: p.id, businessDate: resolveBusinessDate(p), detail: o.detail })
+  }
   const line = (o: ScheduledAuditOutcome) => `${o.propertyName}: ${o.detail}`
   if (problems.length > 0) {
     // Failing the job is what puts it on the Hub Overview; the properties that did run are
@@ -113,6 +119,7 @@ async function auditProperty(
     return {
       propertyName: property.name,
       status: "STOPPED",
+      propertyId: property.id,
       detail: `scheduled time ${settings.autoAuditTime} is outside 22:00–06:00 — set a new time`,
     }
   }
@@ -124,6 +131,7 @@ async function auditProperty(
     return {
       propertyName: property.name,
       status: "BEHIND",
+      propertyId: property.id,
       detail: `business date ${ymd(businessDate)} is more than a day behind — run Night Audit from the property`,
     }
   }
@@ -139,7 +147,7 @@ async function runAllSteps(
     const res = await runEodStep(ctx, { propertyId: property.id, step: step.key }, { scheduled: true })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      return { propertyName: property.name, status: "STOPPED", detail: `stopped at "${step.label}": ${body.error ?? `HTTP ${res.status}`}` }
+      return { propertyName: property.name, propertyId: property.id, status: "STOPPED", detail: `stopped at "${step.label}": ${body.error ?? `HTTP ${res.status}`}` }
     }
   }
   return { propertyName: property.name, status: "RAN", detail: `audited ${ymd(auditedDate)}` }

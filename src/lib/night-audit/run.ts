@@ -11,6 +11,7 @@ import { resolveBusinessDate, nextBusinessDate } from "@/lib/business-date"
 import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules"
 import { applyEodHousekeepingShift } from "@/lib/eod-housekeeping"
 import { logActivity } from "@/lib/activity-log"
+import { notifyBusinessDateRolled } from "@/lib/notifications/producers"
 import { postDueTransportCharges, type TransportAuditResult } from "@/lib/transport/billing"
 
 // The Night Audit itself — posts the audited business date's room charges, allocations,
@@ -545,6 +546,8 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     entityId: log.id,
     description: `Night audit for ${auditDate.toISOString().slice(0, 10)}: ${totalPostings} posting${totalPostings === 1 ? "" : "s"}, $${totalRoomRevenue.toFixed(2)} room revenue, ${noShowCandidates.length} no-show${noShowCandidates.length === 1 ? "" : "s"}`,
   })
+
+  await notifyBusinessDateRolled({ enterpriseId: ctx.enterpriseId, propertyId, newDate: nextDay, actorUserId: ctx.userId })
 
   return NextResponse.json({
     success: true,
