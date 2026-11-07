@@ -69,6 +69,11 @@ export default function DashboardHousekeepingGuide() {
         With rooms ticked, a bar appears with <strong>Mark clean</strong>, <strong>Mark inspected</strong>, <strong>Mark dirty</strong>, <strong>Mark OOO</strong>,{" "}
         <strong>Assign</strong> (to an attendant) and <strong>Report issue</strong> (to Maintenance). The menu on a single card offers the actions for that one room.
       </p>
+      <H2>From the keyboard</H2>
+      <p>
+        Press <kbd>G</kbd> then <kbd>D</kbd> to open the dashboard, or <kbd>G</kbd> then <kbd>H</kbd> to open Housekeeping, from any page. Press <kbd>?</kbd> for the whole
+        list. See <a href="/docs/operations/keyboard-shortcuts">Keyboard shortcuts</a>.
+      </p>
       <Pager href="/docs/operations/dashboard-housekeeping" />
     </>
   )

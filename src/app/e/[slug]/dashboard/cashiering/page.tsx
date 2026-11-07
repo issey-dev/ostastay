@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Lock, Unlock, AlertTriangle, CheckCircle2, Loader2, DollarSign, Plus, Printer, ArrowRightLeft, HandCoins, ChevronDown } from "@/components/icons";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -114,6 +114,22 @@ function CashieringContent() {
   const [closingDrop, setClosingDrop] = useState("");
   const [closeConfirmed, setCloseConfirmed] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+
+  // Command palette "Close shift" (?closeShift=1): once the shift is known, open the close-shift
+  // dialog — the drawer count and the confirmation still happen there — then drop the param.
+  const router = useRouter();
+  const pathname = usePathname();
+  const closeShiftParam = useSearchParams().get("closeShift");
+  useEffect(() => {
+    if (!closeShiftParam || isLoading) return;
+    if (status?.hasActiveShift) setIsCloseModalOpen(true);
+    else toast.info("There is no open shift to close.");
+    const sp = new URLSearchParams(window.location.search);
+    sp.delete("closeShift");
+    const qs = sp.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeShiftParam, isLoading, status?.hasActiveShift]);
 
   // Reconciliation Result State
   const [reconciliation, setReconciliation] = useState<any>(null);

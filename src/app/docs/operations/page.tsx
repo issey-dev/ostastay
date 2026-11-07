@@ -20,6 +20,7 @@ export default function OperationsOverview() {
           { href: "/docs/operations/dashboard-housekeeping", title: "Dashboard and Housekeeping →", body: "The dashboard and its status chips, customising it, and running the Housekeeping board." },
           { href: "/docs/operations/groups-and-clients", title: "Group blocks and Client Relations →", body: "The group's Posting Master, profiles, deactivating and eRegistration." },
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk →", body: "Where bookings from the property's website appear and how to handle them." },
+          { href: "/docs/operations/keyboard-shortcuts", title: "Keyboard shortcuts →", body: "Search and act on a booking from the keyboard, jump to any page with G then a letter, Front Desk list keys and the cheat sheet (press ?)." },
           { href: "/docs/operations/daily-reports", title: "Daily Reports →", body: "Reading a report with its figures and charts, and downloading it as PDF, Excel, delimited text or CSV." },
           { href: "/docs/operations/stop-sale", title: "Price calendar and stop sale →", body: "Reading prices on the calendar, closing dates to sale, and overriding a closed date." },
         ]}

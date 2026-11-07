@@ -135,6 +135,21 @@
   font-size: 0.88em;
 }
 .docs-article strong { color: var(--ink); }
+/* A key on a keyboard — used by the Keyboard shortcuts guide. */
+.docs-article kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  background: var(--inline-code-bg);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.82em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
 
 .docs-code { position: relative; margin: 0 0 18px; border: 1px solid var(--line); background: var(--code-bg); }
 .docs-code-head {
