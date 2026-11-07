@@ -5,9 +5,8 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { HubBreadcrumbs } from "@/components/hub/hub-breadcrumbs"
-import { requireSession, hasHubAccess, hasAnyPropertyModule } from "@/lib/scope"
-import { Button } from "@/components/ui/button"
-import { LayoutDashboard } from "@/components/icons"
+import { requireSession, hasHubAccess } from "@/lib/scope"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 import { prisma } from "@/lib/db"
 
 // Reads live tenant data per request — never prerender. `next build` would otherwise
@@ -81,14 +80,8 @@ export default async function HubLayout({
             <p className="text-xs text-muted-foreground leading-tight">Hub · setup &amp; administration</p>
           </div>
           <div className="ml-auto flex items-center gap-4">
-            {/* The way back to day-to-day work — mirrors "Setup" in the dashboard header. */}
-            {hasAnyPropertyModule(ctx) && (
-              <a href={`/e/${enterprise.slug}/dashboard`} className="max-md:hidden">
-                <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
-                  <LayoutDashboard className="h-4 w-4" /> Operations
-                </Button>
-              </a>
-            )}
+            {/* Operations and Setup live in the account menu (sidebar footer). */}
+            <NotificationBell />
             <ThemeToggle />
           </div>
         </header>

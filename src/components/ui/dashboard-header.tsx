@@ -4,9 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
-import { Building2, CalendarClock, Check, ChevronsUpDown, Loader2, Settings } from "@/components/icons"
+import { Building2, CalendarClock, Check, ChevronsUpDown, Loader2 } from "@/components/icons"
 import { LogoTile } from "@/components/ui/logo-tile"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,17 +135,5 @@ export function HeaderBusinessDate() {
       <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
       {label}
     </Link>
-  )
-}
-
-/** "Setup" — the way into the Hub, shown only to users with Hub access. */
-export function HeaderSetupLink({ href }: { href?: string }) {
-  if (!href) return null
-  return (
-    <a href={href} className="max-md:hidden" title="Setup and administration (Hub)">
-      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
-        <Settings className="h-4 w-4" /> Setup
-      </Button>
-    </a>
   )
 }
