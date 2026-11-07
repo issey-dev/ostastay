@@ -64,7 +64,7 @@ export function HubUserMenu({
     <SidebarMenuItem>
       {/* On the Deep Maroon rail, so sidebar-* tokens; the dialog is portaled to <body> and
           is a normal content surface, so it uses the content tokens. */}
-      <SidebarMenuButton onClick={() => setOpen(true)} tooltip={name} className="h-auto py-2">
+      <SidebarMenuButton onClick={() => setOpen(true)} tooltip={name} className="h-auto py-2 group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:justify-center">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
           {initials(name) || "U"}
         </span>

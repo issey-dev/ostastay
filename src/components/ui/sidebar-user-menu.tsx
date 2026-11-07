@@ -68,7 +68,7 @@ export function SidebarUserMenu({
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton onClick={() => setOpen(true)} tooltip={name} className="h-auto py-2">
+      <SidebarMenuButton onClick={() => setOpen(true)} tooltip={name} className="h-auto py-2 group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:justify-center">
         {/* This trigger sits on the Deep Maroon rail, so it takes sidebar-* tokens. The
             dialog below is portaled to <body> and is a normal content surface, which is
             why it keeps using bg-muted / text-muted-foreground and should NOT be changed
