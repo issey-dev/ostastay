@@ -2,8 +2,7 @@
 
 import { PageHeader } from "@/components/ui/page-header"
 import { useEffect, useState } from "react"
-import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useProperty } from "@/components/providers/property-provider"
 import { RoomStatusCard } from "@/components/housekeeping/room-status-card"
 import { RefreshCw, Layers, CheckCircle2, Brush, X, AlertTriangle, Wrench, Users, ClipboardList } from "@/components/icons"
@@ -19,11 +18,13 @@ import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { housekeepingStaff } from "@/lib/job-functions"
 import { HousekeepingRoomRow, RoomActionSheet } from "@/components/housekeeping/room-action-sheet"
 import { MobileActions } from "@/components/ui/mobile"
+import { ActionBar } from "@/components/ui/action-bar"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
 
 export default function HousekeepingDashboard() {
   const { slug } = useParams<{ slug: string }>()
+  const router = useRouter()
   const { currentProperty } = useProperty()
   const [rooms, setRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -406,37 +407,43 @@ export default function HousekeepingDashboard() {
         actionsClassName="gap-3"
         title="Housekeeping"
         hint="Manage room statuses, turnovers, and attendant tasks."
-        actions={<>
-          <Button
-            variant={selectMode ? "default" : "outline"}
-            aria-pressed={selectMode}
-            title={selectMode ? undefined : "Select several rooms to change them together"}
-            onClick={() => {
-              if (selectMode) setSelectedRooms([])
-              setSelectMode(!selectMode)
-            }}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            {selectMode ? "Done" : "Select"}
-          </Button>
-          {isBulkMode && (
-            // Only the rooms on screen — with a status filter on, a bulk change must never
-            // reach rooms the user can't see.
-            <Button variant="outline" onClick={() => setSelectedRooms(filteredRooms.map((r: any) => r.id))}>
-              {filteredRooms.length === rooms.length ? "Select all" : `Select all ${filteredRooms.length} shown`}
-            </Button>
-          )}
-          <Link href={`/e/${slug}/dashboard/housekeeping/task-sheet`}>
-            <Button variant="outline" className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4" />
-              Task sheets
-            </Button>
-          </Link>
-          <Button onClick={() => fetchRooms()} variant="outline" className="flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </Button>
-        </>}
+        actions={
+          // One primary (Select / Done); while rooms are ticked, Select all is the one
+          // secondary; otherwise Task sheets and Refresh sit in "More".
+          <ActionBar
+            primary={
+              <Button
+                variant={selectMode ? "default" : "outline"}
+                aria-pressed={selectMode}
+                title={selectMode ? undefined : "Select several rooms to change them together"}
+                onClick={() => {
+                  if (selectMode) setSelectedRooms([])
+                  setSelectMode(!selectMode)
+                }}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {selectMode ? "Done" : "Select"}
+              </Button>
+            }
+            secondary={
+              isBulkMode ? (
+                // Only the rooms on screen — with a status filter on, a bulk change must never
+                // reach rooms the user can't see.
+                <Button variant="outline" onClick={() => setSelectedRooms(filteredRooms.map((r: any) => r.id))}>
+                  {filteredRooms.length === rooms.length ? "Select all" : `Select all ${filteredRooms.length} shown`}
+                </Button>
+              ) : undefined
+            }
+            more={
+              isBulkMode
+                ? []
+                : [
+                    { label: "Task sheets", icon: ClipboardList, onSelect: () => router.push(`/e/${slug}/dashboard/housekeeping/task-sheet`) },
+                    { label: "Refresh", icon: RefreshCw, onSelect: () => fetchRooms() },
+                  ]
+            }
+          />
+        }
       />
 
       {/* Filter bar */}

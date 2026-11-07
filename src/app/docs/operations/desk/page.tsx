@@ -29,7 +29,7 @@ export default function DeskGuide() {
         ]}
       />
       <p>
-        <strong>Auto-Assign</strong> (Arrivals tab and Reservations) gives rooms to every booking that has none. It first shows a
+        <strong>Auto-Assign</strong> (a button on the Arrivals tab, and under <strong>More</strong> at the top of Reservations, next to Tape Chart) gives rooms to every booking that has none. It first shows a
         window listing each booking and the room it would get, and the bookings that could not be placed with the reason. Nothing is
         saved until you press <strong>Assign</strong>.
       </p>

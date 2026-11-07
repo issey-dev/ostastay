@@ -13,15 +13,10 @@ import type { AutoAssignProposal, AutoAssignUnassigned } from "@/lib/auto-assign
 // Auto-Assign for bookings that still have no room: shows the plan first (which booking
 // gets which room, and which couldn't be placed) and writes nothing until staff confirm.
 // Used on the Reservations list and the Front Desk arrivals tab.
-export function AutoAssignButton({
-  propertyId,
-  onDone,
-  className,
-}: {
-  propertyId: string | undefined
-  onDone?: () => void
-  className?: string
-}) {
+//
+// `useAutoAssign` holds the whole flow so a page can start it from anywhere (the Reservations
+// header's "More" menu); `AutoAssignButton` is the same flow behind its own button.
+export function useAutoAssign({ propertyId, onDone }: { propertyId: string | undefined; onDone?: () => void }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -81,12 +76,7 @@ export function AutoAssignButton({
 
   const dates = (a: { startDate: string; endDate: string }) => `${format(new Date(a.startDate), "dd MMM")} → ${format(new Date(a.endDate), "dd MMM")}`
 
-  return (
-    <>
-      <Button variant="outline" className={className} onClick={start} disabled={!propertyId || loading}>
-        <Wand2 className="mr-2 h-4 w-4" /> {loading ? "Checking..." : "Auto-Assign"}
-      </Button>
-
+  const dialog = (
       <Dialog open={open} onOpenChange={(o) => !confirming && setOpen(o)}>
         <DialogContent size="lg">
           <DialogHeader>
@@ -156,6 +146,27 @@ export function AutoAssignButton({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+  )
+
+  return { start, loading, dialog }
+}
+
+export function AutoAssignButton({
+  propertyId,
+  onDone,
+  className,
+}: {
+  propertyId: string | undefined
+  onDone?: () => void
+  className?: string
+}) {
+  const { start, loading, dialog } = useAutoAssign({ propertyId, onDone })
+  return (
+    <>
+      <Button variant="outline" className={className} onClick={start} disabled={!propertyId || loading}>
+        <Wand2 className="mr-2 h-4 w-4" /> {loading ? "Checking..." : "Auto-Assign"}
+      </Button>
+      {dialog}
     </>
   )
 }

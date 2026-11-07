@@ -507,6 +507,14 @@ export function TapeChartGrid() {
 
   const unassignedReservations = reservations.filter(r => !r.roomId);
 
+  // Weekend columns (Sat/Sun, as on Availability) get a visible tint and the business date a
+  // primary one, so the eye can find "today" and the weekend without reading the numbers.
+  const dayTint = (date: Date, header = false) => {
+    if (business.ready && isEqual(date, business.today)) return header ? "bg-primary/15 border-b-2 border-b-primary" : "bg-primary/[0.07]";
+    const weekend = date.getDay() === 0 || date.getDay() === 6;
+    return weekend ? (header ? "bg-muted-foreground/15" : "bg-muted-foreground/[0.08]") : "";
+  };
+
   const viewEnd = addDays(startDate, daysToShow - 1);
   const showingToday = isEqual(startDate, business.today);
 
@@ -567,25 +575,26 @@ export function TapeChartGrid() {
       </ul>
     </div>
 
-    <div className="w-full overflow-x-auto relative bg-card">
+    {/* Scrolls both ways inside the card so the date row and the room column stay pinned. */}
+    <div className="w-full overflow-auto relative bg-card max-h-[calc(100dvh-15rem)] min-h-80">
     {/* w-max + min-w-full: every row shares one width, so the last day is never clipped and
         wide windows scroll cleanly with the room column pinned. */}
     <div className="w-max min-w-full">
       {/* Date Header Row */}
-      <div className="flex border-b border-border bg-muted sticky top-0 z-20">
+      <div className="flex border-b border-border bg-muted sticky top-0 z-30">
         <div className="w-32 shrink-0 border-r border-border p-2 flex items-center font-semibold text-foreground bg-muted z-30 sticky left-0 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
           Rooms
         </div>
         <div className="flex-1 grid" style={{ gridTemplateColumns: colTemplate }}>
           {columns.map(date => (
-            <div key={date.toISOString()} className="border-r border-border p-1 text-center">
+            <div key={date.toISOString()} className={cn("border-r border-border p-1 text-center", dayTint(date, true))}>
               <div className={cn("font-semibold text-muted-foreground uppercase", dense ? "text-[10px]" : "text-[11px] tracking-wider")}>
                 {format(date, dense ? "EEEEE" : "EEE")}
               </div>
               <div className={cn("font-bold tabular-nums", dense ? "text-sm" : "text-base", isEqual(date, business.today) ? "text-primary" : "text-foreground")}>
                 {format(date, "d")}
               </div>
-              <div className="text-[10px] text-muted-foreground/70 font-medium">{format(date, "MMM")}</div>
+              <div className="text-[10px] text-muted-foreground font-medium">{format(date, "MMM")}</div>
             </div>
           ))}
         </div>
@@ -594,7 +603,7 @@ export function TapeChartGrid() {
       {/* Unassigned Reservations Row (Only show if there are any) */}
       {unassignedReservations.length > 0 && (
         <div className="flex border-b border-warning/30 bg-warning-muted/60">
-          <div className="w-32 shrink-0 border-r border-border p-2 bg-warning-muted z-10 sticky left-0 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+          <div className="w-32 shrink-0 border-r border-border p-2 bg-warning-muted z-20 sticky left-0 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
             <span className="font-bold text-warning text-xs">Unassigned</span>
             <span className="text-[10px] text-warning/80">{unassignedReservations.length} Bookings</span>
           </div>
@@ -637,7 +646,7 @@ export function TapeChartGrid() {
       {/* Room Rows Grouped by Floor */}
       {Object.entries(groupedRooms).map(([floor, floorRooms]) => (
         <div key={floor}>
-          <div className="bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-0.5 sticky left-0 z-10 border-b border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] w-32">
+          <div className="bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 py-0.5 sticky left-0 z-20 border-b border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] w-32">
             Floor {floor}
           </div>
 
@@ -646,9 +655,9 @@ export function TapeChartGrid() {
 
             return (
               <div key={room.id} className="flex border-b border-border group hover:bg-muted/50 transition-colors">
-                <div className="w-32 shrink-0 border-r border-border p-2 bg-card group-hover:bg-muted/50 z-10 sticky left-0 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                <div className="w-32 shrink-0 border-r border-border p-2 bg-card group-hover:bg-muted/50 z-20 sticky left-0 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                   <span className="font-bold text-foreground text-sm leading-tight">{room.roomNumber}</span>
-                  <span className="text-[10px] text-muted-foreground font-medium truncate">{room.roomType.name}</span>
+                  <span className="text-[11px] text-muted-foreground font-medium truncate">{room.roomType.name}</span>
                 </div>
 
                 {/* Data Grid for this room */}
@@ -663,7 +672,7 @@ export function TapeChartGrid() {
                   {columns.map((date, i) => (
                     <div
                       key={`${room.id}-grid-${i}`}
-                      className="border-r border-border h-14 cursor-crosshair hover:bg-muted/50 transition-colors"
+                      className={cn("border-r border-border h-14 cursor-crosshair hover:bg-muted/50 transition-colors", dayTint(date))}
                       style={{ gridColumn: i + 1 }}
                       title={`Book room ${room.roomNumber} from ${format(date, "dd-MMM")}`}
                       onClick={() =>
@@ -689,10 +698,7 @@ export function TapeChartGrid() {
                         style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
                       >
                         <span className="font-bold text-xs leading-tight truncate">{res.primaryGuest.lastName}</span>
-                        <div className="flex justify-between items-end gap-1 mt-1 text-muted-foreground">
-                           <span className="text-[10px] font-semibold truncate hidden md:inline">{res.status.replace('_', ' ')}</span>
-                           <span className="text-[10px] font-mono shrink-0">#{res.confirmationNo.slice(0,4)}</span>
-                        </div>
+                        <span className="mt-1 text-[10px] font-mono text-muted-foreground truncate">#{res.confirmationNo}</span>
                       </div>
                     );
                   })}

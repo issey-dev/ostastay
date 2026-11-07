@@ -3553,3 +3553,19 @@ Patch release, no schema change, release notes written. Owner approved four firs
   and carries an `aria-label`. `profileIncomplete` is kept (derived from it).
 - **Dashboard status chips** that link elsewhere (Night Audit, Cashier shifts) now end in a chevron
   and have a hover hint. They were already links; the first suggestion missed that.
+
+**Round 1, second batch (same 8.8.5 PR, owner-approved items 5–8):**
+- **Tape Chart.** Cards show guest name + full confirmation number only (status stays in the
+  colour, legend and hover title). The pinned room column now sits above the cards (z-20 vs 10;
+  header 30) — cards used to paint over it when scrolling sideways. The grid scrolls both ways
+  inside the card (`max-h`), so the date row sticks too. Weekend tint = Sat/Sun, as on
+  Availability; today's column tinted + underlined.
+- **Reservations loading** already showed skeletons; the table's are now row-shaped. Actions
+  column 150→190px and column widths rebalanced so "Assign & check in" does not squeeze Stay.
+- **Housekeeping due-out** rooms: tinted card + filled "Due out" tag. Rooms are NOT re-sorted
+  (the board stays in room order); revisit if the desk wants due-outs first.
+- **Page toolbars: one primary + one secondary; if more than two actions, the secondary is a
+  "More" menu** (existing `ActionBar`). Applied to Reservations (New booking | More: Tape Chart,
+  Auto-Assign) and Housekeeping (Select | More: Task sheets, Refresh; while rooms are ticked:
+  Done + Select all). `useAutoAssign()` splits Auto-Assign's flow from its button. Other pages'
+  toolbars are not yet converted — see TODO.

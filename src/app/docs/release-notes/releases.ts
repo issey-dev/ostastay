@@ -25,6 +25,11 @@ export const RELEASES: Release[] = [
       "Front Desk and Reservations: when an arrival has no room yet, the Check in button now reads Assign & check in, because the first step is choosing a room. A hint explains it.",
       "Front Desk: the warning beside an arrival's name now says exactly what is missing from the guest's profile (nationality, date of birth, ID document), not just that something is.",
       "Dashboard: the status chips that open another page (Night Audit, Cashier shifts) now end in an arrow and show where they lead when you hover over them.",
+      "Tape Chart: booking cards now show the guest name and confirmation number, in full, with nothing cut off (hover for the status). Weekends are shaded, today's column is highlighted, and the room names are easier to read.",
+      "Tape Chart: the date row and the room column stay in view as you scroll, and booking cards slide underneath the room column instead of over it.",
+      "Reservations: the list shows row-shaped placeholders while it loads, so it no longer jumps when the bookings appear, and the Actions column is wide enough for Assign & check in.",
+      "Housekeeping: a room whose guest leaves today now has a tinted card and a highlighted Due out tag, so it stands out from the other occupied rooms.",
+      "Reservations and Housekeeping: each page now has one main button and a More menu for the rest (Reservations: New booking, with Tape Chart and Auto-Assign under More; Housekeeping: Select, with Task sheets and Refresh under More).",
     ],
   },
   {

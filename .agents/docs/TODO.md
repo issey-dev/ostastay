@@ -3051,3 +3051,18 @@ Reuse: the End of Day extend-stay route, the reservation save's availability che
   guide — they are text steps only; add them from a real Beds24 account.
 - [ ] The Beds24 scopes listed in the guide (bookings, inventory read/write, properties read) were
   written from the integration's endpoints, not tested against a live invite-code screen — verify.
+
+## UX polish rounds (2026-11-07, branch `release/8.8.5`)
+
+Owner-approved first-glance suggestions; round 1 shipped as 8.8.5 (see DECISIONS 2026-11-07).
+Still open from that review:
+- [ ] **Toolbar rule (one primary + one secondary, "More" for 3+) on the other pages.** Done on
+  Reservations and Housekeeping only; Front Desk already has a single primary. Remaining: Cashiering,
+  Spa, Excursions, Fast Post, Reports, Group Blocks, Maintenance, Availability, Revenue, Debtors,
+  Night Audit, Client Relations, Hub screens. Use `ActionBar` (`src/components/ui/action-bar.tsx`).
+- [ ] Larger ideas from the review: Ctrl-K search as an action palette ("Check in Williams");
+  role-based landing page (Housekeeping → task sheet, Cashier → open shift, Front Desk → arrivals).
+- [ ] Check-in wizard room step shows "Room ()" when the booking's room type name is missing.
+- [ ] Housekeeping due-out rooms are tinted but not sorted first; decide if the desk wants that.
+- [ ] Sub-pixel sliver of a Tape Chart card can show at the room column's left edge at fractional
+  scroll positions (hit-testing is correct; cosmetic only).
