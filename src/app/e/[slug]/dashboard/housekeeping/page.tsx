@@ -16,7 +16,8 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { toneMutedClasses } from "@/lib/status-tone"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { housekeepingStaff } from "@/lib/job-functions"
-import { HousekeepingRoomRow, RoomActionSheet } from "@/components/housekeeping/room-action-sheet"
+import { RoomActionSheet } from "@/components/housekeeping/room-action-sheet"
+import { RevealItem, useIntro, usePageScope } from "@/components/dashboard/motion-kit"
 import { MobileActions } from "@/components/ui/mobile"
 import { ActionBar } from "@/components/ui/action-bar"
 import { useConfirm } from "@/components/providers/confirm-provider"
@@ -60,6 +61,10 @@ export default function HousekeepingDashboard() {
   const [sheetRoomId, setSheetRoomId] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [singleRoomFlow, setSingleRoomFlow] = useState(false)
+
+  // The cards rise in one by one the first time the board loads (see MOTION_PLAN). Never again
+  // for a filter, a refresh or a status change: those rooms mount with `intro` already false.
+  const intro = useIntro(rooms.length > 0, usePageScope("housekeeping"))
 
   const fetchRooms = async (silent = false) => {
     if (!currentProperty) return
@@ -389,9 +394,9 @@ export default function HousekeepingDashboard() {
           <Skeleton className="h-9 w-24" />
         </div>
         <Skeleton className="h-6 w-32 mb-4" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-40" />
           ))}
         </div>
       </div>
@@ -514,39 +519,45 @@ export default function HousekeepingDashboard() {
               Assign floor
             </Button>
           </div>
-          {/* Phones: compact rows; tap opens the room's action sheet */}
-          <div className="space-y-2 md:hidden">
-            {roomsByFloor[floorName].map((room: any) => (
-              <HousekeepingRoomRow
-                key={room.id}
-                room={room}
-                businessDate={currentProperty?.businessDate}
-                selectMode={selectMode}
-                isSelected={selectedRooms.includes(room.id)}
-                onOpen={setSheetRoomId}
-                onToggleSelect={handleToggleSelect}
-              />
+          {/* Phones: one column of cards; tap opens the room's action sheet */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {roomsByFloor[floorName].map((room: any, i: number) => (
+              <RevealItem key={room.id} i={i} intro={intro}>
+                <RoomStatusCard
+                  room={room}
+                  slug={slug}
+                  onStatusChange={handleStatusChange}
+                  selectMode={selectMode}
+                  isSelected={selectedRooms.includes(room.id)}
+                  onToggleSelect={handleToggleSelect}
+                  onOpen={setSheetRoomId}
+                  onCompleteTask={handleCompleteTask}
+                  onEditMaintenance={handleEditMaintenance}
+                  businessDate={currentProperty?.businessDate}
+                />
+              </RevealItem>
             ))}
           </div>
-          {/* Desktop/tablet: neutral cards; click opens the room's status menu, or toggles
-              the room in Select mode */}
-          <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-            {roomsByFloor[floorName].map((room: any) => (
-              <RoomStatusCard
-                key={room.id}
-                room={room}
-                slug={slug}
-                onStatusChange={handleStatusChange}
-                selectMode={selectMode}
-                isSelected={selectedRooms.includes(room.id)}
-                onToggleSelect={handleToggleSelect}
-                onCompleteTask={handleCompleteTask}
-                onEditMaintenance={handleEditMaintenance}
-                onMarkOutOfOrder={(roomId) => openSingleRoomDialog(roomId, "ooo")}
-                onReportIssue={(roomId) => openSingleRoomDialog(roomId, "issue")}
-                onAssign={(roomId) => openSingleRoomDialog(roomId, "assign")}
-                businessDate={currentProperty?.businessDate}
-              />
+          {/* Tablet: two columns, desktop: three. Click opens the room's status menu, or
+              toggles the room in Select mode */}
+          <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {roomsByFloor[floorName].map((room: any, i: number) => (
+              <RevealItem key={room.id} i={i} intro={intro}>
+                <RoomStatusCard
+                  room={room}
+                  slug={slug}
+                  onStatusChange={handleStatusChange}
+                  selectMode={selectMode}
+                  isSelected={selectedRooms.includes(room.id)}
+                  onToggleSelect={handleToggleSelect}
+                  onCompleteTask={handleCompleteTask}
+                  onEditMaintenance={handleEditMaintenance}
+                  onMarkOutOfOrder={(roomId) => openSingleRoomDialog(roomId, "ooo")}
+                  onReportIssue={(roomId) => openSingleRoomDialog(roomId, "issue")}
+                  onAssign={(roomId) => openSingleRoomDialog(roomId, "assign")}
+                  businessDate={currentProperty?.businessDate}
+                />
+              </RevealItem>
             ))}
           </div>
         </div>

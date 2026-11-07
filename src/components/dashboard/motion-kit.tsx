@@ -81,6 +81,35 @@ export function RiseItem({ i = 0, className, children }: { i?: number; className
   )
 }
 
+/** A grid card that rises in, `i`-th of its grid, as it first scrolls into view. Pass
+ *  `intro` from `useIntro()`: once that has expired, cards that mount later (a filter, a
+ *  refresh) render in place with no animation. */
+export function RevealItem({
+  i = 0,
+  intro = true,
+  className,
+  children,
+}: {
+  i?: number
+  intro?: boolean
+  className?: string
+  children: React.ReactNode
+}) {
+  const ok = useMotionOk()
+  const animated = ok && intro
+  return (
+    <motion.div
+      className={className}
+      initial={animated ? { opacity: 0, y: 12 } : false}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={VIEWPORT}
+      transition={{ duration: DUR.enter * 0.8, ease: EASE_OUT, delay: Math.min(i * STAGGER.item, STAGGER.cap) }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 // ── CountUp ───────────────────────────────────────────────────────────────────────
 
 const NUMBER = /-?\d[\d,]*(?:\.\d+)?/

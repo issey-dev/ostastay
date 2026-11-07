@@ -60,14 +60,17 @@ export default function DashboardHousekeepingGuide() {
 
       <H2>The Housekeeping board</H2>
       <p>
-        Rooms are shown as cards grouped by floor. Each card shows the room number, its status (<strong>Dirty</strong>, <strong>Clean</strong>,{" "}
-        <strong>Inspected</strong>, <strong>Out of order</strong> or <strong>Out of service</strong>), the room type, who is in the room, an{" "}
-        <strong>Arrival today</strong> note when someone is due in, any open housekeeping tasks, and a spanner when there is an open maintenance issue. The tabs
-        above the board filter by status and show how many rooms are in each; a second filter shows one attendant&apos;s rooms.
+        Rooms are shown as cards grouped by floor: three across on a desktop, two on a tablet and one on a phone. The top of each card shows the room number and its
+        status (<strong>Dirty</strong>, <strong>Clean</strong>, <strong>Inspected</strong>, <strong>Out of order</strong> or <strong>Out of service</strong>), with a
+        spanner beside it when there is an open maintenance issue. Under a thin line, a short list gives the <strong>Type</strong> of room, the <strong>Stay</strong>{" "}
+        (who is in the room and how many, or Vacant) and the open <strong>Task</strong>. A <strong>Request</strong>, <strong>Staff</strong> or <strong>Tech</strong>{" "}
+        line appears only when the room has a special request, an attendant or a technician, so most cards stay short. The tabs above the board filter by status and show
+        how many rooms are in each; a second filter shows one attendant&apos;s rooms.
       </p>
       <p>
-        A room whose guest is <strong>due out today</strong> has a tinted card and a highlighted <strong>Due out</strong> tag, so you can see at a glance which
-        occupied rooms will need cleaning next. The board stays in room order.
+        A room whose guest is <strong>due out today</strong> shows <strong>Due out</strong> in bold amber on its Stay line, and a room with someone arriving shows{" "}
+        <strong>Arrival today</strong> in bold blue, so you can see at a glance which rooms will need cleaning next. The board stays in room order. The first time the
+        board opens, the cards rise into place one after another; they do not move again when you filter, refresh or change a status.
       </p>
       <Table
         head={["Button", "What it does"]}
