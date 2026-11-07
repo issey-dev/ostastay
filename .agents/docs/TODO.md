@@ -3052,9 +3052,9 @@ Reuse: the End of Day extend-stay route, the reservation save's availability che
 - [ ] The Beds24 scopes listed in the guide (bookings, inventory read/write, properties read) were
   written from the integration's endpoints, not tested against a live invite-code screen — verify.
 
-## UX polish rounds (2026-11-07, branch `release/8.8.5`)
+## UX polish rounds (2026-11-07, branch `release/8.8.6`)
 
-Owner-approved first-glance suggestions; round 1 shipped as 8.8.5 (see DECISIONS 2026-11-07).
+Owner-approved first-glance suggestions; round 1 shipped as 8.8.6 (see DECISIONS 2026-11-07).
 Still open from that review:
 - [ ] **Toolbar rule (one primary + one secondary, "More" for 3+) on the other pages.** Done on
   Reservations and Housekeeping only; Front Desk already has a single primary. Remaining: Cashiering,

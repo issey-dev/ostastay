@@ -3538,9 +3538,9 @@ for it**.
 - Not changed: one connection per property; mapping, sharing switch and defaults as before.
 - Docs: new guide `/docs/configuration/property/channel-manager-setup` (with screenshots).
 
-## 2026-11-07 — UX polish round 1 (owner, 8.8.5)
+## 2026-11-07 — UX polish round 1 (owner, 8.8.6)
 
-Patch release, no schema change, release notes written. Owner approved four first-glance items:
+Patch release 8.8.6 (first numbered 8.8.5, renumbered by the owner so the PRs merge as 8.8.6 → 8.9.0 → 8.9.1), no schema change, release notes written. Owner approved four first-glance items:
 
 - **Dashboard empty state.** The status ribbon no longer counts as a tile: a dashboard page showing
   only the ribbon now shows "Nothing on this dashboard yet" with a **Customise dashboard** button
@@ -3554,7 +3554,7 @@ Patch release, no schema change, release notes written. Owner approved four firs
 - **Dashboard status chips** that link elsewhere (Night Audit, Cashier shifts) now end in a chevron
   and have a hover hint. They were already links; the first suggestion missed that.
 
-**Round 1, second batch (same 8.8.5 PR, owner-approved items 5–8):**
+**Round 1, second batch (same 8.8.6 PR, owner-approved items 5–8):**
 - **Tape Chart.** Cards show guest name + full confirmation number only (status stays in the
   colour, legend and hover title). The pinned room column now sits above the cards (z-20 vs 10;
   header 30) — cards used to paint over it when scrolling sideways. The grid scrolls both ways
