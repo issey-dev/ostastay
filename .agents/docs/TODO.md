@@ -2,6 +2,16 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Notifications + PWA push (2026-11-07) — PLAN WRITTEN, not started
+
+See [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md). Waiting on the owner's answers (section 12)
+before N1.
+- [ ] N0 PWA foundation (manifest fields, install prompt, service worker shell, CSP `worker-src`)
+- [ ] N1 In-app bell replacing the header Setup button (move Setup to account menu + palette)
+- [ ] N2 Web Push (VAPID, subscriptions, outbox job)
+- [ ] N3 Full producer catalogue, preferences, Hub announcements
+- [ ] N4 Optional: quiet hours, email digest, SSE, reminders
+
 ## Default room features (2026-10-11, 8.7.2) — DONE
 - [x] 48 generic bed types / views / amenities (owner-approved list) in `src/lib/properties/default-room-features.ts`; `ensureDefaultRoomFeatures` runs on both property-creation routes (additive, skips codes a property already has).
 - [x] Existing properties (prod included) are backfilled by migration `20261011090000_default_room_features` on `migrate deploy` — same additive rule. The SQL list is generated from the TS list: if you change the defaults, add a NEW migration (never edit this one); the `npm run features:backfill` script is a manual fallback / dry-run report.

@@ -50,6 +50,12 @@ read `.agents/docs/`:
   decide which area it belongs to, and gate its API with `requireEnterpriseHub()` or
   `requirePropertySetup()` from `src/lib/scope.ts`.
 
+- [`.agents/docs/NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) — PLAN ONLY (nothing
+  built): header bell replacing the Setup button, personal + global notifications, the event
+  catalogue, PWA install + Web Push to phones, data model, phases N0-N4 and open owner questions.
+  Read before touching the dashboard header, adding any notification/toast-like feature, the
+  web manifest, or a service worker.
+
 - **The public docs portal** (`src/app/docs`, table of contents in `src/app/docs/nav.ts`) has
   three areas: `/docs/api` (Booking API, for developers), `/docs/configuration` (setting up
   an enterprise and its properties in the Hub, for the client's admin and property team) and
