@@ -34,8 +34,7 @@ Motion in the app is built on the `motion` package through ONE kit:
 
 ## Also done
 
-- List tables (`ui/list-table.tsx`): first ~10 rows fade in 30 ms apart on first load only; an `intro`
-  window closes after 1 s so filter / page / refresh rows never animate; sorting never remounts rows.
+- Lists (ListTable, every `TableBody`, `MobileCardList`): rows/cards POP IN ONE BY ONE on first load — 55 ms apart, 14px rise + slight scale, first 14 then the rest together (none past 30). Pure CSS: `.cascade` in globals.css, toggled by `useIntro()` for 1.6 s. Filter / page / refresh rows never animate; sorting never remounts. `<TableBody cascade={false}>` opts out.
 - Page transition: `src/app/e/[slug]/dashboard/template.tsx`, 180 ms fade + 6 px rise, no exit.
 
 - Tape Chart and Availability grid: one 300 ms fade-in when the grid first appears (tw-animate
@@ -48,7 +47,6 @@ Motion in the app is built on the `motion` package through ONE kit:
   left as they are.
 
 
-- `MobileCardList` (phone): first 8 cards ease in on first load only (`FirstLoadFade` in the kit).
 
 ## Next (not started)
 

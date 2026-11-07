@@ -214,3 +214,30 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .tape-landed { animation: none; }
 }
+
+/* One-by-one row/card pop on first load (tables, ListTable, MobileCardList). The container gets
+   .cascade only while useIntro() is true, so later rows (filter, paging, refresh) never animate. */
+@keyframes row-pop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.985); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+.cascade > * { animation: row-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: 770ms; }
+.cascade > :nth-child(1) { animation-delay: 0ms; }
+.cascade > :nth-child(2) { animation-delay: 55ms; }
+.cascade > :nth-child(3) { animation-delay: 110ms; }
+.cascade > :nth-child(4) { animation-delay: 165ms; }
+.cascade > :nth-child(5) { animation-delay: 220ms; }
+.cascade > :nth-child(6) { animation-delay: 275ms; }
+.cascade > :nth-child(7) { animation-delay: 330ms; }
+.cascade > :nth-child(8) { animation-delay: 385ms; }
+.cascade > :nth-child(9) { animation-delay: 440ms; }
+.cascade > :nth-child(10) { animation-delay: 495ms; }
+.cascade > :nth-child(11) { animation-delay: 550ms; }
+.cascade > :nth-child(12) { animation-delay: 605ms; }
+.cascade > :nth-child(13) { animation-delay: 660ms; }
+.cascade > :nth-child(14) { animation-delay: 715ms; }
+.cascade > :nth-child(n+31) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cascade > * { animation: none; }
+}

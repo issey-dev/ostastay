@@ -155,34 +155,29 @@ export function CountUp({ value, className, duration = DUR.count }: { value: str
   )
 }
 
-/**
- * A container whose first few children ease in on first load only — the phone card lists'
- * version of the table's row fade. The `animate-in` classes are on the container for ~1 s
- * after it first has children; children that arrive later (a filter, a page, a refresh)
- * mount after they're removed and so never animate.
- */
+/** True for ~1.6 s after `hasItems` first becomes true — long enough for the last cascade
+ *  row (770 ms delay + 500 ms pop) to finish before the class is removed. */
+export function useIntro(hasItems: boolean) {
+  const [intro, setIntro] = React.useState(true)
+  React.useEffect(() => {
+    if (!hasItems) return
+    const t = setTimeout(() => setIntro(false), 1600)
+    return () => clearTimeout(t)
+  }, [hasItems])
+  return intro
+}
+
+/** Rows or cards that pop in one by one on first load only (see .cascade in globals.css).
+ *  Rows that arrive later — a filter, a page, a refresh — never animate. */
 export function FirstLoadFade({
   hasItems,
   className,
   children,
   ...rest
 }: { hasItems: boolean; className?: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
-  const [intro, setIntro] = React.useState(true)
-  React.useEffect(() => {
-    if (!hasItems) return
-    const t = setTimeout(() => setIntro(false), 1000)
-    return () => clearTimeout(t)
-  }, [hasItems])
+  const intro = useIntro(hasItems)
   return (
-    <div
-      {...rest}
-      className={
-        (className ?? "") +
-        (intro
-          ? " [&>*:nth-child(-n+8)]:animate-in [&>*:nth-child(-n+8)]:fade-in-0 [&>*:nth-child(-n+8)]:slide-in-from-bottom-1 [&>*:nth-child(-n+8)]:duration-300 motion-reduce:[&>*]:animate-none"
-          : "")
-      }
-    >
+    <div {...rest} className={(className ?? "") + (intro ? " cascade" : "")}>
       {children}
     </div>
   )
