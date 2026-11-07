@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { usePathname } from "next/navigation"
 import { animate, motion, useInView, useReducedMotion } from "motion/react"
 
 // One motion language for every Operations Dashboard widget.
@@ -155,27 +156,43 @@ export function CountUp({ value, className, duration = DUR.count }: { value: str
   )
 }
 
+// Containers that unmount and remount while data reloads (a skeleton swaps in for the list)
+// would otherwise replay the cascade on every refetch, because their intro state is reset.
+// Remembering when a scope last played — module-level, so it survives the remount — fixes that:
+// the same list does not cascade again within REPLAY_AFTER.
+const played = new Map<string, number>()
+const REPLAY_AFTER = 30_000
+
 /** True for ~1.6 s after `hasItems` first becomes true — long enough for the last cascade
- *  row (770 ms delay + 500 ms pop) to finish before the class is removed. */
-export function useIntro(hasItems: boolean) {
-  const [intro, setIntro] = React.useState(true)
+ *  row (770 ms delay + 500 ms pop) to finish before the class is removed. With a `scope`,
+ *  false straight away if that scope played within the last 30 s. */
+export function useIntro(hasItems: boolean, scope?: string) {
+  const [intro, setIntro] = React.useState(() => !scope || Date.now() - (played.get(scope) ?? 0) > REPLAY_AFTER)
   React.useEffect(() => {
     if (!hasItems) return
+    if (scope) played.set(scope, Date.now())
     const t = setTimeout(() => setIntro(false), 1600)
     return () => clearTimeout(t)
-  }, [hasItems])
+  }, [hasItems, scope])
   return intro
+}
+
+/** Per-page scope for the shared list components: one cascade per page path. */
+export function usePageScope(name: string) {
+  return `${usePathname()}:${name}`
 }
 
 /** Rows or cards that pop in one by one on first load only (see .cascade in globals.css).
  *  Rows that arrive later — a filter, a page, a refresh — never animate. */
 export function FirstLoadFade({
   hasItems,
+  scope,
   className,
   children,
   ...rest
-}: { hasItems: boolean; className?: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
-  const intro = useIntro(hasItems)
+}: { hasItems: boolean; scope?: string; className?: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  const pageScope = usePageScope("cards")
+  const intro = useIntro(hasItems, scope ?? pageScope)
   return (
     <div {...rest} className={(className ?? "") + (intro ? " cascade" : "")}>
       {children}

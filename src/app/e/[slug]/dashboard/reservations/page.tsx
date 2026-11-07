@@ -49,6 +49,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import type { MobileAction } from "@/components/ui/mobile"
 import { INPUT_SEARCH } from "@/lib/input-presets"
+import { FirstLoadFade } from "@/components/dashboard/motion-kit"
 
 type Reservation = {
   id: string
@@ -912,7 +913,7 @@ function ReservationsList() {
         <CardContent className="max-md:px-0">
           {/* Mobile: stacked cards */}
           {/* Cards: always on a phone, and on desktop when card view is chosen. */}
-          <div className={`space-y-3 ${view === "card" ? "" : "md:hidden"}`}>
+          <FirstLoadFade hasItems={!loading && reservations.length > 0} className={`space-y-3 ${view === "card" ? "" : "md:hidden"}`}>
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg" />)
             ) : loadError ? (
@@ -1034,7 +1035,7 @@ function ReservationsList() {
                 )
               })
             )}
-          </div>
+          </FirstLoadFade>
 
           {/* Tablet/desktop: fixed-layout table — a stable column grid that never
               reflows when a booking has more rooms or more flags. */}

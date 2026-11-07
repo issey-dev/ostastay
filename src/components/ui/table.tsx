@@ -3,7 +3,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
-import { useIntro } from "@/components/dashboard/motion-kit"
+import { useIntro, usePageScope } from "@/components/dashboard/motion-kit"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
@@ -33,7 +33,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
 // Rows pop in one by one the first time the body has rows (.cascade in globals.css, driven by
 // useIntro). Pass `cascade={false}` for a table that must not animate (a live, working list).
 function TableBody({ className, cascade = true, children, ...props }: React.ComponentProps<"tbody"> & { cascade?: boolean }) {
-  const intro = useIntro(React.Children.toArray(children).length > 0)
+  const intro = useIntro(React.Children.toArray(children).length > 0, usePageScope("rows"))
   return (
     <tbody
       data-slot="table-body"
