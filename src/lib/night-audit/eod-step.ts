@@ -10,7 +10,7 @@ import { logActivity } from "@/lib/activity-log";
 import { purgeExpiredSessions } from "@/lib/session-store";
 import { runNightAudit } from "@/lib/night-audit/run";
 import { checkOutReservation } from "@/lib/reservations/check-out";
-import { computeFolioBalance } from "@/lib/debtor-accounts";
+import { computeFolioBalance, activeCityLedgerPayments } from "@/lib/debtor-accounts";
 import { getPropertySettings } from "@/lib/property-settings";
 
 // Advance one EOD step for a property. Steps run in order; each is idempotent —
@@ -194,7 +194,7 @@ async function checkOutSettledDepartures(ctx: AuthContext, propertyId: string, b
         select: {
           settlementMethod: true,
           lineItems: { select: { amount: true, taxAmount: true, serviceChargeAmount: true, isVoid: true } },
-          payments: { select: { amount: true, isRefund: true, paymentMethod: { select: { type: true } } } },
+          payments: { select: { id: true, refundOfPaymentId: true, amount: true, isRefund: true, paymentMethod: { select: { type: true } } } },
         },
       },
     },
@@ -205,7 +205,7 @@ async function checkOutSettledDepartures(ctx: AuthContext, propertyId: string, b
     const settled = r.folios.every(
       (f) =>
         f.settlementMethod !== "CITY_LEDGER" &&
-        !f.payments.some((p) => !p.isRefund && p.paymentMethod?.type === "CITY_LEDGER") &&
+        activeCityLedgerPayments(f.payments).length === 0 &&
         Math.abs(computeFolioBalance(f.lineItems, f.payments)) <= 0.01
     );
     if (!settled) continue;

@@ -40,10 +40,12 @@ type Line = {
 type CheckEntry = Extract<LedgerEntry<Line>, { kind: "check" }>
 
 type FolioLedgerProps = {
-  folio: { id: string; isClosed?: boolean; lineItems: Line[]; payments: any[] }
+  folio: { id: string; isClosed?: boolean; isDebtorAccount?: boolean; lineItems: Line[]; payments: any[] }
   slug: string
   selectedIds: string[]
   onSelectedIdsChange: (ids: string[]) => void
+  selectedPaymentIds: string[]
+  onSelectedPaymentIdsChange: (ids: string[]) => void
   onVoidLine: (line: Line) => void
   onVoidGroup: (lines: Line[]) => void
   onEditCheckNo: (target: CheckNoTarget) => void
@@ -60,7 +62,7 @@ function StopClicks({ children }: { children: React.ReactNode }) {
   return <span className="contents" onClick={(e) => e.stopPropagation()}>{children}</span>
 }
 
-export function FolioLedger({ folio, slug, selectedIds, onSelectedIdsChange, onVoidLine, onVoidGroup, onEditCheckNo }: FolioLedgerProps) {
+export function FolioLedger({ folio, slug, selectedIds, onSelectedIdsChange, selectedPaymentIds, onSelectedPaymentIdsChange, onVoidLine, onVoidGroup, onEditCheckNo }: FolioLedgerProps) {
   const entries = rollUpByCheck(folio.lineItems)
   const groups = entries.filter((e): e is CheckEntry => e.kind === "check")
   // Collapsed by default. Kept per check key, so a refresh after an edit keeps what the
@@ -89,6 +91,23 @@ export function FolioLedger({ folio, slug, selectedIds, onSelectedIdsChange, onV
   const groupIds = (g: CheckEntry) => g.lines.map((l) => l.id)
   const groupSelected = (g: CheckEntry) => g.lines.every((l) => selected.has(l.id))
   const canAct = !folio.isClosed
+
+  // A payment can be selected for refund unless it is itself a refund, has already been
+  // reversed, or sits on a closed folio (a finalized debtor invoice still takes refunds of
+  // ordinary payments, but not of the City-Ledger transfer that created it).
+  const reversedIds = new Set(folio.payments.map((p: any) => p.refundOfPaymentId).filter(Boolean))
+  const canRefundPayment = (p: any) =>
+    !p.isRefund && !reversedIds.has(p.id) &&
+    (!folio.isClosed || (!!folio.isDebtorAccount && p.paymentMethod?.type !== "CITY_LEDGER"))
+  const selectedPayments = new Set(selectedPaymentIds)
+  const togglePayment = (id: string, on: boolean) => {
+    const next = new Set(selectedPaymentIds)
+    if (on) next.add(id)
+    else next.delete(id)
+    onSelectedPaymentIdsChange([...next])
+  }
+  const paymentLabel = (p: any) =>
+    p.isRefund ? `Refund - ${p.paymentMethod?.name}` : `Payment - ${p.paymentMethod?.name}`
   const empty = folio.lineItems.length === 0 && folio.payments.length === 0
 
   const expandToggle = groups.length > 0 && (
@@ -344,12 +363,32 @@ export function FolioLedger({ folio, slug, selectedIds, onSelectedIdsChange, onV
             {expandToggle && <div className="flex justify-end px-3 py-1.5">{expandToggle}</div>}
             {entries.map((e) => (e.kind === "check" ? phoneGroup(e) : phoneLine(e.line)))}
             {folio.payments.map((payment: any) => (
-              <div key={payment.id} className="flex items-center gap-2 px-3 py-2.5">
+              <div
+                key={payment.id}
+                className={cn("flex items-center gap-2 px-3 py-2.5", selectedPayments.has(payment.id) && "bg-primary/5", canRefundPayment(payment) && "cursor-pointer active:bg-muted/50")}
+                onClick={() => { if (canRefundPayment(payment)) togglePayment(payment.id, !selectedPayments.has(payment.id)) }}
+              >
+                {canRefundPayment(payment) && (
+                  <Checkbox
+                    className="shrink-0"
+                    aria-label={`Select ${paymentLabel(payment)}`}
+                    checked={selectedPayments.has(payment.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    onCheckedChange={(on) => togglePayment(payment.id, !!on)}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">Payment - {payment.paymentMethod?.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{dayMonth(payment.createdAt)}</p>
+                  <p className={cn("truncate text-sm font-medium", reversedIds.has(payment.id) && "text-muted-foreground")}>
+                    {paymentLabel(payment)}
+                    {reversedIds.has(payment.id) && <Badge variant="outline" className="ml-2">REFUNDED</Badge>}
+                  </p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {dayMonth(payment.createdAt)}{payment.isRefund && payment.refundReason ? ` · ${payment.refundReason}` : ""}
+                  </p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-success">{money(payment.amount)}</span>
+                <span className={cn("shrink-0 text-sm font-semibold tabular-nums", payment.isRefund ? "text-destructive" : reversedIds.has(payment.id) ? "text-muted-foreground line-through" : "text-success")}>
+                  {payment.isRefund ? `-${money(payment.amount)}` : money(payment.amount)}
+                </span>
                 {receiptButton(payment, "md")}
               </div>
             ))}
@@ -386,15 +425,31 @@ export function FolioLedger({ folio, slug, selectedIds, onSelectedIdsChange, onV
           <TableBody>
             {entries.map((e) => (e.kind === "check" ? desktopGroup(e) : desktopLine(e.line)))}
             {folio.payments.map((payment: any) => (
-              <TableRow key={payment.id}>
-                <TableCell></TableCell>
+              <TableRow key={payment.id} className={selectedPayments.has(payment.id) ? "bg-muted/30" : ""}>
+                <TableCell className="text-center">
+                  {canRefundPayment(payment) && (
+                    <Checkbox
+                      aria-label={`Select ${paymentLabel(payment)}`}
+                      checked={selectedPayments.has(payment.id)}
+                      onCheckedChange={(on) => togglePayment(payment.id, !!on)}
+                    />
+                  )}
+                </TableCell>
                 <TableCell className="text-xs text-muted-foreground">{shortDate(payment.createdAt)}</TableCell>
-                <TableCell>Payment - {payment.paymentMethod?.name}</TableCell>
+                <TableCell className={reversedIds.has(payment.id) ? "text-muted-foreground" : ""}>
+                  {paymentLabel(payment)}
+                  {reversedIds.has(payment.id) && <Badge variant="outline" className="ml-2">REFUNDED</Badge>}
+                  {payment.isRefund && payment.refundReason && (
+                    <span className="ml-2 text-xs text-muted-foreground">— {payment.refundReason}</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right text-muted-foreground">-</TableCell>
                 <TableCell className="text-right text-muted-foreground">-</TableCell>
                 <TableCell className="text-right text-muted-foreground">-</TableCell>
                 <TableCell className="text-right text-muted-foreground">-</TableCell>
-                <TableCell className="text-right font-medium text-success">{money(payment.amount)}</TableCell>
+                <TableCell className={cn("text-right font-medium", payment.isRefund ? "text-destructive" : reversedIds.has(payment.id) ? "text-muted-foreground line-through" : "text-success")}>
+                  {payment.isRefund ? `-${money(payment.amount)}` : money(payment.amount)}
+                </TableCell>
                 <TableCell>{receiptButton(payment, "sm")}</TableCell>
               </TableRow>
             ))}

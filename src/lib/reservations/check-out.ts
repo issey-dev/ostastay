@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { assertPropertyAccess, type AuthContext } from "@/lib/scope";
-import { computeFolioBalance, checkCreditLimitWarning } from "@/lib/debtor-accounts";
+import { computeFolioBalance, checkCreditLimitWarning, activeCityLedgerPayments } from "@/lib/debtor-accounts";
 import { calculateFolioCommission } from "@/lib/commission";
 import { postCharge, chargeCodeInclude, type PostableChargeCode } from "@/lib/posting/post-charge";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -74,6 +74,16 @@ export async function checkOutReservation(ctx: AuthContext, id: string, opts: { 
       creditAccount = travelAgent;
     }
   }
+  // No AR travel agent: a payee the folio was routed to can be the account instead —
+  // the payments route accepts that payee for a City-Ledger payment, so check-out must too.
+  if (!creditAccount) {
+    const payeeIds = reservation.folios.map((f) => f.payeeProfileId).filter((x): x is string => !!x);
+    if (payeeIds.length > 0) {
+      creditAccount = await prisma.profile.findFirst({
+        where: { upid: { in: payeeIds }, isCreditAccount: true },
+      });
+    }
+  }
 
   // A folio settles to the account when the desk actually PAID it with a City-Ledger
   // method (the payments route stamps settlementMethod at that moment), or when
@@ -82,7 +92,7 @@ export async function checkOutReservation(ctx: AuthContext, id: string, opts: { 
   // account must exist for the invoice to have somewhere to go.
   const settlesToLedger = (folio: (typeof reservation.folios)[number]) =>
     folio.settlementMethod === "CITY_LEDGER" ||
-    folio.payments.some((p) => !p.isRefund && p.paymentMethod?.type === "CITY_LEDGER");
+    activeCityLedgerPayments(folio.payments).length > 0;
 
   const qualifiesForAccount = (folio: (typeof reservation.folios)[number]) =>
     settlesToLedger(folio) && creditAccount !== null;

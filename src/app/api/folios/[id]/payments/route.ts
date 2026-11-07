@@ -47,6 +47,41 @@ export async function POST(
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
 
+    // Paying with a City-Ledger method transfers the bill to the payee's AR account, so
+    // it is only allowed when that payee actually has one — otherwise the payment would
+    // book a receivable with nowhere to go (and check-out would then fail). The payee is
+    // the folio's routed profile, else the reservation's travel agent / company, else the
+    // primary guest. Refunds and already-finalized debtor invoices are not a transfer.
+    if (!body.isRefund && paymentMethod.type === CITY_LEDGER_METHOD_TYPE && !folio.isDebtorAccount) {
+      const reservation = folio.reservationId
+        ? await prisma.reservation.findUnique({
+            where: { id: folio.reservationId },
+            select: { travelAgentId: true, primaryGuestId: true },
+          })
+        : null;
+      const payeeId = folio.payeeProfileId ?? reservation?.travelAgentId ?? reservation?.primaryGuestId ?? null;
+      const payee = payeeId
+        ? await prisma.profile.findUnique({
+            where: { upid: payeeId },
+            select: { isCreditAccount: true, firstName: true, lastName: true, companyName: true },
+          })
+        : null;
+      if (!payee?.isCreditAccount) {
+        const payeeName = payee
+          ? payee.companyName || `${payee.firstName} ${payee.lastName ?? ""}`.trim()
+          : null;
+        return NextResponse.json(
+          {
+            error: payeeName
+              ? `Cannot pay by City Ledger: ${payeeName} has no AR (credit) account. Create an AR account for this profile, or choose another payment method.`
+              : "Cannot pay by City Ledger: this folio has no payee with an AR (credit) account. Route the folio to an account holder, or choose another payment method.",
+            cityLedgerNoAccount: true,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // The client no longer picks a shift explicitly — payments always post against the
     // caller's own currently-open cashier shift for the folio's property, auto-opening
     // one (0 float) if they don't have one yet, rather than trusting a client shiftId.

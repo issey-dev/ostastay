@@ -17,6 +17,19 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.9.3",
+    date: "2026-11-07",
+    highlights: "A payment can no longer be sent to a City Ledger account that does not exist, and a wrong payment can now be refunded straight from the folio.",
+    new: [
+      "Folio: tick a payment line and press Refund to reverse it. You must give a reason. The original payment stays on the folio, marked Refunded, and a refund line takes it back out. If you tick charges as well, only Move to folio is offered.",
+    ],
+    fixed: [
+      "Folio payments: paying with the City Ledger method is now blocked when the guest, or the company or agent the bill is routed to, has no AR (credit) account. Before, the payment went through and the problem only appeared at check-out, with no way to undo it.",
+      "Check-out and Night Audit: refunding a City Ledger payment now stops the folio from being treated as a City Ledger bill, so the reservation can check out again.",
+      "Check-out: a company the folio was routed to can now serve as the AR account when the booking has no travel agent.",
+    ],
+  },
+  {
     version: "8.9.1",
     date: "2026-11-07",
     highlights: "The dashboard and the lists come alive: figures count up, charts draw themselves and rows arrive one after another the first time you open a screen. It is short, it plays once per screen, and it switches itself off if your device asks for reduced motion.",

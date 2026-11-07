@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, Trash2, UserCircle, ExternalLink, LogOut, MoreHorizontal } from "@/components/icons"
+import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, RotateCcw, Trash2, UserCircle, ExternalLink, LogOut, MoreHorizontal } from "@/components/icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Badge } from "@/components/ui/badge"
 import { FolioPrintDialog, type FolioDocumentType } from "@/components/front-office/folio-print-dialog"
@@ -28,6 +28,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { FolioLedger } from "@/components/front-office/folio-ledger"
 import { FolioCheckNoDialog, type CheckNoTarget } from "@/components/front-office/folio-check-no-dialog"
 import { InlineLoading } from "@/components/ui/inline-loading"
+import { activeCityLedgerPayments } from "@/lib/debtor-accounts"
 
 type FolioPanelProps = {
   reservationId: string | null
@@ -134,6 +135,13 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
   const [voidTarget, setVoidTarget] = useState<any | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [voidSaving, setVoidSaving] = useState(false)
+  // Payment lines selected for refund. Kept apart from the charge selection: a selection
+  // that mixes the two offers only "Move to folio" (payments can't move, and a refund
+  // makes no sense beside charges).
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<string[]>([])
+  const [isRefundOpen, setIsRefundOpen] = useState(false)
+  const [refundReason, setRefundReason] = useState("")
+  const [refundSaving, setRefundSaving] = useState(false)
   // Edit check number — one line, or every line of a rolled-up check.
   const [checkNoTarget, setCheckNoTarget] = useState<CheckNoTarget | null>(null)
   // Which one-shot action is in flight — its button is disabled so it can't be sent twice.
@@ -160,7 +168,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
       fetchFolios()
       fetchLookupData()
       fetchInHouseFolios()
-      setSelectedLineItemIds([])
+      setSelectedLineItemIds([]); setSelectedPaymentIds([])
       // Opening a billing screen auto-opens the cashier's drawer for this property,
       // even before anything is posted (front-desk "begin my shift" behavior).
       fetch("/api/cashiering/ensure", { method: "POST" }).catch(() => {})
@@ -230,6 +238,36 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
     } catch (e) {
       console.error("Failed to fetch lookup data", e)
     }
+  }
+
+  const handleRefundPayments = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+    if (!activeFolioId || !refundReason.trim() || refundSaving || selectedPaymentRows.length === 0) return
+    setRefundSaving(true)
+    let failed = ""
+    let done = 0
+    for (const p of selectedPaymentRows) {
+      try {
+        const res = await fetch(`/api/folios/${activeFolioId}/payments/${p.id}/refund`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: refundReason.trim() }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) { failed = data.error || "Couldn't refund the payment. Try again."; break }
+        done++
+      } catch {
+        failed = "Couldn't refund the payment. Try again."
+        break
+      }
+    }
+    setRefundSaving(false)
+    setSelectedPaymentIds([])
+    if (!failed) { setIsRefundOpen(false); setRefundReason("") }
+    fetchFolios()
+    if (done > 0) toast.success(done === 1 ? "Payment refunded" : `${done} payments refunded`)
+    if (failed) toast.error(failed)
   }
 
   const handleVoidCharge = async (e?: React.FormEvent) => {
@@ -517,7 +555,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
 
       if (res.ok) {
         setIsMoveDialogOpen(false)
-        setSelectedLineItemIds([])
+        setSelectedLineItemIds([]); setSelectedPaymentIds([])
         setTargetFolioId("")
         fetchFolios()
         toast.success("Charges moved")
@@ -629,6 +667,9 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
   // be posted and no fiscal document exists to raise. A walk-in/outlet folio (no
   // reservation) is never pre-arrival. Owner rule, 2026-08-03.
   const preArrival = !!activeFolio?.reservation && activeFolio.reservation.status !== "IN_HOUSE"
+  const selectedPaymentRows = (activeFolio?.payments ?? []).filter((p: any) => selectedPaymentIds.includes(p.id))
+  const refundTotal = selectedPaymentRows.reduce((sum: number, p: any) => sum + p.amount, 0)
+
   const canDeleteFolio = !!activeFolio && activeFolio.folioNumber !== 1 && activeFolio.lineItems.length === 0 && activeFolio.payments.length === 0
 
   // Settled stay → offer check-out right here (DESKTOP_PLAN D2). Same guest-payable rule
@@ -636,7 +677,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
   // server re-checks, so a disagreement only costs an error toast.
   const reservation = folios[0]?.reservation
   const settlesToLedger = (f: any) =>
-    f.settlementMethod === "CITY_LEDGER" || (f.payments ?? []).some((p: any) => !p.isRefund && p.paymentMethod?.type === "CITY_LEDGER")
+    f.settlementMethod === "CITY_LEDGER" || activeCityLedgerPayments(f.payments ?? []).length > 0
   let guestBalance = 0
   for (const f of folios) {
     if (f.isDebtorAccount || settlesToLedger(f)) continue
@@ -710,7 +751,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                     key={f.id}
                     onClick={() => {
                       setActiveFolioId(f.id)
-                      setSelectedLineItemIds([])
+                      setSelectedLineItemIds([]); setSelectedPaymentIds([])
                       setPaymentAmountTouched(false)
                     }}
                     className={`px-4 py-2 rounded-t-md text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -885,14 +926,26 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                   </div>
 
                   {/* Move Action Bar (Shows when items selected) */}
-                  {selectedLineItemIds.length > 0 && (
-                    <div className="bg-muted border border-border rounded-lg p-3 flex justify-between items-center shrink-0">
+                  {(selectedLineItemIds.length > 0 || selectedPaymentIds.length > 0) && (
+                    <div className="bg-muted border border-border rounded-lg p-3 flex justify-between items-center gap-2 shrink-0">
                       <span className="text-sm font-medium text-primary">
-                        {selectedLineItemIds.length} charge(s) selected
+                        {[
+                          selectedLineItemIds.length > 0 && `${selectedLineItemIds.length} charge(s)`,
+                          selectedPaymentIds.length > 0 && `${selectedPaymentIds.length} payment(s)`,
+                        ].filter(Boolean).join(" and ")} selected
+                        {selectedLineItemIds.length > 0 && selectedPaymentIds.length > 0 && (
+                          <span className="block text-xs font-normal text-muted-foreground">Only the charges can be moved.</span>
+                        )}
                       </span>
-                      <Button size="sm" onClick={() => setIsMoveDialogOpen(true)}>
-                        <ArrowRightLeft className="w-4 h-4 mr-2" /> Move to folio
-                      </Button>
+                      {selectedLineItemIds.length > 0 ? (
+                        <Button size="sm" onClick={() => setIsMoveDialogOpen(true)}>
+                          <ArrowRightLeft className="w-4 h-4 mr-2" /> Move to folio
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="destructive" onClick={() => { setRefundReason(""); setIsRefundOpen(true) }}>
+                          <RotateCcw className="w-4 h-4 mr-2" /> Refund
+                        </Button>
+                      )}
                     </div>
                   )}
 
@@ -904,6 +957,8 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                         slug={slug}
                         selectedIds={selectedLineItemIds}
                         onSelectedIdsChange={setSelectedLineItemIds}
+                        selectedPaymentIds={selectedPaymentIds}
+                        onSelectedPaymentIdsChange={setSelectedPaymentIds}
                         onVoidLine={(item) => { setVoidTarget(item); setVoidReason("") }}
                         onVoidGroup={handleVoidGroup}
                         onEditCheckNo={setCheckNoTarget}
@@ -1014,6 +1069,38 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
             )}
           </div>
         )}
+
+      {/* Refund Payment Dialog */}
+      <Dialog open={isRefundOpen} onOpenChange={(open) => { if (!open && !refundSaving) setIsRefundOpen(false) }}>
+        <DialogContent size="sm">
+          <form onSubmit={handleRefundPayments} className="contents">
+          <DialogHeader>
+            <DialogTitle>Refund payment</DialogTitle>
+            <DialogDescription>
+              Refund {selectedPaymentRows.length === 1
+                ? `"Payment - ${selectedPaymentRows[0].paymentMethod?.name}"`
+                : `${selectedPaymentRows.length} payments`} (${refundTotal.toFixed(2)})?
+              The original stays on the folio and a refund line takes it back out.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="refund-reason">Reason (required)</Label>
+            <Input
+              id="refund-reason"
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="e.g. Wrong payment method used"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsRefundOpen(false)} disabled={refundSaving}>Cancel</Button>
+            <SubmitButton variant="destructive" pending={refundSaving} pendingLabel="Refunding…" disabled={!refundReason.trim()}>
+              Refund
+            </SubmitButton>
+          </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Void Charge Dialog */}
       <Dialog open={!!voidTarget} onOpenChange={(open) => { if (!open) setVoidTarget(null) }}>
