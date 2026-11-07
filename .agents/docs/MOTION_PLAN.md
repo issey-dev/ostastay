@@ -47,6 +47,9 @@ Motion in the app is built on the `motion` package through ONE kit:
 - Sheet and toast easing aligned to the kit curve. Dialog / alert-dialog already fade+zoom in 100 ms,
   left as they are.
 
+
+- `MobileCardList` (phone): first 8 cards ease in on first load only (`FirstLoadFade` in the kit).
+
 ## Next (not started)
 
-1. `MobileCardList` (phone) row fade, same first-load-only rule as the table.
+Nothing planned. Candidates if asked: Revenue/Debtors/Payments figure strips (product call).
