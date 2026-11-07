@@ -1,5 +1,6 @@
 "use client"
 
+import { signOutCleanup } from "@/lib/notifications/push-client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2, LogOut } from "@/components/icons"
 import { Button } from "@/components/ui/button"
@@ -94,7 +95,8 @@ export function EodSessionWatch({ loginPath }: { loginPath: string }) {
 
   const signOut = useCallback(() => {
     setSigningOut(true)
-    fetch("/api/auth/logout", { method: "POST" })
+    signOutCleanup()
+      .then(() => fetch("/api/auth/logout", { method: "POST" }))
       .catch(() => {})
       .finally(() => {
         // Full navigation, not router.push — every cached server component in this tab

@@ -1,5 +1,6 @@
 "use client"
 
+import { signOutCleanup } from "@/lib/notifications/push-client"
 import { useState } from "react"
 import { Check, ChevronsUpDown, Loader2, LogOut } from "@/components/icons"
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
@@ -53,6 +54,7 @@ export function HubUserMenu({
 
   const handleLogout = async () => {
     setLoggingOut(true)
+    await signOutCleanup()
     await fetch("/api/auth/logout", { method: "POST" })
     window.location.href = "/login"
   }

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { NOTIFICATION_TYPES, type NotificationType } from "./types"
 import { resolveRecipients, type AudienceQuery } from "./audience"
+import { sendPushToUsers } from "./push"
 
 // The ONE way a notification is raised. Like logActivity() and notifyBookingChange(), it
 // NEVER throws into the caller: telling people about something must not break the action
@@ -60,6 +61,17 @@ export async function notify(input: NotifyInput): Promise<string | null> {
         },
         select: { id: true },
       })
+      // Phone push only for things someone should act on; INFO stays in the bell. Fire and
+      // forget: push is best-effort and must never slow or fail the action itself.
+      if (meta.severity !== "INFO") {
+        void sendPushToUsers(recipients, {
+          title: input.title,
+          body: input.body,
+          url: safeUrl(input.url),
+          tag: created.id,
+          urgent: meta.severity === "URGENT",
+        })
+      }
       return created.id
     } catch (e) {
       // Same dedupeKey already raised: that is the point of the key, not an error.
