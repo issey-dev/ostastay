@@ -65,6 +65,10 @@ export default function NotificationsGuide() {
           ["A channel connection stopped working", "People who manage integrations"],
           ["A guest booked an excursion or spa treatment on the website", "People who can create bookings for that service"],
           ["A maintenance task was assigned to you", "The person it was assigned to"],
+          ["Rooms were assigned to you to clean", "The room attendant they were assigned to (one notice, however many rooms)"],
+          ["A transfer in the next two days has a problem, such as a boat that leaves before the flight lands, or a flight time that changed", "People who manage transport manifests"],
+          ["A cashier shift has been open for over 16 hours", "The cashier, and people who supervise cashiering"],
+          ["A group's cut-off date is today or tomorrow and rooms are still not picked up", "People who manage group blocks"],
           ["A sign-in from a browser or device your account has not used before", "You, about your own account"],
           ["Osta support opened a session in your enterprise", "People who manage users"],
           ["An announcement from your administrators", "Everyone, or the property it was sent to"],
@@ -73,6 +77,8 @@ export default function NotificationsGuide() {
       <Callout title="Good to know">
         <ul>
           <li>You are not notified about something you did yourself.</li>
+          <li>Cashier shift, transfer and group cut-off notifications are checked every few minutes, and each problem is announced once. A transfer is announced again if its flight time changes.</li>
+          <li>Notifications you have read are removed after 90 days, and all of them after 180 days.</li>
           <li>Notifications never include guest names or amounts. Open the screen to see the details.</li>
           <li>Setup and the operations dashboard are in the <strong>Account</strong> menu at the bottom of the left-hand menu, where Setup and Operations buttons used to be in the header.</li>
         </ul>

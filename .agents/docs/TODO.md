@@ -10,7 +10,8 @@ before N1.
 - [x] N1 In-app bell replacing Setup/Operations (both stay in the Account menu); 5 producers. Open: full `/notifications` page, a Hub "who is notified" setting
 - [x] N2 Web Push (VAPID, subscriptions, send for ACTION/URGENT; no retry job by design). **Owner: add VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT to the VPS .env**, then try it on a real Android phone and an iPhone
 - [x] N3 Preferences, full page, Hub announcements, 4 more kinds (task assigned, new device, support session, website excursion/spa booking)
-- [ ] N3 leftovers: housekeeping task assignment, transport attention, City Ledger / open-cashier-shift alerts, group cut-off, per-property default settings in the Hub; screenshots for the Announcements docs page (`docs:shots`)
+- [x] Housekeeping assignment, transport attention, open cashier shift, group cut-off alerts + retention sweep (job `notification-alerts`; make sure the external cron runs `/api/jobs/run` every few minutes, it already does for the other jobs)
+- [ ] Leftovers: per-property default settings in the Hub, reminders ("remind me"), quiet hours, email digest; screenshots for the Announcements docs page (`docs:shots`)
 - [ ] N4 Optional: quiet hours, email digest, SSE, reminders
 
 ## Default room features (2026-10-11, 8.7.2) — DONE
