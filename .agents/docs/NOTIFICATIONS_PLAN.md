@@ -1,12 +1,12 @@
 # Notifications — plan (drafted 2026-11-07)
 
-> **Status 2026-11-07 (8.10.0, PR #93):** N0 and N1 are BUILT. N0: manifest, push-only service worker,
+> **Status 2026-11-07 (8.10.0, PR #93):** N0, N1 and N2 are BUILT. N0: manifest, push-only service worker,
 > install prompt. N1: `Notification`/`NotificationRecipient` tables, `src/lib/notifications/`
 > (catalogue, audience by permission, `notify()` with dedupe, producers), `/api/notifications`
 > (list, mark read), the bell in both headers, five producers (business date rolled, Night Audit
-> failed, channel booking received/failed, channel connection failed). NOT built yet: the full
+> failed, channel booking received/failed, channel connection failed). N2 (push): `PushSubscription` table, `src/lib/notifications/push.ts` (VAPID via `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`; off when unset), `/api/notifications/push` (config, register, forget), the bell's phone toggle, `signOutCleanup()` on every sign-out path (incl. idle/EOD forced ones), sent after commit for ACTION/URGENT only. **Deviation from section 6.3:** no outbox/retry job — push is best-effort, a failing device is counted and dropped after 5 failures (410/404 at once); the bell is the source of truth. NOT built yet: the full
 > `/notifications` page (the bell has "Show older" instead), preferences, push (N2), the rest of
-> section 4's catalogue (N3). Setup/Operations were NOT moved: both were already in the Account menu.
+> section 4's catalogue (N3), quiet hours (N4). **Production needs the three VAPID_* variables added to the VPS `.env`** (`npx web-push generate-vapid-keys`); until then the phone toggle is hidden. Setup/Operations were NOT moved: both were already in the Account menu.
 
 > Owner ask: replace the header's **Setup** button with a **notification bell**; have personal and
 > global notifications; and, because staff will install the app as a PWA, deliver them as **phone

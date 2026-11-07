@@ -1,4 +1,4 @@
-import webpush from "web-push"
+import { sendNotification } from "web-push"
 import { prisma } from "@/lib/db"
 import { decryptSecret, encryptSecret } from "@/lib/secret-crypto"
 
@@ -40,7 +40,7 @@ export type PushSender = (
   opts: { TTL: number; urgency: "high" | "normal"; timeout: number; vapidDetails: { subject: string; publicKey: string; privateKey: string } },
 ) => Promise<unknown>
 
-const defaultSender: PushSender = (sub, body, opts) => webpush.sendNotification(sub, body, opts)
+const defaultSender: PushSender = (sub, body, opts) => sendNotification(sub, body, opts)
 
 /** Pure: should this response drop the device for good? 404/410 = the push service says it is gone. */
 export function isGone(statusCode: number | undefined): boolean {

@@ -14,7 +14,7 @@ export default function InstallTheAppGuide() {
       <p>
         Nothing is downloaded from an app store. The installed app is the same Uppsolut Stay you use in the browser, with the same sign-in and the same
         permissions. It simply opens in its own window without the browser&apos;s address bar. Installing is also what lets the app send notifications to
-        your phone when that arrives in a later version.
+        your phone: see <a href="/docs/operations/notifications">Notifications</a>.
       </p>
 
       <H2>Android (Chrome)</H2>
