@@ -1,11 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Bell, Loader2 } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { disablePush, enablePush, pushSupport, type PushSupport } from "@/lib/notifications/push-client"
+import { PhoneToggle } from "@/components/notifications/phone-toggle"
+import { DOT, ago } from "@/components/notifications/format"
 import { cn } from "@/lib/utils"
 
 // The header bell (NOTIFICATIONS_PLAN.md §5): unread badge + a list of the signed-in
@@ -20,21 +22,6 @@ type Page = { items: Item[]; nextBefore: string | null; unreadCount: number }
 const PAGE = 15
 const REFRESH_AT_MOST_EVERY_MS = 20_000
 
-function ago(iso: string): string {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
-  if (s < 60) return "just now"
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`
-  if (s < 86_400) return `${Math.floor(s / 3600)} h ago`
-  if (s < 7 * 86_400) return `${Math.floor(s / 86_400)} d ago`
-  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-}
-
-const DOT: Record<string, string> = {
-  URGENT: "bg-destructive",
-  ACTION: "bg-amber-500",
-  INFO: "bg-muted-foreground/50",
-}
-
 async function fetchPage(before?: string | null): Promise<Page | null> {
   try {
     const qs = new URLSearchParams({ limit: String(PAGE) })
@@ -46,64 +33,7 @@ async function fetchPage(before?: string | null): Promise<Page | null> {
   }
 }
 
-function PhoneToggle() {
-  const [support, setSupport] = useState<PushSupport | null>(null)
-  const [config, setConfig] = useState<{ configured: boolean; publicKey: string | null } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    void (async () => {
-      const [s, c] = await Promise.all([
-        pushSupport(),
-        fetch("/api/notifications/push", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      ])
-      if (alive) {
-        setSupport(s)
-        setConfig(c)
-      }
-    })()
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  if (!support || !config?.configured || support.state === "unsupported") return null
-
-  const toggle = async () => {
-    setBusy(true)
-    setError(null)
-    if (support.state === "on") {
-      await disablePush()
-    } else if (config.publicKey) {
-      const problem = await enablePush(config.publicKey)
-      if (problem) setError(problem)
-    }
-    setSupport(await pushSupport())
-    setBusy(false)
-  }
-
-  return (
-    <div className="border-t px-4 py-2.5 text-xs text-muted-foreground">
-      {support.state === "needs-install" ? (
-        <p>To get notifications on this iPhone, add Uppsolut Stay to your Home Screen (Share, then Add to Home Screen) and open it from there.</p>
-      ) : support.state === "denied" ? (
-        <p>Notifications are blocked for this site. Allow them in your browser&apos;s site settings to get them on this device.</p>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <span>{support.state === "on" ? "Phone notifications are on for this device." : "Get notifications on this device, even when the app is closed."}</span>
-          <Button variant="outline" size="sm" disabled={busy} onClick={toggle} className="shrink-0">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : support.state === "on" ? "Turn off" : "Turn on"}
-          </Button>
-        </div>
-      )}
-      {error && <p className="mt-1 text-destructive">{error}</p>}
-    </div>
-  )
-}
-
-export function NotificationBell({ className }: { className?: string }) {
+export function NotificationBell({ className, allHref }: { className?: string; allHref?: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Item[]>([])
@@ -264,6 +194,13 @@ export function NotificationBell({ className }: { className?: string }) {
             </div>
           )}
         </div>
+        {allHref && (
+          <div className="border-t px-4 py-2 text-center">
+            <Link href={allHref} onClick={() => setOpen(false)} className="text-xs font-medium text-foreground hover:underline">
+              All notifications and settings
+            </Link>
+          </div>
+        )}
         <PhoneToggle />
       </PopoverContent>
     </Popover>

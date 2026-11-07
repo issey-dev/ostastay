@@ -144,7 +144,7 @@ export default async function DashboardLayout({
               <div className="ml-auto flex items-center gap-4">
                 <CommandPaletteTrigger />
                 <HeaderBusinessDate />
-                <NotificationBell />
+                <NotificationBell allHref={`/e/${enterprise.slug}/dashboard/notifications`} />
                 <ThemeToggle />
               </div>
             </header>

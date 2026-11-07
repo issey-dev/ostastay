@@ -81,7 +81,7 @@ export default async function HubLayout({
           </div>
           <div className="ml-auto flex items-center gap-4">
             {/* Operations and Setup live in the account menu (sidebar footer). */}
-            <NotificationBell />
+            <NotificationBell allHref={`/e/${enterprise.slug}/hub/notifications`} />
             <ThemeToggle />
           </div>
         </header>
