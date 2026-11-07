@@ -27,7 +27,7 @@ export type NotifyInput = {
    * Who: everyone at the property, only users who hold a permission, or named people
    * (`userIds`, a PERSONAL notification — still limited to active users of this enterprise).
    */
-  audience: Pick<AudienceQuery, "need"> & { userIds?: string[] }
+  audience: Pick<AudienceQuery, "need" | "everyone"> & { userIds?: string[] }
   /** Never notify the person who just did it themselves. */
   excludeUserId?: string
 }
@@ -48,7 +48,7 @@ export async function notify(input: NotifyInput): Promise<string | null> {
             select: { id: true },
           })
         ).map((u) => u.id)
-      : await resolveRecipients({ enterpriseId: input.enterpriseId, propertyId: input.propertyId, need: input.audience.need })
+      : await resolveRecipients({ enterpriseId: input.enterpriseId, propertyId: input.propertyId, need: input.audience.need, everyone: input.audience.everyone })
     // Each person's own choices: who sees it in the bell, and who also gets it on a phone.
     const { bell: recipients, phone } = await splitRecipients(
       input.type,

@@ -31,6 +31,8 @@ export type AudienceQuery = {
   propertyId: string | null
   /** Omit for "everyone at the property". */
   need?: { module: Module; action?: Action }
+  /** Everyone in the enterprise, whichever property they work at (announcements). */
+  everyone?: boolean
 }
 
 /** Active, real (not system) users of the enterprise who may receive this. */
@@ -40,7 +42,7 @@ export async function resolveRecipients(q: AudienceQuery): Promise<string[]> {
       enterpriseId: q.enterpriseId,
       isActive: true,
       isSystem: false,
-      ...(q.propertyId ? { OR: [{ scope: "ENTERPRISE" }, { propertyId: q.propertyId }] } : { scope: "ENTERPRISE" }),
+      ...(q.everyone ? {} : q.propertyId ? { OR: [{ scope: "ENTERPRISE" }, { propertyId: q.propertyId }] } : { scope: "ENTERPRISE" }),
     },
     select: {
       id: true,
@@ -50,7 +52,7 @@ export async function resolveRecipients(q: AudienceQuery): Promise<string[]> {
     },
   })
   return users
-    .filter((u) => worksAt(u, q.propertyId))
+    .filter((u) => q.everyone || worksAt(u, q.propertyId))
     .filter((u) => !q.need || canDo(u, q.need.module, q.need.action ?? "view"))
     .map((u) => u.id)
 }
