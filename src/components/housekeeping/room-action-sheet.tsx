@@ -7,9 +7,9 @@ import { Drawer, DrawerBody, DrawerContent, DrawerDescription, DrawerHeader, Dra
 import { cn } from "@/lib/utils"
 import { statusMutedClasses, toneMutedClasses } from "@/lib/status-tone"
 
-// Phone-only pieces of the housekeeping board (.agents/docs/MOBILE_PLAN.md §2.3): a compact
-// room row instead of the ~170px card, and a bottom sheet with big status buttons. Both call
-// the page's existing handlers — the same API requests the desktop controls make.
+// Phone-only piece of the housekeeping board (.agents/docs/MOBILE_PLAN.md §2.3): the bottom
+// sheet with big status buttons that a card opens on phones. It calls the page's existing
+// handlers — the same API requests the desktop controls make.
 
 /** Occupancy / priority flags derived exactly like RoomStatusCard does. */
 export function roomFlags(room: any, businessDate?: string | null) {
@@ -28,79 +28,6 @@ export function roomFlags(room: any, businessDate?: string | null) {
 }
 
 const statusLabel = (status: string) => status.replace(/_/g, " ").toLowerCase()
-
-export function HousekeepingRoomRow({
-  room,
-  businessDate,
-  selectMode,
-  isSelected,
-  onOpen,
-  onToggleSelect,
-}: {
-  room: any
-  businessDate?: string | null
-  selectMode: boolean
-  isSelected: boolean
-  onOpen: (roomId: string) => void
-  onToggleSelect: (roomId: string) => void
-}) {
-  const f = roomFlags(room, businessDate)
-  return (
-    <button
-      type="button"
-      onClick={() => (selectMode ? onToggleSelect(room.id) : onOpen(room.id))}
-      aria-pressed={selectMode ? isSelected : undefined}
-      className={cn(
-        "flex min-h-14 w-full items-center gap-3 rounded-lg border bg-card px-3 py-2 text-left transition-colors active:bg-muted",
-        isSelected && "border-primary ring-2 ring-primary/40"
-      )}
-    >
-      {selectMode && (
-        <span
-          aria-hidden
-          className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
-            isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border"
-          )}
-        >
-          {isSelected && <CheckCircle2 className="h-3.5 w-3.5" />}
-        </span>
-      )}
-      <div className="w-12 shrink-0">
-        <p className="text-lg font-bold leading-tight tabular-nums">{room.roomNumber}</p>
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs text-muted-foreground">{room.roomType?.name}</p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-          <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-semibold capitalize", statusMutedClasses(room.status))}>
-            {statusLabel(room.status)}
-          </span>
-          {f.isOccupied ? (
-            f.isDueOut ? (
-              <span className="rounded bg-warning-muted px-1.5 py-0.5 text-[11px] font-bold text-warning">Due out</span>
-            ) : (
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Occupied</span>
-            )
-          ) : (
-            <span className="text-[11px] text-muted-foreground">Vacant</span>
-          )}
-          {f.hasArrivalToday && (
-            <span className="rounded bg-info-muted px-1.5 py-0.5 text-[11px] font-bold text-info">Arrival</span>
-          )}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {f.activeTicket && <Wrench className="h-4 w-4 text-destructive" aria-label="Open maintenance issue" />}
-        {f.openTasks.length > 0 && (
-          <span className="rounded-full bg-warning-muted px-2 py-0.5 text-[11px] font-bold text-warning">
-            {f.openTasks.length} task{f.openTasks.length === 1 ? "" : "s"}
-          </span>
-        )}
-        {!selectMode && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-      </div>
-    </button>
-  )
-}
 
 export function RoomActionSheet({
   room,

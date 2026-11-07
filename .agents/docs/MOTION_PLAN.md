@@ -14,7 +14,9 @@ Motion in the app is built on the `motion` package through ONE kit:
 - Reduced motion → final state immediately (`useMotionOk()` / `useReducedMotion`).
 - Print / PDF views never animate.
 - Motion is for arrival and for explaining a change (a moved booking). Never for screens people
-  work in all shift: forms, settings, housekeeping cards, Front Desk worklists, sidebar/header.
+  work in all shift: forms, settings, Front Desk worklists, sidebar/header. The Housekeeping cards
+  get ONE arrival reveal on first load (below) and nothing after: no hover motion, no replay on
+  filter, refresh or a status change.
 
 ## Done
 
@@ -47,6 +49,12 @@ Motion in the app is built on the `motion` package through ONE kit:
   left as they are.
 
 
+
+- Housekeeping board (8.9.4): the ledger cards rise in one by one on first load via `RevealItem`
+  in the kit (12 px rise + fade, 55 ms apart, stagger capped at 0.6 s, only when scrolled into
+  view). `intro` comes from `useIntro(rooms.length > 0, usePageScope("housekeeping"))` on the page,
+  so a filter, a refresh (which swaps in a skeleton) or a status change never replays it; cards that
+  mount after the 1.6 s intro window render in place. Reduced motion: final state at once.
 
 ## Next (not started)
 

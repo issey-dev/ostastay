@@ -17,6 +17,17 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.9.4",
+    date: "2026-11-07",
+    highlights: "The Housekeeping board has a cleaner, roomier card, with fewer columns so each room has space to breathe.",
+    improved: [
+      "Housekeeping: each room card now shows a large room number and status, then a short Type / Stay / Task list. Due out is bold amber and Arrival today is bold blue. Requests, attendants and technicians appear only when a room has one.",
+      "Housekeeping: three cards across on a desktop, two on a tablet and one on a phone. On a phone you now see the same full card as on a desktop instead of a compact row, with larger tick buttons that are easy to tap.",
+      "Housekeeping: when the board first opens, the cards rise into place one after another. They stay still when you filter, refresh or change a room's status.",
+      "Reservation page: the header and cards settle into place one after another when a booking opens, and a placeholder shows while it loads. It plays once, not on every refresh.",
+    ],
+  },
+  {
     version: "8.9.3",
     date: "2026-11-07",
     highlights: "A payment can no longer be sent to a City Ledger account that does not exist, and a wrong payment can now be refunded straight from the folio.",

@@ -81,6 +81,35 @@ export function RiseItem({ i = 0, className, children }: { i?: number; className
   )
 }
 
+/** A grid card that rises in, `i`-th of its grid, as it first scrolls into view. Pass
+ *  `intro` from `useIntro()`: once that has expired, cards that mount later (a filter, a
+ *  refresh) render in place with no animation. */
+export function RevealItem({
+  i = 0,
+  intro = true,
+  className,
+  children,
+}: {
+  i?: number
+  intro?: boolean
+  className?: string
+  children: React.ReactNode
+}) {
+  const ok = useMotionOk()
+  const animated = ok && intro
+  return (
+    <motion.div
+      className={className}
+      initial={animated ? { opacity: 0, y: 12 } : false}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={VIEWPORT}
+      transition={{ duration: DUR.enter * 0.8, ease: EASE_OUT, delay: Math.min(i * STAGGER.item, STAGGER.cap) }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 // ── CountUp ───────────────────────────────────────────────────────────────────────
 
 const NUMBER = /-?\d[\d,]*(?:\.\d+)?/
@@ -198,4 +227,35 @@ export function FirstLoadFade({
       {children}
     </div>
   )
+}
+
+/**
+ * Page-level entrance for a detail screen made of cards: the header settles first, then the
+ * cards one after another down the page, with the side rail landing alongside the second.
+ * Runs once per mount, the first time `ready` is true — a refetch that swaps the page back
+ * to its skeleton does not replay it. Uses the Web Animations API on the existing DOM so the
+ * page's own markup needs no wrappers.
+ *
+ *   cards  = every `[data-slot="card"]` that is not nested in another card
+ *   header = the root's first child; rail = the `<aside>`'s panel
+ */
+export function useStaggerIn(rootRef: React.RefObject<HTMLElement | null>, ready: boolean) {
+  const done = React.useRef(false)
+  React.useEffect(() => {
+    if (!ready || done.current) return
+    const root = rootRef.current
+    if (!root) return
+    done.current = true
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+    const from = { opacity: 0, transform: "translateY(14px)" }
+    const to = { opacity: 1, transform: "none" }
+    const run = (el: Element | null | undefined, delay: number) =>
+      el?.animate([from, to], { duration: 600, delay, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "backwards" })
+    run(root.firstElementChild, 0)
+    const cards = Array.from(root.querySelectorAll('[data-slot="card"]')).filter(
+      (c) => !c.parentElement?.closest('[data-slot="card"]')
+    )
+    cards.forEach((c, i) => run(c, 90 + Math.min(i, 6) * 80))
+    run(root.querySelector("aside > div"), 160)
+  }, [ready, rootRef])
 }

@@ -16,7 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { ReservationSkeleton } from "@/components/reservations/reservation-skeleton"
+import { useStaggerIn } from "@/components/dashboard/motion-kit"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -89,6 +90,8 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const nationalities = useNationalities()
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const pageRef = useRef<HTMLDivElement>(null)
+  useStaggerIn(pageRef, !loading && !!reservation)
 
   const [isFolioOpen, setIsFolioOpen] = useState(false)
   const [isTraceOpen, setIsTraceOpen] = useState(false)
@@ -370,24 +373,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     }
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-9 w-9" />
-          <div>
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-40" />
-          </div>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-56 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <ReservationSkeleton />
 
   if (notFound || !reservation) {
     return <EmptyState icon={CalendarDays} title="Reservation not found" className="py-24" />
@@ -551,7 +537,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   if ((reservation.traces?.length ?? 0) === 0) addLinks.push({ label: "Add trace", onClick: () => setIsTraceOpen(true) })
 
   return (
-    <div className="space-y-6">
+    <div ref={pageRef} className="space-y-6">
       {/* Header — breadcrumbs ("Reservations › VM4224") replace the back arrow on desktop;
           phones keep the arrow. */}
       <div className="space-y-4">

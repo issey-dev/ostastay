@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Bell, Brush, CheckCircle2, Users, Wrench } from "@/components/icons"
+import { AlertTriangle, Brush, CheckCircle2, Users, Wrench } from "@/components/icons"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,18 +16,28 @@ import { cn } from "@/lib/utils"
 import { statusTone, type StatusTone } from "@/lib/status-tone"
 import { roomFlags } from "@/components/housekeeping/room-action-sheet"
 
-// Desktop/tablet housekeeping tile (the phone board uses HousekeepingRoomRow + RoomActionSheet).
-// DESKTOP_PLAN §2.3 / DECISIONS 2026-09-25 "Housekeeping board": a neutral card with a 3px
-// status stripe + a labelled dot — no fully tinted tiles. A click opens the room's status
-// menu (same handlers as the phone action sheet); in Select mode a click toggles the room
-// for the bulk bar instead.
+// The housekeeping "ledger" card, used on every screen size (phones get one column of them,
+// tablets two, desktops three). A big room number and a coloured status word, then a small
+// Type / Stay / Task list. Type, Stay and Task are always present so rows line up across a
+// grid; Request, Staff and Tech appear only when there is something to show. Flags are words
+// (bold amber "Due out", bold blue "Arrival today"), never pills or fills. Square corners come
+// from the theme (--radius: 0). A click opens the room's status menu (desktop/tablet) or its
+// action sheet (phones, via `onOpen`); in Select mode a click toggles the room for the bulk bar.
 
-const STRIPE: Record<StatusTone, string> = {
+const DOT: Record<StatusTone, string> = {
   success: "bg-success",
   warning: "bg-warning",
   danger: "bg-destructive",
   info: "bg-info",
   neutral: "bg-muted-foreground",
+}
+
+const WORD: Record<StatusTone, string> = {
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-destructive",
+  info: "text-info",
+  neutral: "text-muted-foreground",
 }
 
 const statusLabel = (status: string) => {
@@ -37,6 +47,16 @@ const statusLabel = (status: string) => {
 
 const taskLabel = (taskType: string) => statusLabel(taskType)
 
+/** One label + value pair of the card's list. */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">{children}</dd>
+    </>
+  )
+}
+
 type RoomStatusCardProps = {
   room: any
   slug: string
@@ -45,6 +65,8 @@ type RoomStatusCardProps = {
   selectMode?: boolean
   isSelected?: boolean
   onToggleSelect?: (roomId: string) => void
+  /** Phones: a click opens this room's action sheet instead of the dropdown menu. */
+  onOpen?: (roomId: string) => void
   onEditMaintenance?: (ticket: any) => void
   onCompleteTask?: (taskId: string) => Promise<void> | void
   onMarkOutOfOrder?: (roomId: string) => void
@@ -62,6 +84,7 @@ export function RoomStatusCard({
   selectMode,
   isSelected,
   onToggleSelect,
+  onOpen,
   onEditMaintenance,
   onCompleteTask,
   onMarkOutOfOrder,
@@ -94,6 +117,12 @@ export function RoomStatusCard({
   const regularTasks = f.openTasks.filter((t: any) => t.taskType !== "SPECIAL_REQUEST")
   const activeTicket = f.activeTicket
   const tone = statusTone(room.status)
+  const isOutOfOrder = room.status === "OUT_OF_ORDER"
+  const oooLine = [
+    room.oooReason,
+    room.oooExpectedReturn &&
+      `back ${new Date(room.oooExpectedReturn).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`,
+  ].filter(Boolean).join(" · ")
 
   const setStatus = async (status: string) => {
     if (loading) return
@@ -116,9 +145,9 @@ export function RoomStatusCard({
   }
 
   // Small ✓ beside a task: hidden until the card is hovered/focused on a mouse; always
-  // shown on touch (tablets see this card too).
+  // shown on touch (phones and tablets get a 44px target).
   const tickClass =
-    "relative z-10 inline-flex shrink-0 items-center justify-center p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-success focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:opacity-100"
+    "relative z-10 inline-flex shrink-0 items-center justify-center self-center p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-success focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:border pointer-coarse:border-border pointer-coarse:opacity-100"
 
   const overlayClass =
     "absolute inset-0 z-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -126,16 +155,11 @@ export function RoomStatusCard({
   return (
     <div
       className={cn(
-        "group relative flex min-w-0 flex-col gap-1 border border-border bg-card py-2.5 pr-3 pl-4 text-xs transition-colors hover:border-foreground/25",
-        // A guest leaving today is the room the desk will want next: warm border and wash so
-        // it stands out from the other occupied rooms at a glance.
-        f.isDueOut && "border-warning/50 bg-warning-muted/30",
+        "group relative flex h-full min-w-0 flex-col border border-border bg-card px-5 py-4 text-sm transition-colors hover:border-foreground/25",
         loading && "opacity-60",
         isSelected && "border-primary ring-2 ring-primary/40"
       )}
     >
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[3px]", STRIPE[tone])} />
-
       {/* The whole card is the click target; links/buttons inside sit above it (z-10). */}
       {selectMode ? (
         <button
@@ -145,6 +169,8 @@ export function RoomStatusCard({
           className={overlayClass}
           onClick={() => onToggleSelect?.(room.id)}
         />
+      ) : onOpen ? (
+        <button type="button" aria-label={`Room ${room.roomNumber} actions`} className={overlayClass} onClick={() => onOpen(room.id)} />
       ) : (
         <DropdownMenu>
           <DropdownMenuTrigger aria-label={`Room ${room.roomNumber} actions`} className={overlayClass} />
@@ -196,20 +222,22 @@ export function RoomStatusCard({
       )}
 
       {/* Room number · status */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
+      <div className="pointer-events-none flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {selectMode && (
             <span
               aria-hidden
               className={cn(
-                "flex h-4 w-4 shrink-0 items-center justify-center border",
-                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"
+                "flex h-5 w-5 shrink-0 items-center justify-center border",
+                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground bg-card"
               )}
             >
-              {isSelected && <CheckCircle2 className="h-3 w-3" />}
+              {isSelected && <CheckCircle2 className="h-3.5 w-3.5" />}
             </span>
           )}
-          <span className="text-lg font-bold leading-tight tabular-nums text-foreground">{room.roomNumber}</span>
+          <span className="text-3xl leading-none font-semibold tracking-tight text-foreground tabular-nums">{room.roomNumber}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {activeTicket && (
             <button
               type="button"
@@ -217,117 +245,105 @@ export function RoomStatusCard({
               title={`${activeTicket.status}: ${activeTicket.description}${activeTicket.assignedTo ? `\nAssigned to: ${activeTicket.assignedTo.firstName} ${activeTicket.assignedTo.lastName}` : ""}`}
               aria-label="Open maintenance issue"
               className={cn(
-                "relative z-10 inline-flex items-center justify-center p-0.5 transition-colors hover:bg-muted pointer-coarse:min-h-11 pointer-coarse:min-w-11",
+                "pointer-events-auto relative z-10 inline-flex items-center justify-center p-0.5 transition-colors hover:bg-muted pointer-coarse:min-h-11 pointer-coarse:min-w-11",
                 activeTicket.status === "IN_PROGRESS" ? "text-warning" : "text-destructive"
               )}
             >
-              <Wrench className="h-3.5 w-3.5" />
+              <Wrench className="h-4 w-4" />
             </button>
           )}
-        </div>
-        <span className="mt-1 inline-flex shrink-0 items-center gap-1.5 font-medium text-foreground">
-          <span aria-hidden className={cn("h-1.5 w-1.5", STRIPE[tone])} />
-          {statusLabel(room.status)}
-        </span>
-      </div>
-      <p className="-mt-1 truncate text-muted-foreground">{room.roomType?.name}</p>
-
-      {/* Occupancy */}
-      {occ ? (
-        <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-foreground">
-          <span className={cn(f.isDueOut ? "rounded bg-warning-muted px-1.5 py-0.5 font-bold text-warning ring-1 ring-inset ring-warning/30" : "text-muted-foreground")}>
-            {f.isDueOut ? "Due out" : "Occupied"}
+          <span className={cn("inline-flex items-center gap-1.5 text-sm font-semibold", WORD[tone])}>
+            <span aria-hidden className={cn("h-2 w-2", DOT[tone])} />
+            {statusLabel(room.status)}
           </span>
-          <span aria-hidden className="text-muted-foreground">·</span>
-          <Link
-            href={`/e/${slug}/dashboard/reservations/${occ.id}`}
-            className="relative z-10 min-w-0 max-w-full truncate font-medium hover:underline"
-          >
-            {f.guestName || "Guest"}
-          </Link>
-          <span aria-hidden className="text-muted-foreground">·</span>
-          <span className="tabular-nums text-muted-foreground" title={paxTitle}>{pax}</span>
-          {hasSharer && <span className="text-muted-foreground">· Sharer</span>}
-        </p>
-      ) : (
-        <p className="text-muted-foreground">Vacant</p>
-      )}
+        </div>
+      </div>
 
-      {f.hasArrivalToday && (
-        <p className="inline-flex items-center gap-1.5 font-semibold text-info">
-          <span aria-hidden className="h-1.5 w-1.5 bg-info" />
-          Arrival today
-        </p>
-      )}
+      <div aria-hidden className="my-3.5 h-px bg-border" />
 
-      {room.status === "OUT_OF_ORDER" && (room.oooReason || room.oooExpectedReturn) && (
-        <p className="truncate text-muted-foreground" title={room.oooReason || undefined}>
-          {room.oooReason}
-          {room.oooReason && room.oooExpectedReturn && " · "}
-          {room.oooExpectedReturn &&
-            `back ${new Date(room.oooExpectedReturn).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`}
-        </p>
-      )}
+      <dl className="pointer-events-none grid grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5">
+        <Row label="Type">
+          <span className="truncate">{room.roomType?.name ?? "—"}</span>
+        </Row>
 
-      {/* Tasks — one compact line */}
-      {regularTasks.length > 0 && (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1 text-foreground">
-          {regularTasks.map((task: any, i: number) => (
-            <span key={task.id} className="inline-flex items-center gap-0.5" title={task.notes || undefined}>
-              {i > 0 && <span aria-hidden className="mr-0.5 text-muted-foreground">·</span>}
-              {taskLabel(task.taskType)}
+        <Row label="Stay">
+          {isOutOfOrder ? (
+            <span className="truncate" title={room.oooReason || undefined}>{oooLine || "Out of order"}</span>
+          ) : occ ? (
+            <>
+              <Link
+                href={`/e/${slug}/dashboard/reservations/${occ.id}`}
+                className="pointer-events-auto relative z-10 min-w-0 max-w-full truncate font-medium hover:underline"
+              >
+                {f.guestName || "Guest"}
+              </Link>
+              <span className="font-mono text-xs text-muted-foreground tabular-nums" title={paxTitle}>{pax}</span>
+              {hasSharer && <span className="text-xs text-muted-foreground">Sharer</span>}
+            </>
+          ) : (
+            <span className="text-muted-foreground">Vacant</span>
+          )}
+          {f.isDueOut && <span className="font-bold text-warning">Due out</span>}
+          {f.hasArrivalToday && <span className="font-bold text-info">Arrival today</span>}
+        </Row>
+
+        <Row label="Task">
+          {regularTasks.length === 0 ? (
+            <span className="text-muted-foreground/70">—</span>
+          ) : (
+            regularTasks.map((task: any) => (
+              <span key={task.id} className="inline-flex items-center gap-1.5" title={task.notes || undefined}>
+                {taskLabel(task.taskType)}
+                {onCompleteTask && (
+                  <button
+                    type="button"
+                    className={cn(tickClass, "pointer-events-auto")}
+                    title="Mark as completed"
+                    aria-label={`Complete ${taskLabel(task.taskType)}`}
+                    disabled={loading}
+                    onClick={() => completeTask(task.id)}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </span>
+            ))
+          )}
+        </Row>
+
+        {specialRequests.map((req: any) => (
+          <Row key={req.id} label="Request">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="truncate" title={req.notes || undefined}>{req.notes || "Special request"}</span>
               {onCompleteTask && (
                 <button
                   type="button"
-                  className={tickClass}
+                  className={cn(tickClass, "pointer-events-auto")}
                   title="Mark as completed"
-                  aria-label={`Complete ${taskLabel(task.taskType)}`}
+                  aria-label="Complete special request"
                   disabled={loading}
-                  onClick={() => completeTask(task.id)}
+                  onClick={() => completeTask(req.id)}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 </button>
               )}
             </span>
-          ))}
-        </div>
-      )}
+          </Row>
+        ))}
 
-      {specialRequests.map((req: any) => (
-        <div key={req.id} className="flex min-w-0 items-center gap-1 text-foreground">
-          <Bell className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-label="Special request" />
-          <span className="min-w-0 flex-1 truncate" title={req.notes || undefined}>{req.notes || "Special request"}</span>
-          {onCompleteTask && (
-            <button
-              type="button"
-              className={tickClass}
-              title="Mark as completed"
-              aria-label="Complete special request"
-              disabled={loading}
-              onClick={() => completeTask(req.id)}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      ))}
-
-      {(room.assignedAttendant || activeTicket?.assignedTo) && (
-        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 text-muted-foreground">
-          {room.assignedAttendant && (
-            <span className="inline-flex min-w-0 items-center gap-1 truncate">
-              <Users className="h-3 w-3 shrink-0" />
-              {room.assignedAttendant.firstName} {room.assignedAttendant.lastName}
-            </span>
-          )}
-          {activeTicket?.assignedTo && (
-            <span className="inline-flex min-w-0 items-center gap-1 truncate" title="Maintenance technician">
-              <Wrench className="h-3 w-3 shrink-0" />
+        {room.assignedAttendant && (
+          <Row label="Staff">
+            <span className="truncate">{room.assignedAttendant.firstName} {room.assignedAttendant.lastName}</span>
+          </Row>
+        )}
+        {activeTicket?.assignedTo && (
+          <Row label="Tech">
+            <span className="truncate" title="Maintenance technician">
               {activeTicket.assignedTo.firstName} {activeTicket.assignedTo.lastName}
             </span>
-          )}
-        </div>
-      )}
+          </Row>
+        )}
+      </dl>
     </div>
   )
 }
