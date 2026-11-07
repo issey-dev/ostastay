@@ -17,6 +17,19 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.10.0",
+    date: "2026-11-07",
+    highlights: "Install Uppsolut Stay on your phone or computer and open it like an app.",
+    new: [
+      "Install the app: on Android and on Windows or Mac a card offers a one-tap install; on iPhone it shows the Share, Add to Home Screen steps. The installed app opens full screen, straight to your dashboard.",
+      "Home screen shortcuts: press and hold the installed app's icon to jump to the Front Desk or Reservations.",
+      "A new Install the app guide in the Operations documentation.",
+    ],
+    improved: [
+      "This prepares the app to send notifications to your phone in a coming release.",
+    ],
+  },
+  {
     version: "8.9.5",
     date: "2026-11-07",
     highlights: "A tidier Front Desk: the card and list switch moves to the end of the toolbar and cards get breathing room.",

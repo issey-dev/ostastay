@@ -129,6 +129,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/operations/front-desk", title: "Online bookings at the desk", summary: "For front office and spa staff: finding and handling online bookings." },
           { href: "/docs/operations/transportation", title: "Transportation", summary: "For front office, airport reps and dispatch: transfers, departures, charges and the daily report." },
           { href: "/docs/operations/keyboard-shortcuts", title: "Keyboard shortcuts", summary: "For everyone: find a guest, jump to a page, check in, check out and post a charge from the keyboard, and the cheat sheet (press ?)." },
+          { href: "/docs/operations/install-the-app", title: "Install the app", summary: "For everyone: put the app on your phone's home screen or your computer, on Android, iPhone and desktop." },
           { href: "/docs/operations/daily-reports", title: "Daily Reports", summary: "For managers, front office and finance: reading a report on screen and downloading it as PDF, Excel, delimited text or CSV." },
           { href: "/docs/operations/stop-sale", title: "Price calendar and stop sale", summary: "For revenue, reservations and front office: reading and changing prices on the calendar, closing dates to sale, and overriding a closed date." },
         ],
