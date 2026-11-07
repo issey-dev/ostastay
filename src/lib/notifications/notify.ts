@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { NOTIFICATION_TYPES, type NotificationType } from "./types"
 import { resolveRecipients, type AudienceQuery } from "./audience"
 import { sendPushToUsers } from "./push"
+import { splitRecipients } from "./preferences"
 
 // The ONE way a notification is raised. Like logActivity() and notifyBookingChange(), it
 // NEVER throws into the caller: telling people about something must not break the action
@@ -22,8 +23,11 @@ export type NotifyInput = {
   /** Makes the producer safe to run twice. Same key in the same enterprise = one notification. */
   dedupeKey?: string
   createdByUserId?: string
-  /** Who: everyone at the property, or only users who hold this permission. */
-  audience: Pick<AudienceQuery, "need">
+  /**
+   * Who: everyone at the property, only users who hold a permission, or named people
+   * (`userIds`, a PERSONAL notification — still limited to active users of this enterprise).
+   */
+  audience: Pick<AudienceQuery, "need"> & { userIds?: string[] }
   /** Never notify the person who just did it themselves. */
   excludeUserId?: string
 }
@@ -36,9 +40,20 @@ export function safeUrl(url: string | undefined): string | null {
 
 export async function notify(input: NotifyInput): Promise<string | null> {
   try {
-    const recipients = (
-      await resolveRecipients({ enterpriseId: input.enterpriseId, propertyId: input.propertyId, need: input.audience.need })
-    ).filter((id) => id !== input.excludeUserId)
+    const personal = input.audience.userIds !== undefined
+    const wanted = personal
+      ? (
+          await prisma.user.findMany({
+            where: { id: { in: input.audience.userIds }, enterpriseId: input.enterpriseId, isActive: true, isSystem: false },
+            select: { id: true },
+          })
+        ).map((u) => u.id)
+      : await resolveRecipients({ enterpriseId: input.enterpriseId, propertyId: input.propertyId, need: input.audience.need })
+    // Each person's own choices: who sees it in the bell, and who also gets it on a phone.
+    const { bell: recipients, phone } = await splitRecipients(
+      input.type,
+      wanted.filter((id) => id !== input.excludeUserId),
+    )
     if (recipients.length === 0) return null
 
     const meta = NOTIFICATION_TYPES[input.type]
@@ -49,7 +64,7 @@ export async function notify(input: NotifyInput): Promise<string | null> {
           propertyId: input.propertyId,
           type: input.type,
           severity: meta.severity,
-          scope: "GLOBAL",
+          scope: personal ? "PERSONAL" : "GLOBAL",
           title: input.title,
           body: input.body ?? null,
           url: safeUrl(input.url),
@@ -64,7 +79,7 @@ export async function notify(input: NotifyInput): Promise<string | null> {
       // Phone push only for things someone should act on; INFO stays in the bell. Fire and
       // forget: push is best-effort and must never slow or fail the action itself.
       if (meta.severity !== "INFO") {
-        void sendPushToUsers(recipients, {
+        void sendPushToUsers(phone, {
           title: input.title,
           body: input.body,
           url: safeUrl(input.url),

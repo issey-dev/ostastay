@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { canDo, worksAt, type AudienceUser } from "@/lib/notifications/audience"
 import { safeUrl } from "@/lib/notifications/notify"
+import { applyPreferences } from "@/lib/notifications/preferences"
 
 const perm = (module: string, v: Partial<Record<"canView" | "canCreate" | "canUpdate" | "canDelete", boolean>> = {}) => ({
   module, canView: false, canCreate: false, canUpdate: false, canDelete: false, ...v,
@@ -31,5 +32,34 @@ describe("notification audience rules", () => {
     expect(safeUrl("https://evil.example")).toBeNull()
     expect(safeUrl("//evil.example")).toBeNull()
     expect(safeUrl(undefined)).toBeNull()
+  })
+
+  describe("preferences", () => {
+    const prefs = [
+      { userId: "muted", type: "CHANNEL_BOOKING_RECEIVED", inApp: false, push: true },
+      { userId: "bellOnly", type: "CHANNEL_BOOKING_RECEIVED", inApp: true, push: false },
+      { userId: "muted", type: "ANNOUNCEMENT", inApp: false, push: true },
+      { userId: "other", type: "NIGHT_AUDIT_FAILED", inApp: false, push: false },
+    ]
+    const everyone = ["muted", "bellOnly", "default"]
+
+    it("no stored choice means bell and phone", () => {
+      expect(applyPreferences("CHANNEL_BOOKING_RECEIVED", ["default"], [])).toEqual({ bell: ["default"], phone: ["default"] })
+    })
+
+    it("muting the bell removes the person from both; bell-only skips the phone", () => {
+      expect(applyPreferences("CHANNEL_BOOKING_RECEIVED", everyone, prefs)).toEqual({
+        bell: ["bellOnly", "default"],
+        phone: ["default"],
+      })
+    })
+
+    it("a choice about one kind does not affect another", () => {
+      expect(applyPreferences("NIGHT_AUDIT_FAILED", everyone, prefs).bell).toEqual(everyone)
+    })
+
+    it("a locked kind (announcements, security) ignores a bell opt-out", () => {
+      expect(applyPreferences("ANNOUNCEMENT", everyone, prefs).bell).toEqual(everyone)
+    })
   })
 })
