@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 import { resolveBusinessDate } from "@/lib/business-date"
 import { logActivity } from "@/lib/activity-log"
+import { notifyRoomsAssigned } from "@/lib/notifications/producers"
 
 export async function GET(request: Request) {
   try {
@@ -187,6 +188,19 @@ export async function PATCH(request: Request) {
         entityType: "Room",
         description: `Bulk room update (${result.count} room${result.count === 1 ? "" : "s"}): ${changeDesc}`,
       })
+      // Tell the attendant about the rooms that are newly theirs, one notice per property.
+      if (typeof assignedAttendantId === "string") {
+        for (const propertyId of distinctPropertyIds) {
+          const newly = rooms.filter((r) => r.propertyId === propertyId && r.assignedAttendantId !== assignedAttendantId)
+          await notifyRoomsAssigned({
+            enterpriseId: ctx.enterpriseId,
+            propertyId,
+            assigneeId: assignedAttendantId,
+            actorUserId: ctx.userId,
+            roomNumbers: newly.map((r) => r.roomNumber),
+          })
+        }
+      }
       return NextResponse.json({ success: true, count: result.count })
     } else {
       const existing = await prisma.room.findUnique({ where: { id: roomId } })
@@ -215,6 +229,15 @@ export async function PATCH(request: Request) {
         entityId: roomId,
         description: `Room ${existing.roomNumber}: ${changeDesc}`,
       })
+      if (typeof assignedAttendantId === "string" && existing.assignedAttendantId !== assignedAttendantId) {
+        await notifyRoomsAssigned({
+          enterpriseId: ctx.enterpriseId,
+          propertyId: existing.propertyId,
+          assigneeId: assignedAttendantId,
+          actorUserId: ctx.userId,
+          roomNumbers: [existing.roomNumber],
+        })
+      }
       return NextResponse.json(updatedRoom)
     }
   } catch (error) {

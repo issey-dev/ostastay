@@ -152,6 +152,32 @@ export async function notifyTaskAssigned(a: { enterpriseId: string; propertyId: 
   }
 }
 
+/** Rooms were assigned to a room attendant — tell them once, however many rooms (personal). */
+export async function notifyRoomsAssigned(a: { enterpriseId: string; propertyId: string; assigneeId: string; actorUserId: string; roomNumbers: string[] }) {
+  try {
+    const where = await whereIs(a.propertyId)
+    if (!where || a.roomNumbers.length === 0) return
+    const shown = a.roomNumbers.slice(0, 8).join(", ")
+    const more = a.roomNumbers.length > 8 ? ` and ${a.roomNumbers.length - 8} more` : ""
+    await notify({
+      type: "ROOMS_ASSIGNED",
+      enterpriseId: a.enterpriseId,
+      propertyId: a.propertyId,
+      title: a.roomNumbers.length === 1 ? "A room was assigned to you" : `${a.roomNumbers.length} rooms were assigned to you`,
+      body: `${where.name}: ${shown}${more}`,
+      url: `/e/${where.slug}/dashboard/housekeeping/task-sheet`,
+      entityType: "Room",
+      // The minute only stops a double click; assigning again later is a new assignment.
+      dedupeKey: `ROOMS_ASSIGNED:${a.assigneeId}:${a.propertyId}:${[...a.roomNumbers].sort().join(",")}:${new Date().toISOString().slice(0, 16)}`,
+      audience: { userIds: [a.assigneeId] },
+      excludeUserId: a.actorUserId,
+      createdByUserId: a.actorUserId,
+    })
+  } catch (e) {
+    console.error("[notifications] rooms assigned", e)
+  }
+}
+
 /** Someone signed in from a browser or device this account has not used before — tell the account's owner (personal). */
 export async function notifyNewDeviceSignIn(a: { enterpriseId: string; userId: string; device: string }) {
   try {

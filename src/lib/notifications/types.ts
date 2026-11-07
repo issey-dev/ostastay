@@ -63,6 +63,30 @@ export const NOTIFICATION_TYPES = {
     severity: SEVERITY.ACTION,
     group: "Work",
   },
+  ROOMS_ASSIGNED: {
+    label: "Rooms were assigned to you",
+    description: "Someone assigned rooms to you to clean.",
+    severity: SEVERITY.ACTION,
+    group: "Work",
+  },
+  TRANSPORT_ATTENTION: {
+    label: "A transfer needs attention",
+    description: "A transfer in the next two days has a problem, such as a boat that leaves before the flight lands. Sent to people who manage transport manifests.",
+    severity: SEVERITY.ACTION,
+    group: "Work",
+  },
+  CASHIER_SHIFT_OPEN: {
+    label: "A cashier shift was left open",
+    description: "A cashier shift has been open for over 16 hours. Sent to the cashier, and to people who supervise cashiering.",
+    severity: SEVERITY.ACTION,
+    group: "Work",
+  },
+  GROUP_CUTOFF: {
+    label: "A group cut-off date is close",
+    description: "A group's cut-off date is today or tomorrow and rooms are still not picked up. Sent to people who manage group blocks.",
+    severity: SEVERITY.ACTION,
+    group: "Bookings",
+  },
   NEW_DEVICE_SIGN_IN: {
     label: "Sign-in from a new device",
     description: "Your account was signed in on a browser or device it has not been used on before.",
