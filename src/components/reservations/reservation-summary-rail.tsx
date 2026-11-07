@@ -1,5 +1,6 @@
 "use client"
 
+import { CountUp } from "@/components/dashboard/motion-kit"
 import Link from "next/link"
 import type { ComponentType } from "react"
 import { format } from "date-fns"
@@ -90,7 +91,7 @@ export function ReservationSummaryRail({
           <div>
             <p className="text-xs text-muted-foreground">Balance</p>
             {hasFolios ? (
-              <p className={cn("text-2xl font-semibold tabular-nums", settled(balance) && "text-success")}>{money(balance)}</p>
+              <p className={cn("text-2xl font-semibold tabular-nums", settled(balance) && "text-success")}><CountUp value={money(balance)} /></p>
             ) : (
               <p className="text-sm text-muted-foreground">No folio yet</p>
             )}
