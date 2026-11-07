@@ -42,6 +42,13 @@ export default function DeskGuide() {
         saved until you press <strong>Assign</strong>.
       </p>
 
+      <p>
+        <strong>From the keyboard:</strong> on a computer, <kbd>J</kbd> and <kbd>K</kbd> move down and up the lists, <kbd>C</kbd> checks in, <kbd>O</kbd> checks out
+        (it always asks first), <kbd>F</kbd> opens the folio, <kbd>A</kbd> assigns a room, <kbd>M</kbd> moves a room, <kbd>1</kbd> to <kbd>4</kbd> switch tab and{" "}
+        <kbd>Enter</kbd> opens the booking. A short reminder is shown above the list, and the full list is behind <kbd>?</kbd>. See{" "}
+        <a href="/docs/operations/keyboard-shortcuts">Keyboard shortcuts</a>.
+      </p>
+
       <H2>Reservations list</H2>
       <p>
         <strong>New booking</strong> is the main button at the top. <strong>Tape Chart</strong> and <strong>Auto-Assign</strong> are under <strong>More</strong>
