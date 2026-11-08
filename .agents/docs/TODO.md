@@ -101,6 +101,7 @@ before N1.
 - [x] N2 Web Push (VAPID, subscriptions, send for ACTION/URGENT; no retry job by design). **Owner: add VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT to the VPS .env**, then try it on a real Android phone and an iPhone
 - [x] N3 Preferences, full page, Hub announcements, 4 more kinds (task assigned, new device, support session, website excursion/spa booking)
 - [x] Housekeeping assignment, transport attention, open cashier shift, group cut-off alerts + retention sweep (job `notification-alerts`; make sure the external cron runs `/api/jobs/run` every few minutes, it already does for the other jobs)
+- [x] Osta console bell + platform notifications (8.12.0)
 - [ ] Leftovers: per-property default settings in the Hub, reminders ("remind me"), quiet hours, email digest; screenshots for the Announcements docs page (`docs:shots`)
 - [ ] N4 Optional: quiet hours, email digest, SSE, reminders
 

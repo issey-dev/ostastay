@@ -17,6 +17,19 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.12.0",
+    date: "2026-11-08",
+    highlights: "The notification bell comes to the Uppsolut platform console, so approvals, licences, billing and failing channels reach the team without opening Today.",
+    new: [
+      "Notification bell in the platform console, with a Notifications page for the list and each person's settings.",
+      "The platform team is told when a customer adds a property that needs approving, when a connection Uppsolut runs is failing, when a licence is in its grace period or has expired, and when a licence invoice is unpaid or becomes overdue. These come from the same Needs action list as the Today page, so the two always agree, and each item is announced once.",
+      "Customers now see a notification, marked urgent, whenever Uppsolut support opens a session in their enterprise.",
+    ],
+    improved: [
+      "The platform notifications are listed only in the platform team's own settings. A customer's settings never show them.",
+    ],
+  },
+  {
     version: "8.11.0",
     date: "2026-11-08",
     highlights: "A redesigned platform console for the Uppsolut team: a Today page of what needs action, a searchable customer directory, a workspace per customer, a finance overview and a monitoring page with history.",

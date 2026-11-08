@@ -8,7 +8,7 @@ import { listPreferences, setPreference } from "@/lib/notifications/preferences"
 export async function GET() {
   try {
     const ctx = await requireSession()
-    return NextResponse.json({ preferences: await listPreferences(ctx.userId) })
+    return NextResponse.json({ preferences: await listPreferences(ctx.userId, { platform: ctx.isInternal }) })
   } catch (e) {
     const { status, body } = toErrorResponse(e)
     return NextResponse.json(body, { status })
@@ -26,7 +26,7 @@ export async function PUT(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: "Send { type, inApp?, push? }" }, { status: 400 })
     const { type, ...rest } = parsed.data
     if (!(await setPreference(ctx.userId, type, rest))) return NextResponse.json({ error: "Unknown kind of notification" }, { status: 400 })
-    return NextResponse.json({ preferences: await listPreferences(ctx.userId) })
+    return NextResponse.json({ preferences: await listPreferences(ctx.userId, { platform: ctx.isInternal }) })
   } catch (e) {
     const { status, body } = toErrorResponse(e)
     return NextResponse.json(body, { status })

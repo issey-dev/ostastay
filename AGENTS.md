@@ -50,11 +50,14 @@ read `.agents/docs/`:
   decide which area it belongs to, and gate its API with `requireEnterpriseHub()` or
   `requirePropertySetup()` from `src/lib/scope.ts`.
 
-- [`.agents/docs/NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) — PLAN ONLY (nothing
-  built): header bell replacing the Setup button, personal + global notifications, the event
-  catalogue, PWA install + Web Push to phones, data model, phases N0-N4 and open owner questions.
-  Read before touching the dashboard header, adding any notification/toast-like feature, the
-  web manifest, or a service worker.
+- [`.agents/docs/NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) — the notification
+  system, BUILT (8.10.0 and 8.12.0): header bell in the dashboard, Hub and Osta console, personal +
+  global notifications, per-person settings, Hub announcements, the clock-based alerts job,
+  PWA install and Web Push to phones. The plan holds the catalogue, data model, decisions and what
+  is still open. Read before touching a header, adding any notification/toast-like feature, the
+  web manifest or service worker, or `src/lib/notifications/**`. A new kind of notification is a
+  row in `src/lib/notifications/types.ts` plus a producer; keep its text free of guest names and
+  amounts, and add it to the Notifications guide (`/docs/operations/notifications`).
 
 - **The public docs portal** (`src/app/docs`, table of contents in `src/app/docs/nav.ts`) has
   three areas: `/docs/api` (Booking API, for developers), `/docs/configuration` (setting up
