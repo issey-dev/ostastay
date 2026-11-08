@@ -13,7 +13,8 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
-import { toneMutedClasses } from "@/lib/status-tone"
+import { statusTone, toneMutedClasses, type StatusTone } from "@/lib/status-tone"
+import { cn } from "@/lib/utils"
 import { MAINTENANCE_ISSUE_TYPES } from "@/lib/maintenance"
 import { housekeepingStaff } from "@/lib/job-functions"
 import { RoomActionSheet } from "@/components/housekeeping/room-action-sheet"
@@ -22,6 +23,24 @@ import { MobileActions } from "@/components/ui/mobile"
 import { ActionBar } from "@/components/ui/action-bar"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { toast } from "@/lib/toast"
+
+const STATUS_FILTERS = [
+  { label: "All", value: "" },
+  { label: "Dirty", value: "DIRTY" },
+  { label: "Clean", value: "CLEAN" },
+  { label: "Inspected", value: "INSPECTED" },
+  { label: "Out of order", value: "OUT_OF_ORDER" },
+  { label: "Out of service", value: "OUT_OF_SERVICE" },
+]
+
+// The dot on a phone status chip, in the room status's own colour.
+const TONE_DOT: Record<StatusTone, string> = {
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-destructive",
+  info: "bg-info",
+  neutral: "bg-muted-foreground/60",
+}
 
 export default function HousekeepingDashboard() {
   const { slug } = useParams<{ slug: string }>()
@@ -451,16 +470,73 @@ export default function HousekeepingDashboard() {
         }
       />
 
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        {[
-          { label: "All", value: "" },
-          { label: "Dirty", value: "DIRTY" },
-          { label: "Clean", value: "CLEAN" },
-          { label: "Inspected", value: "INSPECTED" },
-          { label: "Out of order", value: "OUT_OF_ORDER" },
-          { label: "Out of service", value: "OUT_OF_SERVICE" },
-        ].map((opt) => (
+      {/* Phone filter: one swipeable row of status chips (a coloured dot + count, so the
+          row doubles as the status summary), the attendant picker full width under it, and
+          a result line with Clear while anything is filtered. Desktop keeps the bar below. */}
+      <div className="md:hidden mb-5 space-y-2.5">
+        <div className="relative -mx-4">
+          <div
+            role="group"
+            aria-label="Filter by status"
+            className="flex gap-2 overflow-x-auto px-4 pb-0.5 snap-x scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {STATUS_FILTERS.map((opt) => {
+              const active = filterStatus === opt.value
+              const count = opt.value ? rooms.filter((r: any) => r.status === opt.value).length : rooms.length
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFilterStatus(opt.value)}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 snap-start items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors",
+                    active ? "border-foreground bg-foreground text-background" : "border-border bg-card text-foreground active:bg-muted",
+                  )}
+                >
+                  {opt.value && <span aria-hidden className={cn("h-2 w-2 rounded-full", TONE_DOT[statusTone(opt.value)])} />}
+                  {opt.label}
+                  <span className={cn("tabular-nums text-xs", active ? "opacity-80" : "text-muted-foreground")}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Fade on the right edge: the cue that the row scrolls. */}
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
+        </div>
+        {housekeepers.length > 0 && (
+          <OptionSelect
+            aria-label="Filter by attendant"
+            value={filterAttendantId}
+            onChange={setFilterAttendantId}
+            options={[
+              { label: "All attendants", value: "" },
+              ...housekeepers.map((hk: any) => ({ label: `${hk.firstName} ${hk.lastName ?? ""}`.trim(), value: hk.id })),
+            ]}
+          />
+        )}
+        {(filterStatus || filterAttendantId) && (
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              {filteredRooms.length} of {rooms.length} rooms
+            </span>
+            <button
+              type="button"
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+              onClick={() => {
+                setFilterStatus("")
+                setFilterAttendantId("")
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Filter bar (tablet and desktop) */}
+      <div className="flex flex-wrap items-center gap-2 mb-6 max-md:hidden">
+        {STATUS_FILTERS.map((opt) => (
           <Button
             key={opt.value}
             size="sm"

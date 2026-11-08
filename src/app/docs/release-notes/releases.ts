@@ -27,6 +27,7 @@ export const RELEASES: Release[] = [
     improved: [
       "Platform console on phones: search is an icon in the header, the summary tiles on Today sit two across, and lists on Billing, Support Access and a customer's Properties, Channel and Support tabs show as cards instead of wide tables.",
       "Platform console on phones: the Monitoring chart, the invoice settings and preview on Controls, and a few headings on Billing and Channel Manager now fit the screen.",
+      "Housekeeping on phones: the room status filters are one row you swipe sideways, each with its colour and count, the attendant filter sits full width under it, and a line shows how many rooms match with a button to clear the filters.",
     ],
     fixed: [
       "Platform console: Today no longer stays highlighted in the menu while you are on the Notifications page.",
