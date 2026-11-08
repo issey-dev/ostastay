@@ -51,7 +51,7 @@ jobs:
             const pub=Buffer.concat([Buffer.from([4]),Buffer.from(p.x,'base64url'),Buffer.from(p.y,'base64url')]).toString('base64url');
             console.log('VAPID_PUBLIC_KEY='+pub);
             console.log('VAPID_PRIVATE_KEY='+v.d);
-          ")
+          " </dev/null)
           case "$KEYS" in VAPID_PUBLIC_KEY=*) ;; *) echo "key generation failed"; exit 1;; esac
           printf '\n%s\nVAPID_SUBJECT=mailto:%s\n' "$KEYS" "$SUBJECT" >> .env
           docker compose up -d app
