@@ -7,6 +7,7 @@ import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { UppsolutWordmark } from "@/components/brand/uppsolut-logo"
 import { OstaHeaderTools } from "@/components/osta/osta-header-tools"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -55,6 +56,7 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
           <div className="ml-auto flex items-center gap-2 print:hidden">
             {/* Search (Ctrl+K palette) and the + New menu; also mounts both overlays. */}
             <OstaHeaderTools />
+            <NotificationBell allHref="/osta/notifications" />
             <ThemeToggle />
           </div>
         </header>

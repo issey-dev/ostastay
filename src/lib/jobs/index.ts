@@ -1,5 +1,6 @@
 import { notifyChannelConnectionFailed } from "@/lib/notifications/producers";
 import { scanGroupCutoffs, scanOpenShifts, scanTransportAttention } from "@/lib/notifications/scans";
+import { scanOstaInbox } from "@/lib/notifications/osta-scan";
 import { pruneNotifications } from "@/lib/notifications/retention";
 import { prisma } from "@/lib/db";
 import { runScheduledAudits } from "@/lib/night-audit/scheduled";
@@ -377,6 +378,8 @@ const notificationAlertsJob: Job = {
       ["transport", () => scanTransportAttention(enterpriseId)],
       ["cashier shifts", () => scanOpenShifts(enterpriseId)],
       ["group cut-offs", () => scanGroupCutoffs(enterpriseId)],
+      // Does nothing unless this is the Osta (platform) enterprise.
+      ["platform items", () => scanOstaInbox(enterpriseId)],
     ];
     for (const [label, scan] of scans) {
       try {

@@ -80,6 +80,7 @@ export default function NotificationsGuide() {
           <li>Cashier shift, transfer and group cut-off notifications are checked every few minutes, and each problem is announced once. A transfer is announced again if its flight time changes.</li>
           <li>Notifications you have read are removed after 90 days, and all of them after 180 days.</li>
           <li>Notifications never include guest names or amounts. Open the screen to see the details.</li>
+          <li>The Uppsolut team uses the same bell in its own console, with its own notifications about approvals, licences, billing and connections it runs. Those never appear in your settings.</li>
           <li>Setup and the operations dashboard are in the <strong>Account</strong> menu at the bottom of the left-hand menu, where Setup and Operations buttons used to be in the header.</li>
         </ul>
       </Callout>

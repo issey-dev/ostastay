@@ -16,8 +16,10 @@ export type TypeMeta = {
   /** One plain sentence for the settings page: what it is and who gets it. */
   description: string
   severity: Severity
-  group: "Property" | "Bookings" | "Work" | "Account and security" | "Announcements"
+  group: "Property" | "Bookings" | "Work" | "Account and security" | "Announcements" | "Platform"
   locked?: boolean
+  /** Only for Uppsolut's own staff (the platform console); hidden from every customer's settings. */
+  platform?: boolean
 }
 
 export const NOTIFICATION_TYPES = {
@@ -93,6 +95,36 @@ export const NOTIFICATION_TYPES = {
     severity: SEVERITY.INFO,
     group: "Account and security",
     locked: true,
+  },
+  // ── Platform console (Uppsolut staff only). Raised from the same "Needs action" list the
+  // console's Today page shows (src/lib/osta/attention.ts), so the bell and the page agree.
+  OSTA_PROPERTY_REVIEW: {
+    label: "A property is waiting for approval",
+    description: "A customer added a property that needs approving before it can be used.",
+    severity: SEVERITY.ACTION,
+    group: "Platform",
+    platform: true,
+  },
+  OSTA_CHANNEL_FAILING: {
+    label: "A channel connection we run is failing",
+    description: "A channel-manager connection managed by Uppsolut stopped working. Raised at most once a day for each connection.",
+    severity: SEVERITY.URGENT,
+    group: "Platform",
+    platform: true,
+  },
+  OSTA_LICENSE: {
+    label: "A licence is in its grace period or has expired",
+    description: "A customer's licence needs renewing before access locks, or already has.",
+    severity: SEVERITY.ACTION,
+    group: "Platform",
+    platform: true,
+  },
+  OSTA_BILLING: {
+    label: "A licence invoice is unpaid or overdue",
+    description: "A licence invoice was issued and not marked paid. Raised when it appears and again once it is overdue.",
+    severity: SEVERITY.ACTION,
+    group: "Platform",
+    platform: true,
   },
   INSTALL_APP: {
     label: "Invitation to install the app",

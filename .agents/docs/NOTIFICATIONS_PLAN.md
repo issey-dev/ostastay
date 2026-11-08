@@ -1,5 +1,7 @@
 # Notifications — plan (drafted 2026-11-07)
 
+> **Osta console (8.12.0, 2026-11-08):** the bell is in the platform console header with a `/osta/notifications` page (the same `NotificationCenter`). Platform kinds (`platform: true` in `types.ts`: OSTA_PROPERTY_REVIEW, OSTA_CHANNEL_FAILING, OSTA_LICENSE, OSTA_BILLING) are raised by `src/lib/notifications/osta-scan.ts` from `getOstaToday().inbox` (the console's own Needs action list; one source of truth), through the `notification-alerts` job, for the INTERNAL enterprise only, to Osta users holding CONTROLS view; deduped per item/state (a failing channel repeats daily, an invoice again when overdue). `listPreferences` hides platform kinds from non-Osta users. SUPPORT_SESSION_OPENED (tenant admins) was already built in 8.10.0. Not built: platform-wide broadcasts to every tenant (N4).
+
 > **Install prompt (owner, 2026-11-07):** the floating "Install" card was removed. The invitation is a one-time INSTALL_APP notification (personal, INFO, dedupe key per user, sent at sign-in); `Install app` shows in the Account dialog only after it was read (`/api/notifications/install-offer`). `beforeinstallprompt` is kept by `InstallCapture` (root layout) in `src/lib/pwa/install-store.ts` until the person asks.
 
 > **Status 2026-11-07 (8.10.0, PR #93):** N0, N1, N2 N3 are BUILT (plus the four clock-based alerts). N0: manifest, push-only service worker,

@@ -36,11 +36,15 @@ export type PreferenceView = {
   pushable: boolean
 }
 
-/** Every kind, with the person's current choice, for the settings page. */
-export async function listPreferences(userId: string): Promise<PreferenceView[]> {
+/**
+ * Every kind, with the person's current choice, for the settings page. The platform kinds
+ * (Uppsolut staff only) are left out unless `platform` is true, so a customer never sees them.
+ */
+export async function listPreferences(userId: string, opts: { platform?: boolean } = {}): Promise<PreferenceView[]> {
   const rows = await prisma.notificationPreference.findMany({ where: { userId } })
   const byType = new Map(rows.map((r) => [r.type, r]))
-  return (Object.keys(NOTIFICATION_TYPES) as NotificationType[]).map((type) => {
+  const kinds = (Object.keys(NOTIFICATION_TYPES) as NotificationType[]).filter((t) => opts.platform || !typeMeta(t)?.platform)
+  return kinds.map((type) => {
     const m = NOTIFICATION_TYPES[type] as { label: string; description: string; group: string; severity: string; locked?: boolean }
     const r = byType.get(type)
     return {

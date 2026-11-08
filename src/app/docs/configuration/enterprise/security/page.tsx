@@ -58,6 +58,13 @@ export default function Security() {
           while approved is recorded in the activity log.
         </p>
       </Callout>
+      <H2>Being told when support is in</H2>
+      <p>
+        Each time Uppsolut support opens a session in your enterprise, everyone who manages users receives a notification in the bell,{" "}
+        <strong>Osta support opened a session</strong>, marked urgent. It cannot be switched off in the bell, so an approved session is
+        never silent. Anyone who sees one they do not expect can open <strong>Support Access</strong> and choose <strong>Revoke</strong>.
+        See <a href="/docs/operations/notifications">Notifications</a>.
+      </p>
       <Pager href="/docs/configuration/enterprise/security" />
     </>
   )
