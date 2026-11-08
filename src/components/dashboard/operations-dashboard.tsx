@@ -1117,7 +1117,20 @@ function DashboardHeading({ userName, action }: { userName: string; action?: Rea
   // display text only — it is never read back as an identity, and every gate on this page
   // runs off the session. The browser tab still says "Dashboard" (= the sidebar label).
   // No subtitle: the header already shows the property and business date.
-  return <PageHeader title={`Welcome, ${userName}`} tabTitle="Dashboard" actions={action} />
+  // Phones: just "Dashboard", like every other page title (owner, 2026-11-09).
+  return (
+    <PageHeader
+      title={
+        <>
+          <span className="max-sm:hidden">Welcome, {userName}</span>
+          <span className="sm:hidden">Dashboard</span>
+        </>
+      }
+      tabTitle="Dashboard"
+      actions={action}
+      phoneActionsBelow
+    />
+  )
 }
 
 /** The thin status line above the widgets: is the day closed, is a drawer open, is the

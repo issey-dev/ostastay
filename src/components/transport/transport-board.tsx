@@ -273,10 +273,10 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
         hint="Pickups and drop-offs by day. Put guests from different reservations on the same departure; warnings never stop you saving. Charges post at Night Audit."
         actions={
           <ActionBar
-            secondary={
+            primary={
               perms.manageBookings && (
                 <Button onClick={() => setBookingForm({ editing: null })}>
-                  <Plus className="mr-2 h-4 w-4" /> New transfer
+                  <Plus className="mr-2 h-4 w-4" /> New<span className="max-sm:hidden"> transfer</span>
                 </Button>
               )
             }

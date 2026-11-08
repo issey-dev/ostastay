@@ -96,7 +96,7 @@ export function MobileActionBar({ children, className }: { children: React.React
       <div
         data-mobile-action-bar=""
         className={cn(
-          "fixed inset-x-0 bottom-[var(--bottom-nav-offset,0px)] z-[var(--z-sticky)] flex items-center gap-2 border-t border-border bg-card/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden print:hidden",
+          "fixed inset-x-0 bottom-[var(--bottom-nav-offset,0px)] z-[var(--z-banner)] flex items-center gap-2 border-t border-border bg-card/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden print:hidden",
           className
         )}
       >

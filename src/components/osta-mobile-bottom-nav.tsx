@@ -39,7 +39,7 @@ export function OstaMobileBottomNav({ counts }: { counts: OstaNavCounts | null }
     <nav
       aria-label="Main"
       data-mobile-nav=""
-      className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden print:hidden"
+      className="fixed inset-x-0 bottom-0 z-[var(--z-banner)] border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden print:hidden"
     >
       <ul className="grid h-16" style={{ gridTemplateColumns: `repeat(${slots.length + 1}, minmax(0, 1fr))` }}>
         {slots.map((item) => {

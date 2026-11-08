@@ -278,6 +278,10 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
   on phones: full-width grid (`max-md:grid max-md:grid-cols-N max-md:h-auto!` — the `!` beats the
   `pointer-coarse:data-horizontal:h-11` height on touch screens), a segmented switch, or a dropdown.
   Check with a 375px pass that also lists elements inside `overflow-x: auto` that scroll.
+- **Built-in phone rules (2026-11-09):** `PageHeader` keeps title + actions on one row (h-9 buttons;
+  `phoneActionsBelow` for filter-type actions); `TabsList` (horizontal) becomes a grid of ≤4 per row;
+  bottom navs and `MobileActionBar` sit at `--z-banner` so card content (z-10 links) never paints over
+  them; dialog/sheet close buttons are z-20 above the sticky phone dialog header.
 - **`PageHeader`** (`ui/page-header.tsx`): actions wrap instead of clipping — Housekeeping,
   Maintenance; Cashiering and Group detail headers wrap too.
 - **Pickers:** `DateRangePicker` shows one month on phones and has a unique id.

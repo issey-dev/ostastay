@@ -831,7 +831,7 @@ function ReservationsList() {
             <ActionBar
               primary={
                 <Link href={`/e/${slug}/dashboard/reservations/new`}>
-                  <Button><Plus className="mr-2 h-4 w-4" /> New booking</Button>
+                  <Button><Plus className="mr-2 h-4 w-4" /> New<span className="max-sm:hidden"> booking</span></Button>
                 </Link>
               }
               more={[

@@ -3202,3 +3202,15 @@ Shipped as 8.9.0 (see DECISIONS 2026-11-07 "Keyboard-first front desk"). Still o
 - [ ] Docs screenshots of the cheat sheet / palette actions are not in the guide yet
   (`scripts/docs-shots.config.ts`); the guide is text + key tables only.
 - [ ] Parked by the owner: role-based landing page (Housekeeping → task sheet, Cashier → open shift).
+
+## Phone consistency pass (2026-11-09) — DONE in PR #101
+- [x] Icons: chevrons, plain close ×, Sun 2 Linear; dialog/sheet close above the sticky phone header.
+- [x] PageHeader phone row (Housekeeping style), TabsList max-4-per-row, Front Desk counts strip off,
+  Dashboard title, bottom nav / action bar above card content (z-banner).
+- [x] Folio phone layout (sticky header + close, pinned post bar → bottom sheet).
+- [x] Booking form: nights badge in the Stay heading; invalid save names the problem and scrolls/focuses;
+  room-less bookings load with a room line spanning the stay; check-in / Assign room explain and link to
+  Choose room & rate.
+- [ ] **Check production for bookings with no room line** (seen in local seed data only — 17 rows). Query:
+  reservations with no RoomAssignment and status not CANCELLED. Fix the seed did; real data may need a
+  one-off repair (add a line with the room type + BAR rate) — ask the owner before touching prod data.

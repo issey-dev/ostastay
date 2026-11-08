@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, RotateCcw, Trash2, UserCircle, ExternalLink, LogOut, MoreHorizontal } from "@/components/icons"
+import { Plus, CreditCard, Receipt, Printer, ArrowRightLeft, RotateCcw, Trash2, UserCircle, ExternalLink, LogOut, MoreHorizontal, XIcon } from "@/components/icons"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Badge } from "@/components/ui/badge"
 import { FolioPrintDialog, type FolioDocumentType } from "@/components/front-office/folio-print-dialog"
@@ -28,6 +28,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { FolioLedger } from "@/components/front-office/folio-ledger"
 import { FolioCheckNoDialog, type CheckNoTarget } from "@/components/front-office/folio-check-no-dialog"
 import { InlineLoading } from "@/components/ui/inline-loading"
+import { Drawer, DrawerBody, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { activeCityLedgerPayments } from "@/lib/debtor-accounts"
 
 type FolioPanelProps = {
@@ -48,7 +50,10 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose, onCheck
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       {/* Already a full-screen layout of its own on phones (h-[100dvh]) — opt out of the
           shared bottom-sheet treatment. */}
-      <DialogContent mobile="none" className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto max-sm:px-4 max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Its own close button in the header (below) instead of the corner one, which scrolled
+          away with the content on a phone. --bottom-nav-offset 0: there is no bottom nav
+          inside the dialog, so the phone post bar sits at the very bottom. */}
+      <DialogContent mobile="none" showCloseButton={false} initialFocus={false} style={{ "--bottom-nav-offset": "0px" } as React.CSSProperties} className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-6 sm:p-8 flex flex-col bg-muted overflow-y-auto max-sm:px-4 max-sm:pt-0 max-sm:pb-0">
         <FolioView
           key={reservationId}
           reservationId={reservationId}
@@ -56,8 +61,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose, onCheck
           onClose={onClose}
           onCheckedOut={onCheckedOut}
           renderHeader={({ actions }) => (
-            <DialogHeader className="border-b pb-4 mb-4 shrink-0">
-              <div className="flex justify-between items-center gap-3 w-full sm:pr-8">
+            // Phones: the header stays at the top while the folio scrolls under it.
+            <DialogHeader className="border-b pb-4 mb-4 shrink-0 max-sm:sticky max-sm:top-0 max-sm:z-20 max-sm:-mx-4 max-sm:bg-muted max-sm:px-4 max-sm:pt-[max(0.75rem,env(safe-area-inset-top))] max-sm:pb-3 max-sm:pr-4">
+              <div className="flex justify-between items-center gap-3 w-full">
                 <div>
                   <DialogTitle className="text-2xl flex items-center max-sm:text-xl">
                     <Receipt className="mr-2" /> Guest folio
@@ -66,7 +72,7 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose, onCheck
                     Manage billing, charges, and payments for this reservation.
                   </DialogDescription>
                 </div>
-                <div className="flex items-center gap-2 max-sm:pr-8">
+                <div className="flex items-center gap-2">
                   {actions}
                   <a
                     href={`/e/${slug}/dashboard/reservations/${reservationId}/folio`}
@@ -78,6 +84,9 @@ export function FolioPanel({ reservationId, propertyId, isOpen, onClose, onCheck
                   >
                     <ExternalLink className="h-4 w-4" />
                   </a>
+                  <DialogClose render={<Button variant="ghost" size="icon" aria-label="Close folio" className="shrink-0" />}>
+                    <XIcon className="h-5 w-5" />
+                  </DialogClose>
                 </div>
               </div>
             </DialogHeader>
@@ -113,6 +122,10 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
   
   // Posting State
   const [postType, setPostType] = useState<"charge" | "payment">("charge")
+  // Phones: the post forms open in a bottom sheet from a pinned bar (like Fast Post),
+  // instead of sitting under the whole ledger.
+  const isMobile = useIsMobile()
+  const [postSheet, setPostSheet] = useState<"charge" | "payment" | null>(null)
   const [chargeForm, setChargeForm] = useState({ chargeCodeId: "", amount: "", description: "", reference: "" })
   const [paymentForm, setPaymentForm] = useState({ paymentMethodId: "", amount: "", referenceNumber: "" })
   // Until the cashier types an amount, the payment amount IS the folio balance (see
@@ -377,6 +390,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
         setChargeForm({ chargeCodeId: "", amount: "", description: "", reference: "" })
+        setPostSheet(null)
         fetchFolios()
         toast.success("Charge posted", { description: data.description || undefined })
       } else {
@@ -406,6 +420,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
         // Reset back to the folio's default rather than blank — taking a second payment
         // shouldn't mean re-picking the method the folio is configured to settle with.
         setPaymentForm({ paymentMethodId: activeFolio?.defaultPaymentMethodId || "", amount: "", referenceNumber: "" })
+        setPostSheet(null)
         fetchFolios()
         toast.success("Payment posted")
       } else {
@@ -727,6 +742,99 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
     </Button>
   ) : null
 
+  // The two post forms — in the right-hand column from md up, in a bottom sheet on phones.
+  const chargeFormEl = activeFolio ? (
+    <>
+      {preArrival && (
+        <div className="mb-4 text-xs rounded-md bg-warning-muted text-warning border border-warning/20 p-2.5">
+          Guest not checked in — nothing can be posted to this folio yet, including
+          cancellation and no-show fees. Money taken before arrival is a <strong>deposit</strong>;
+          it is recorded against the reservation and appears here once the guest checks in.
+        </div>
+      )}
+      <fieldset disabled={preArrival} className="contents">
+      <form onSubmit={handlePostCharge} className="grid gap-5">
+        <div className="space-y-2">
+          <Label>Charge code <span className="text-destructive">*</span></Label>
+          {/* Searchable by code or description, as wide as the form
+              (owner, 2026-09-26). Opens as a drawer on phones. */}
+          <SearchableSelect
+            required
+            disabled={preArrival}
+            value={chargeForm.chargeCodeId}
+            onChange={(v) => {
+              const c = chargeCodes.find((cc) => cc.id === v)
+              // Auto-fill the description from the code (operator can still edit).
+              setChargeForm((p) => ({ ...p, chargeCodeId: v, description: c ? c.description : p.description }))
+            }}
+            placeholder="Select charge code…"
+            searchPlaceholder="Type a code or description…"
+            emptyText="No charge code matches."
+            searchable
+            options={postableChargeCodes(chargeCodes).map((c) => ({
+              value: c.id,
+              label: `${c.code} · ${c.description}`,
+            }))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Amount <span className="text-destructive">*</span></Label>
+          <div className="relative">
+            <span className="absolute left-3 top-2 text-muted-foreground">$</span>
+            <Input className="pl-7" required type="number" step="0.01" placeholder="Negative to reverse/adjust" value={chargeForm.amount} onChange={e => setChargeForm(p => ({...p, amount: e.target.value}))} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Description <span className="text-destructive">*</span></Label>
+          <Input required placeholder="Auto-filled from the charge code" value={chargeForm.description} onChange={e => setChargeForm(p => ({...p, description: e.target.value}))} />
+        </div>
+        <div className="space-y-2">
+          <Label>Reference</Label>
+          <Input placeholder="Prints on the invoice (optional)" value={chargeForm.reference} onChange={e => setChargeForm(p => ({...p, reference: e.target.value}))} />
+        </div>
+        <SubmitButton className="w-full mt-2" pending={pending === "charge"} pendingLabel="Posting…" disabled={loading || preArrival || !!pending}>
+          {preArrival ? "Posting unavailable before check-in" : `Post charge to folio ${activeFolio.folioNumber}`}
+        </SubmitButton>
+      </form>
+      </fieldset>
+    </>
+  ) : null
+  const paymentFormEl = activeFolio ? (
+    <>
+      <form onSubmit={handlePostPayment} className="grid gap-5">
+        <div className="space-y-2">
+          <Label>Payment method <span className="text-destructive">*</span></Label>
+          <Select required value={paymentForm.paymentMethodId} onValueChange={v => setPaymentForm(p => ({...p, paymentMethodId: v ?? ""}))}>
+            <SelectTrigger>
+              {/* Children replace the placeholder, so they must fall back to it
+                  themselves — returning "" left an empty, icon-only box. */}
+              <SelectValue placeholder="Select method">
+                {paymentMethods.find(m => m.id === paymentForm.paymentMethodId)?.name ?? (
+                  <span className="text-muted-foreground">Select method</span>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {paymentMethods.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Amount <span className="text-destructive">*</span></Label>
+          <div className="relative">
+            <span className="absolute left-3 top-2 text-muted-foreground">$</span>
+            <Input className="pl-7" required type="number" inputMode="decimal" step="0.01" min="0.01" value={paymentAmount} onChange={e => { setPaymentAmountTouched(true); setPaymentForm(p => ({...p, amount: e.target.value})) }} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Reference no. (optional)</Label>
+          <Input placeholder="e.g. Receipt # or Check #" value={paymentForm.referenceNumber} onChange={e => setPaymentForm(p => ({...p, referenceNumber: e.target.value}))} />
+        </div>
+        <SubmitButton className="w-full bg-success hover:bg-success/90 mt-2" pending={pending === "payment"} pendingLabel="Posting…" disabled={loading || !!pending}>Post payment to folio {activeFolio.folioNumber}</SubmitButton>
+      </form>
+    </>
+  ) : null
+
   return (
     <>
         {renderHeader({ actions: headerActions, guestName, confirmationNo: reservation?.confirmationNo ?? "" })}
@@ -739,7 +847,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
           // was drawn over the balance card. Natural height, and the dialog scrolls.
           <div className="flex flex-col flex-1 h-full max-lg:h-auto max-lg:flex-none">
             {/* Folio Tabs */}
-            <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 shrink-0 border-b border-border">
+            <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 shrink-0 border-b border-border max-sm:flex-wrap max-sm:overflow-visible">
               {folios.map((f: any) => {
                 let fBase = 0, fSc = 0, fTax = 0, fPay = 0
                 f.lineItems.forEach((i: any) => { if(!i.isVoid) { fBase += i.amount; fSc += i.serviceChargeAmount || 0; fTax += i.taxAmount } })
@@ -968,7 +1076,7 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                 </div>
 
                 {/* Right Column: Actions */}
-                <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-0 shrink-0">
+                <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-0 shrink-0 max-md:hidden">
                   <Tabs value={postType} onValueChange={(v: any) => setPostType(v)} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="charge"><Plus className="w-4 h-4 mr-2"/> Post charge</TabsTrigger>
@@ -976,92 +1084,11 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
                     </TabsList>
                     
                     <TabsContent value="charge" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">
-                      {preArrival && (
-                        <div className="mb-4 text-xs rounded-md bg-warning-muted text-warning border border-warning/20 p-2.5">
-                          Guest not checked in — nothing can be posted to this folio yet, including
-                          cancellation and no-show fees. Money taken before arrival is a <strong>deposit</strong>;
-                          it is recorded against the reservation and appears here once the guest checks in.
-                        </div>
-                      )}
-                      <fieldset disabled={preArrival} className="contents">
-                      <form onSubmit={handlePostCharge} className="grid gap-5">
-                        <div className="space-y-2">
-                          <Label>Charge code <span className="text-destructive">*</span></Label>
-                          {/* Searchable by code or description, as wide as the form
-                              (owner, 2026-09-26). Opens as a drawer on phones. */}
-                          <SearchableSelect
-                            required
-                            disabled={preArrival}
-                            value={chargeForm.chargeCodeId}
-                            onChange={(v) => {
-                              const c = chargeCodes.find((cc) => cc.id === v)
-                              // Auto-fill the description from the code (operator can still edit).
-                              setChargeForm((p) => ({ ...p, chargeCodeId: v, description: c ? c.description : p.description }))
-                            }}
-                            placeholder="Select charge code…"
-                            searchPlaceholder="Type a code or description…"
-                            emptyText="No charge code matches."
-                            searchable
-                            options={postableChargeCodes(chargeCodes).map((c) => ({
-                              value: c.id,
-                              label: `${c.code} · ${c.description}`,
-                            }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Amount <span className="text-destructive">*</span></Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2 text-muted-foreground">$</span>
-                            <Input className="pl-7" required type="number" step="0.01" placeholder="Negative to reverse/adjust" value={chargeForm.amount} onChange={e => setChargeForm(p => ({...p, amount: e.target.value}))} />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Description <span className="text-destructive">*</span></Label>
-                          <Input required placeholder="Auto-filled from the charge code" value={chargeForm.description} onChange={e => setChargeForm(p => ({...p, description: e.target.value}))} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Reference</Label>
-                          <Input placeholder="Prints on the invoice (optional)" value={chargeForm.reference} onChange={e => setChargeForm(p => ({...p, reference: e.target.value}))} />
-                        </div>
-                        <SubmitButton className="w-full mt-2" pending={pending === "charge"} pendingLabel="Posting…" disabled={loading || preArrival || !!pending}>
-                          {preArrival ? "Posting unavailable before check-in" : `Post charge to folio ${activeFolio.folioNumber}`}
-                        </SubmitButton>
-                      </form>
-                      </fieldset>
+                      {chargeFormEl}
                     </TabsContent>
 
                     <TabsContent value="payment" className="bg-card p-5 rounded-b-xl border border-t-0 shadow-sm mt-0">
-                      <form onSubmit={handlePostPayment} className="grid gap-5">
-                        <div className="space-y-2">
-                          <Label>Payment method <span className="text-destructive">*</span></Label>
-                          <Select required value={paymentForm.paymentMethodId} onValueChange={v => setPaymentForm(p => ({...p, paymentMethodId: v ?? ""}))}>
-                            <SelectTrigger>
-                              {/* Children replace the placeholder, so they must fall back to it
-                                  themselves — returning "" left an empty, icon-only box. */}
-                              <SelectValue placeholder="Select method">
-                                {paymentMethods.find(m => m.id === paymentForm.paymentMethodId)?.name ?? (
-                                  <span className="text-muted-foreground">Select method</span>
-                                )}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {paymentMethods.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Amount <span className="text-destructive">*</span></Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2 text-muted-foreground">$</span>
-                            <Input className="pl-7" required type="number" inputMode="decimal" step="0.01" min="0.01" value={paymentAmount} onChange={e => { setPaymentAmountTouched(true); setPaymentForm(p => ({...p, amount: e.target.value})) }} />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Reference no. (optional)</Label>
-                          <Input placeholder="e.g. Receipt # or Check #" value={paymentForm.referenceNumber} onChange={e => setPaymentForm(p => ({...p, referenceNumber: e.target.value}))} />
-                        </div>
-                        <SubmitButton className="w-full bg-success hover:bg-success/90 mt-2" pending={pending === "payment"} pendingLabel="Posting…" disabled={loading || !!pending}>Post payment to folio {activeFolio.folioNumber}</SubmitButton>
-                      </form>
+                      {paymentFormEl}
                     </TabsContent>
                   </Tabs>
                 </div>
@@ -1069,6 +1096,32 @@ export function FolioView({ reservationId, propertyId, onClose, onCheckedOut, re
             )}
           </div>
         )}
+
+      {/* Phones: Post charge / Post payment pinned at the bottom (like Fast Post); each opens
+          its form in a bottom sheet. The bar sits above the bottom nav on the folio page, and
+          at the very bottom inside the dialog (which sets --bottom-nav-offset to 0). */}
+      {isMobile && activeFolio && (
+        <>
+          <div className="sticky bottom-[var(--bottom-nav-offset,0px)] z-20 -mx-4 mt-4 grid grid-cols-2 gap-2 border-t border-border bg-card/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+            <Button variant="outline" className="h-11" disabled={preArrival} onClick={() => setPostSheet("charge")}>
+              <Plus className="h-4 w-4" /> Post charge
+            </Button>
+            <Button className="h-11 bg-success hover:bg-success/90" onClick={() => setPostSheet("payment")}>
+              <CreditCard className="h-4 w-4" /> Post payment
+            </Button>
+          </div>
+          <Drawer open={postSheet !== null} onOpenChange={(o) => !o && setPostSheet(null)}>
+            <DrawerContent initialFocus={false}>
+              <DrawerHeader>
+                <DrawerTitle>
+                  {postSheet === "payment" ? "Post payment" : "Post charge"} · Folio {activeFolio.folioNumber}
+                </DrawerTitle>
+              </DrawerHeader>
+              <DrawerBody className="pb-6">{postSheet === "payment" ? paymentFormEl : chargeFormEl}</DrawerBody>
+            </DrawerContent>
+          </Drawer>
+        </>
+      )}
 
       {/* Refund Payment Dialog */}
       <Dialog open={isRefundOpen} onOpenChange={(open) => { if (!open && !refundSaving) setIsRefundOpen(false) }}>

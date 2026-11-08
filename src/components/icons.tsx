@@ -13,9 +13,9 @@ import {
   AddOutline,
   MinusOutline,
   ArrowCircleRightOutline,
-  ArrowDown2Outline,
+  ArrowDown1Outline,
   ArrowLeft2Outline,
-  ArrowRight2Outline,
+  ArrowRight3Outline,
   ArrowSwapHorizontalOutline,
   ArrowUp2Outline,
   BankOutline,
@@ -36,7 +36,7 @@ import {
   ClipboardTickOutline,
   ClockOutline,
   CloseCircleOutline,
-  CloseSquareOutline,
+
   CloudDrizzleOutline,
   CoffeeOutline,
   CoinOutline,
@@ -99,7 +99,6 @@ import {
   SortOutline,
   Star1Outline,
   StatusUpOutline,
-  SunOutline,
   TaskSquareOutline,
   TextOutline,
   TickCircleOutline,
@@ -112,7 +111,7 @@ import {
   UserOutline,
   Wallet2Outline,
 } from "mx-icons"
-import { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench } from "lucide-react"
+import { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench, X as LucideXBase } from "lucide-react"
 
 export type IconProps = Omit<SVGProps<SVGSVGElement>, "color"> & { size?: number | string; color?: string }
 export type IconComponent = ComponentType<IconProps>
@@ -123,11 +122,28 @@ function outline(Cmp: ComponentType<Record<string, unknown>>): IconComponent {
   return Wrapped
 }
 
+// mx-icons has no plain ×: CloseSquare / CloseCircle draw a box or ring around it, which read
+// as a broken button in every dialog and sheet corner. Lucide's X at Iconsax's 1.5 stroke
+// matches the set. (Owner, 2026-11-09. Also: ArrowRight2 / ArrowDown2 in this package are
+// CIRCLED arrows while ArrowLeft2 / ArrowUp2 are plain chevrons — right and down now use
+// ArrowRight3 / ArrowDown1, the plain chevrons, so ‹ › and ˅ match everywhere.)
+const LucideX: IconComponent = (props) => <LucideXBase strokeWidth={1.5} {...(props as Record<string, unknown>)} />
+
+// Light-mode icon: Iconsax "Sun 2" Linear (MIT), picked by the owner 2026-11-09 — the old
+// SunOutline read as a snowflake. mx-icons types it but only ships Outline variants at
+// runtime, so its drawing is copied here.
+const Sun2Linear: IconComponent = ({ size = 24, color: _color, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" {...props}>
+    <circle cx="12" cy="12" r="5" />
+    <path d="M12 2V4M12 20V22M4 12L2 12M22 12L20 12M19.7778 4.22266L17.5558 6.25424M4.22217 4.22266L6.44418 6.25424M6.44434 17.5557L4.22211 19.7779M19.7778 19.7773L17.5558 17.5551" />
+  </svg>
+)
+
 export const Activity = outline(ActivityOutline)
 export const AlertTriangle = outline(DangerOutline)
 export const ArrowLeft = outline(ArrowLeft2Outline)
 export const ArrowLeftRight = outline(ArrowSwapHorizontalOutline)
-export const ArrowRight = outline(ArrowRight2Outline)
+export const ArrowRight = outline(ArrowRight3Outline)
 export const ArrowRightCircle = outline(ArrowCircleRightOutline)
 export const ArrowRightLeft = outline(ArrowSwapHorizontalOutline)
 export const ArrowUp = outline(ArrowUp2Outline)
@@ -153,11 +169,11 @@ export const CheckCircle = outline(TickCircleOutline)
 export const CheckCircle2 = outline(TickCircleOutline)
 export const CheckIcon = outline(TickSquareOutline)
 export const CheckSquare = outline(TaskSquareOutline)
-export const ChevronDown = outline(ArrowDown2Outline)
-export const ChevronDownIcon = outline(ArrowDown2Outline)
+export const ChevronDown = outline(ArrowDown1Outline)
+export const ChevronDownIcon = outline(ArrowDown1Outline)
 export const ChevronLeft = outline(ArrowLeft2Outline)
-export const ChevronRight = outline(ArrowRight2Outline)
-export const ChevronRightIcon = outline(ArrowRight2Outline)
+export const ChevronRight = outline(ArrowRight3Outline)
+export const ChevronRightIcon = outline(ArrowRight3Outline)
 export const ChevronUp = outline(ArrowUp2Outline)
 export const ChevronUpIcon = outline(ArrowUp2Outline)
 export const ChevronsUpDown = outline(SortOutline)
@@ -239,7 +255,7 @@ export const ShieldCheck = outline(ShieldTickOutline)
 export const ShieldOff = outline(ShieldSlashOutline)
 export const Star = outline(Star1Outline)
 export const Store = outline(ShopOutline)
-export const Sun = outline(SunOutline)
+export const Sun = Sun2Linear
 export const Trash2 = outline(TrashOutline)
 export const TrendingUp = outline(StatusUpOutline)
 export const Type = outline(TextOutline)
@@ -259,9 +275,9 @@ export const Ship = outline(ShipOutline)
 export const Plane = outline(AirplaneOutline)
 export const Filter = outline(FilterOutline)
 export const Wand2 = outline(MagicStarOutline)
-export const X = outline(CloseSquareOutline)
+export const X = LucideX
 export const XCircle = outline(CloseCircleOutline)
-export const XIcon = outline(CloseSquareOutline)
+export const XIcon = LucideX
 
 // No faithful outline equivalent in the runtime bundle — kept as lucide. (Menu: the phone
 // bottom bar's "More"; mx-icons' HamburgerMenuOutline is in its types but not its bundle.)

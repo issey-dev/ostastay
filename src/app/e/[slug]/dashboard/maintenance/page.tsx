@@ -169,7 +169,7 @@ export default function MaintenanceDashboard() {
         actions={<>
           <Button variant="outline" onClick={() => fetchTickets()} className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            <span className="max-sm:sr-only">Refresh</span>
           </Button>
           <Button
             variant="outline"

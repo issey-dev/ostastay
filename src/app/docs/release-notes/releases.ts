@@ -33,9 +33,17 @@ export const RELEASES: Release[] = [
       "Cashiering on phones: the Payments, Exchanges, Paid-outs and History tabs share the width instead of scrolling sideways.",
       "Excursions and Spa on phones: the Book, Schedule and History switch spans the screen, and each sale in History shows its amount at the top with Reprint and Bill as full-width buttons.",
       "Setup on phones: list categories are a dropdown, and the room and channel-mapping tabs fit the screen instead of scrolling sideways.",
+      "Every page on a phone has the same header: the title on the left and its buttons beside it on the same line. Tab rows always fit the screen, with at most four tabs to a row. The dashboard title on a phone simply reads Dashboard, and Front Desk no longer repeats its counts above the tabs.",
+      "The guest folio on a phone keeps its header and close button at the top while you scroll, with Post charge and Post payment pinned at the bottom; each opens its form as a sheet.",
+      "Icons: the right and down arrows now match the left and up ones, the close button is a plain cross, and light mode has a clearer sun.",
+      "Saving a booking with a problem now names the problem and takes you to the field.",
     ],
     fixed: [
       "Platform console: Today no longer stays highlighted in the menu while you are on the Notifications page.",
+      "The close button of pop-up windows on a phone could be hidden behind the window's title.",
+      "On a phone, guest names on Housekeeping room cards no longer show on top of the bottom menu.",
+      "The night count on the booking form no longer pushes the departure date out of line with the arrival date.",
+      "A booking with no room type or rate could not be saved (a hidden field was missing) or checked in. Saving now works, and check-in or Assign room asks you to choose the room type and rate first.",
     ],
   },
   {

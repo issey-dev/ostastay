@@ -403,19 +403,18 @@ export async function seedDemoData(
           ...(spec.requests?.length
             ? { specialRequests: { create: spec.requests.map((code) => ({ code })) } }
             : {}),
-          ...(spec.assign
-            ? {
-                assignments: {
-                  create: [{
-                    roomId: room.id,
-                    roomTypeId: room.roomTypeId,
-                    ratePlanId,
-                    startDate: checkIn,
-                    endDate: checkOut,
-                  }],
-                },
-              }
-            : {}),
+          // Every booking has a room line (room type + rate), like one made in the app;
+          // `assign` only decides whether a room NUMBER is on it yet. Bookings with no line
+          // at all could not be checked in or re-saved (owner, 2026-11-09).
+          assignments: {
+            create: [{
+              roomId: spec.assign ? room.id : null,
+              roomTypeId: room.roomTypeId,
+              ratePlanId,
+              startDate: checkIn,
+              endDate: checkOut,
+            }],
+          },
         },
       })
 
