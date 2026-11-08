@@ -3211,6 +3211,4 @@ Shipped as 8.9.0 (see DECISIONS 2026-11-07 "Keyboard-first front desk"). Still o
 - [x] Booking form: nights badge in the Stay heading; invalid save names the problem and scrolls/focuses;
   room-less bookings load with a room line spanning the stay; check-in / Assign room explain and link to
   Choose room & rate.
-- [ ] **Check production for bookings with no room line** (seen in local seed data only — 17 rows). Query:
-  reservations with no RoomAssignment and status not CANCELLED. Fix the seed did; real data may need a
-  one-off repair (add a line with the room type + BAR rate) — ask the owner before touching prod data.
+- [x] Bookings with no room line: local seed data only — production has none (owner, 2026-11-09).
