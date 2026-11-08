@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
-import { testConnection } from "@/lib/channels/connection";
+import { testConnection, assertOstaManaged } from "@/lib/channels/connection";
 
 // Osta-console health check — identical semantics to the Hub's test route: gated on
 // "update" because it mutates the connection and makes a real outbound call; always 200
@@ -22,6 +22,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
+    // An enterprise's own Beds24 connection is theirs to run, from their Hub.
+    assertOstaManaged(existing);
 
     return NextResponse.json({ connection: await testConnection(id) });
   } catch (error) {

@@ -1,11 +1,7 @@
-import { PropertyApprovalQueue } from "@/components/osta/property-approval-queue"
-import { PageHeader } from "@/components/ui/page-header"
+import { redirect } from "next/navigation"
 
-export default function OstaPropertiesPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Property Approvals" tabTitle="Property Approvals · Osta" hint="New properties are locked out of real use until approved here." />
-      <PropertyApprovalQueue />
-    </div>
-  )
+// Property approvals are handled in Today's inbox and on each enterprise's Properties tab
+// (owner, 2026-11-08); the standalone list is gone. Single properties stay at /osta/properties/[id].
+export default function OstaPropertiesRedirect() {
+  redirect("/osta?show=approval")
 }

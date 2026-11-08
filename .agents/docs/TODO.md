@@ -2,6 +2,96 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Osta console redesign (2026-11-07) — TODAY + DIRECTORY + WORKSPACE + PALETTE BUILT (`feat/osta-today`), rest open
+
+Design canvas (4 screens): https://claude.ai/artifact/66TuX8sojkQpNAk7greP9A (private to the owner).
+Phase 1 is the Today page + sidebar; the other screens are not built.
+
+- [x] `/osta` is now **Today**: KPI strip (`today-kpis.tsx`), a "Needs action" inbox with the
+  action on each row (`today-inbox.tsx`: Approve property, Mark invoice paid, Test channel link,
+  Renew → Licensing), Renewals (60 days), live Support access, Osta's own recent activity.
+  Inbox filter is in the URL (`?show=`). Data: `src/lib/osta/attention.ts`.
+- [x] Osta sidebar grouped (Customers / Billing / Operations / Platform) with counts from
+  `getOstaNavCounts()` (pending approvals, unpaid invoices, live grants, failing channels).
+- [x] `/osta/licensing?enterprise=<id>` opens Licensing on that enterprise.
+- [x] Console page transition `src/app/osta/template.tsx` (same as the tenant dashboard).
+- [x] Enterprises directory (`/osta/enterprises`): one sortable `ListTable` (licence, renews,
+  monthly price, properties live/cap + pending, add-ons, channel health, unpaid/overdue), tabs
+  in the URL (`?view=` all/active/grace/expired/onboarding/unpaid), name search, CSV export,
+  phone cards, row click → preview Sheet with quick links. Data: `src/lib/osta/directory.ts`.
+  The old card grid's create dialog is now `create-enterprise-button.tsx`.
+- [ ] Directory bulk actions (issue invoices / extend licences for selected rows) — needs the
+  licence/invoice dialogs first; not built.
+- [x] Enterprise workspace (`/osta/enterprises/[id]`): header (licence/support/channel/unpaid
+  badges, Request/Enter support, Issue invoice, Add property / Create initial user) and tabs as
+  server-rendered links (`?tab=`), each loading only its own data: Overview (licence figures,
+  properties, recent invoices, setup checklist, support status), Properties (approve / reject in
+  place), Licence & billing (`LicensingManager` with `locked` + `onChanged`), Modules (add-on
+  switches), Channel (status, webhook, API credits, Test now), Support (grant history).
+  **No People or Activity tab, by owner decision** — see DECISIONS.md 2026-11-07.
+  Tab lists: `src/components/osta/workspace/workspace-lists.tsx`.
+- [ ] Workspace: Enter support mode still goes through the Support Access page (no direct
+  "enter" from the header); the Channel tab links out to Channel Manager for connect/replace;
+  no internal-notes field (would need a column on EnterpriseLicense or Enterprise).
+- [ ] Remove the now-duplicated Licensing page's enterprise picker? Owner call — it is still the
+  only place to compare licences across enterprises side by side.
+- [x] Ctrl K / "/" command palette in the console (`osta-command-palette.tsx`, same dialog and
+  keys as the tenant palette; header search box opens it). Searches enterprises, properties,
+  licence invoices via `GET /api/osta/search` (Osta staff only; never a customer's users, see
+  DECISIONS.md 2026-11-07); Tab on a result lists its actions (workspace tabs, print invoice,
+  approve/reject). Plus console actions and pages.
+- [x] "+ New" menu in the console header (`osta-header-tools.tsx`): Enterprise (opens the shared
+  create dialog, `OPEN_CREATE_ENTERPRISE` event), Licence invoice, Support access request,
+  Channel-manager connection, Review property approvals.
+- [x] Channel privacy (DECISIONS.md 2026-11-07): `ChannelConnection.managedBy` (OSTA / ENTERPRISE,
+  migration `20261107210000_…`); the Osta console shows an enterprise's own connection as running /
+  not running only, lists it read-only on Channel Manager, keeps it out of Today and DB Health
+  logs, and its `/api/osta/channels/connections/[id]*` routes refuse it (`assertOstaManaged`).
+- [ ] Channel privacy: the back-fill marks a connection OSTA from the activity-log line the Osta
+  route writes; a connection whose log row was deleted would fall back to ENTERPRISE (private).
+  Check production rows after deploy and correct by hand if any Uppsolut-run one shows as the
+  enterprise's.
+- [x] **Monitoring** (`/osta/monitoring`, replaces DB Health; DECISIONS 2026-11-08): per-minute
+  `DbMetricRollup` + `src/lib/db-rollups.ts`; `GET /api/osta/monitoring`; page
+  `src/components/osta/monitoring/` (one-control scope picker, 1h/24h/7d, key figures with
+  sparklines, stacked load chart, per-enterprise / per-property table that re-scopes on click,
+  "worth a look", slowest statements) with the old DB Health sections as the Database / Channel API
+  / Background jobs / Storage tabs.
+- [x] Monitoring checked in the browser 2026-11-08 (with temporary rollup rows, since removed):
+  overview, scope picker (search + Enter), row click re-scoping, chart hover and arrow keys, 1h/24h/7d,
+  the four tabs under a property scope. Fixed on the way: "Sign-in, public pages & system" traffic is
+  grey (was a near-copy of the first enterprise's crimson); the p95 card explains when a few slow
+  operations lift the average above it.
+- [x] Property page (`/osta/properties/[id]`) redesigned: needs-attention list (business date
+  behind/ahead of the property's own date, failed or unfinished Night Audit, over licence caps,
+  failing Osta-run channel), facts (rooms / room types vs licence, business date, occupancy, last
+  activity), setup checklist, details, Night Audit, channel (running-only for enterprise-run) and
+  add-ons (read-only; enterprise-level per DECISIONS 2026-08-02, Transportation also shows "Off at
+  this property" when the Hub switch is off). Data: `src/lib/osta/property-facts.ts`, shared with
+  the workspace Properties tab (new Rooms / Room types / Business date / Last activity columns).
+- [x] Sidebar (DECISIONS 2026-11-08): Billing (new, read-only `/osta/billing`) replaces Licensing;
+  Property Approvals removed (pending count rides on Enterprises; `/osta/properties` redirects to
+  Today's approvals filter; `property-approval-queue.tsx` deleted). `/osta/licensing` redirects to
+  the enterprise's Billing tab (`?enterprise=`) or `/osta/billing`. Support Access is a simple log
+  (`support-access-log.tsx`): request dialog (`?request=<enterpriseId>` pre-fills), live sessions,
+  All / Live / Pending / Ended. Checked in the browser with temporary invoices / grant, since removed.
+- [ ] Billing: "Up next to invoice" assumes monthly periods back to back from the last non-void
+  invoice (or the licence start). If invoices are ever quarterly or irregular it will mislead — say so
+  to the owner before relying on it. Platform-mail usage (PLATFORM_EMAIL) is not on the Billing page.
+- [ ] Support Access log shows only the signed-in Osta user's own requests (that is what
+  `GET /api/support-access` returns). A team-wide log needs an API change — ask the owner first.
+- [ ] "Last activity" on properties = newest booking change, folio posting or Night Audit start
+  (no actor, by design). Sign-ins are not counted (UserActivityLog has no propertyId).
+- [ ] Monitoring: the Background jobs and Storage tabs can't narrow to a property (JobRun has no
+  property; storage is platform-wide) — they show the enterprise or the whole platform.
+- [ ] Found, not fixed (pre-existing, not this branch): an Osta user who opens `/login` while
+  signed in is sent to `/e/osta/dashboard`, which is a 404 — should go to `/osta`.
+- [ ] Split Controls into "Mail & usage" and "Settings" (invoice templates); add an Invoices
+  ledger page under Billing (today invoices live only inside Licensing).
+- [ ] "Send reminder" for an overdue licence invoice — no email path for it exists yet.
+- [ ] Licence lifecycle actions (extend / renew) are links to Licensing, not inline: needs a
+  small dialog reusing `/api/licenses` once the workspace exists.
+
 ## Notifications + PWA push (2026-11-07) — N0 + N1 + N2 + most of N3 BUILT (8.10.0)
 
 See [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md). Waiting on the owner's answers (section 12)

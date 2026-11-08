@@ -8,6 +8,7 @@ import { ArrowLeftRight, RefreshCw, Trash2, Plus, KeyRound, ClipboardList, Build
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,11 +36,27 @@ import {
 // generation (the admin is the one pasting them into Beds24 anyway), self-throttle floors,
 // re-authorizing and removal. Room-type and rate MAPPING is deliberately absent — that is
 // the property's own, in its Hub area.
+//
+// Since 2026-10-14 an enterprise may connect its OWN Beds24 account from its Hub. Those
+// connections are theirs (owner, 2026-11-07): the API sends only whether each one is
+// running, and this screen lists them read-only, apart from the ones Uppsolut runs.
 
 type PlatformConnection = Connection & {
+  managedBy: "OSTA"
   enterprise: { id: string; name: string; slug: string }
   property: { id: string; name: string; code: string }
   externalPropertyId: string | null
+}
+
+/** An enterprise-run connection: whether it is running, nothing else. */
+type EnterpriseConnection = {
+  id: string
+  managedBy: "ENTERPRISE"
+  provider: string
+  name: string
+  running: boolean
+  enterprise: { id: string; name: string; slug: string }
+  property: { id: string; name: string; code: string }
 }
 
 type PropertyOption = { id: string; name: string; code: string; enterpriseName: string }
@@ -60,6 +77,7 @@ type ReauthFormValues = z.infer<typeof reauthSchema>
 export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
   const confirm = useConfirm()
   const [connections, setConnections] = useState<PlatformConnection[]>([])
+  const [enterpriseConnections, setEnterpriseConnections] = useState<EnterpriseConnection[]>([])
   const [properties, setProperties] = useState<PropertyOption[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -95,7 +113,9 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
       if (!connRes.ok || !entRes.ok) throw new Error("failed")
       const connData = await connRes.json()
       const entData = await entRes.json()
-      setConnections(connData.connections ?? [])
+      const all: (PlatformConnection | EnterpriseConnection)[] = connData.connections ?? []
+      setConnections(all.filter((c): c is PlatformConnection => c.managedBy === "OSTA"))
+      setEnterpriseConnections(all.filter((c): c is EnterpriseConnection => c.managedBy === "ENTERPRISE"))
       // Every customer property, across enterprises — the connect form offers the ones not
       // yet connected.
       setProperties(
@@ -361,7 +381,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
       {connections.length === 0 ? (
         <EmptyState
           icon={ArrowLeftRight}
-          title="No channel-manager connections yet"
+          title="No connections run by Uppsolut yet"
           description="When a customer requests a property's connection, generate an invite code in the master Beds24 account and connect that property here."
         />
       ) : (
@@ -482,6 +502,31 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
         </div>
       )}
 
+      {enterpriseConnections.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Connected by the enterprise</CardTitle>
+            <CardDescription>
+              These properties run their own Beds24 account from their Hub. Only whether each connection is running is
+              shown here; its checks, errors and logs are the enterprise&rsquo;s.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y border-t">
+              {enterpriseConnections.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium">{c.property.name}</span>{" "}
+                    <span className="text-muted-foreground">· {c.enterprise.name}</span>
+                  </span>
+                  <StatusBadge label={c.running ? "Running" : "Not running"} tone={c.running ? "success" : "neutral"} dot />
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Connect a customer property */}
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent>
@@ -506,7 +551,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
                         onChange={(v) => field.onChange(v ?? "")}
                         placeholder="Select property..."
                         options={properties
-                          .filter((p) => !connections.some((c) => c.property.id === p.id))
+                          .filter((p) => !connections.some((c) => c.property.id === p.id) && !enterpriseConnections.some((c) => c.property.id === p.id))
                           .map((p) => ({ label: `${p.name} (${p.code}) — ${p.enterpriseName}`, value: p.id }))}
                       />
                     </FormControl>

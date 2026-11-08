@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { assertOstaManaged } from "@/lib/channels/connection";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { generateWebhookToken, hashWebhookToken } from "@/lib/channels/webhook-token";
@@ -26,11 +27,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     const connection = await prisma.channelConnection.findUnique({
       where: { id },
-      select: { id: true, enterpriseId: true, name: true, webhookTokenHash: true },
+      select: { id: true, enterpriseId: true, name: true, webhookTokenHash: true, managedBy: true },
     });
     if (!connection) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
+    // An enterprise's own Beds24 connection is theirs to run, from their Hub.
+    assertOstaManaged(connection);
 
     const token = generateWebhookToken();
     await prisma.channelConnection.update({

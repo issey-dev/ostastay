@@ -1,5 +1,5 @@
 // In-memory, per-process query/engine-event collector feeding the Osta "DB Health"
-// dashboard (src/app/osta/db-health). Deliberately NOT a persisted table — a
+// Monitoring page (src/app/osta/monitoring, formerly DB Health). Deliberately NOT a persisted table — a
 // since-last-restart rolling window, not a historical-trend tool. On a
 // multi-instance/serverless deployment this only reflects whichever instance served
 // the request; the dashboard's own copy calls this out explicitly rather than
@@ -7,6 +7,12 @@
 //
 // State lives on globalThis (same pattern as src/lib/db.ts's PrismaClient caching) so
 // Next.js dev's module hot-reload doesn't silently reset the buffer on every save.
+//
+// 2026-11-07: model operations and engine events are ALSO added to per-minute rollups
+// (src/lib/db-rollups.ts → DbMetricRollup) for the Monitoring page's 1h / 24h / 7d charts.
+// These ring buffers stay as the live, detailed view (SQL text, model names).
+
+import { rollupModelOp, rollupEngineEvent } from "@/lib/db-rollups";
 
 type QueryEvent = { query: string; duration: number; timestamp: number };
 type EngineEvent = { level: "error" | "warn"; message: string; timestamp: number };
@@ -52,6 +58,7 @@ export function recordQuery(query: string, duration: number, timestamp: Date): v
 
 export function recordEngineEvent(level: "error" | "warn", message: string, timestamp: Date): void {
   engineEvents.push({ level, message, timestamp: timestamp.getTime() });
+  rollupEngineEvent(level, timestamp.getTime());
   if (engineEvents.length > MAX_ENGINE_EVENTS) engineEvents.shift();
 }
 
@@ -108,6 +115,7 @@ export function recordModelOp(
     propertyId: tenant?.propertyId ?? null,
   });
   if (modelOpEvents.length > MAX_MODEL_OP_EVENTS) modelOpEvents.shift();
+  rollupModelOp(model, duration, tenant?.enterpriseId ?? null, tenant?.propertyId ?? null);
 }
 
 // Pre-aggregated per (tenant, model, operation) — the dashboard filters/re-groups

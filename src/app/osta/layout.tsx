@@ -6,6 +6,7 @@ import { SkipToContent } from "@/components/ui/skip-to-content"
 import { ConfirmProvider } from "@/components/providers/confirm-provider"
 import { InfoHint } from "@/components/ui/info-hint"
 import { UppsolutWordmark } from "@/components/brand/uppsolut-logo"
+import { OstaHeaderTools } from "@/components/osta/osta-header-tools"
 import { requireSession } from "@/lib/scope"
 import { prisma } from "@/lib/db"
 
@@ -51,7 +52,9 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
             <InfoHint label="Uppsolut Platform Admin">The Osta platform console — manages customer enterprises, licensing, and channel-manager connections across every property on Uppsolut.</InfoHint>
           </div>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2 print:hidden">
+            {/* Search (Ctrl+K palette) and the + New menu; also mounts both overlays. */}
+            <OstaHeaderTools />
             <ThemeToggle />
           </div>
         </header>

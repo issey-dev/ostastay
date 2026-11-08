@@ -1,6 +1,7 @@
 "use client"
 
 import { toDateKey } from "@/lib/date-only"
+import { cn } from "@/lib/utils"
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
@@ -88,9 +89,17 @@ const INVOICE_STATUS_LABEL: Record<string, string> = { ISSUED: "Issued", PAID: "
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"
 
-export function LicensingManager() {
+// `initialEnterpriseId` opens the manager on that enterprise (links from the Today page,
+// /osta/licensing?enterprise=<id>); otherwise the first one is selected. `locked` hides the
+// enterprise picker (the enterprise workspace's Licence & billing tab), and `onChanged`
+// runs after any save so that page can refresh its header.
+export function LicensingManager({
+  initialEnterpriseId,
+  locked = false,
+  onChanged,
+}: { initialEnterpriseId?: string; locked?: boolean; onChanged?: () => void } = {}) {
   const [enterprises, setEnterprises] = useState<EnterpriseRow[]>([])
-  const [selectedId, setSelectedId] = useState<string>("")
+  const [selectedId, setSelectedId] = useState<string>(initialEnterpriseId ?? "")
   const [license, setLicense] = useState<License | null>(null)
   const [form, setForm] = useState({
     maxProperties: "1",
@@ -121,7 +130,7 @@ export function LicensingManager() {
       if (res.ok) {
         const data: EnterpriseRow[] = await res.json()
         setEnterprises(data)
-        if (data.length > 0 && !selectedId) setSelectedId(data[0].id)
+        if (data.length > 0 && !data.some((e) => e.id === selectedId)) setSelectedId(data[0].id)
       }
     } finally {
       setLoading(false)
@@ -192,6 +201,7 @@ export function LicensingManager() {
       })
       if (res.ok) {
         await Promise.all([fetchLicense(selectedId), fetchEnterprises()])
+        onChanged?.()
         return true
       }
       setErrorMsg(await apiError(res, "Couldn't save the license. Try again."))
@@ -247,6 +257,7 @@ export function LicensingManager() {
       if (res.ok) {
         toast.success("Allowances saved")
         fetchAllowances(selectedId)
+        onChanged?.()
       } else {
         toast.error(await apiError(res, "Couldn't save the allowances. Try again."))
       }
@@ -279,6 +290,7 @@ export function LicensingManager() {
       })
       if (res.ok) {
         toast.success("Invoice issued")
+        onChanged?.()
         setInvForm({ period: undefined, amount: "", discount: "", currency: invForm.currency, dueAt: "", notes: "" })
         fetchInvoices(selectedId)
       } else {
@@ -300,6 +312,7 @@ export function LicensingManager() {
       })
       if (res.ok) {
         toast.success("Payment recorded")
+        onChanged?.()
         setPayingId(null)
         setPaymentRef("")
         fetchInvoices(selectedId)
@@ -327,6 +340,7 @@ export function LicensingManager() {
     })
     if (res.ok) {
       toast.success("Invoice voided")
+      onChanged?.()
       fetchInvoices(selectedId)
     } else {
       toast.error(await apiError(res, "Couldn't void the invoice. Try again."))
@@ -339,7 +353,7 @@ export function LicensingManager() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className={cn("space-y-2", locked && "hidden")}>
         <label className="text-sm font-medium flex items-center gap-1"><Building2 className="w-4 h-4" /> Enterprise</label>
         <Select value={selectedId} onValueChange={(v) => setSelectedId(v ?? "")}>
           <SelectTrigger className="max-w-md"><SelectValue placeholder="Select an enterprise">{selected?.name}</SelectValue></SelectTrigger>

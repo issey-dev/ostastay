@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { assertOstaManaged } from "@/lib/channels/connection";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { pollConnection, MAX_RESYNC_LOOKBACK_HOURS } from "@/lib/channels/inbound/poll";
@@ -28,6 +29,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
+    // An enterprise's own Beds24 connection is theirs to run, from their Hub.
+    assertOstaManaged(existing);
 
     const body = await request.json().catch(() => null);
     const hours = Number(body?.hours);

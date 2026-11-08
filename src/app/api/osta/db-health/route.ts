@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { MANAGED_BY } from "@/lib/channels/connection";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { getRowCounts, getMigrationStatus, getDbFileSizeBytes, getStorageStats } from "@/lib/db-health";
 import {
@@ -18,8 +19,11 @@ import {
 // and 5000 rows is nothing at this scale.
 async function getChannelApiStats() {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // Only connections Uppsolut runs: an enterprise's own Beds24 account's calls, errors and
+  // logs are theirs, not Osta's (owner, 2026-11-07; DECISIONS.md). Setup attempts that never
+  // produced a connection (connectionId null) can't be attributed, so they are left out too.
   const logs = await prisma.channelSyncLog.findMany({
-    where: { createdAt: { gte: since } },
+    where: { createdAt: { gte: since }, connection: { managedBy: MANAGED_BY.OSTA } },
     select: {
       enterpriseId: true,
       connectionName: true,

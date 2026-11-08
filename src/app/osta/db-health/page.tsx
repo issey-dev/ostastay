@@ -1,11 +1,6 @@
-import { DbHealthDashboard } from "@/components/osta/db-health-dashboard"
-import { PageHeader } from "@/components/ui/page-header"
+import { redirect } from "next/navigation"
 
+// DB Health became Monitoring (2026-11-08); old links and bookmarks land there.
 export default function OstaDbHealthPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader title="DB Health" tabTitle="DB Health · Osta" hint="Storage statistics, per-tenant query load, and channel-manager API performance." />
-      <DbHealthDashboard />
-    </div>
-  )
+  redirect("/osta/monitoring")
 }

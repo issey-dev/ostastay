@@ -1727,7 +1727,8 @@ code was written (recorded here since they're not obvious from reading the code)
   metrics reflect *this server instance only*, since its last restart — on a
   multi-instance/serverless deployment it's not a global aggregate, and a real
   historical-trend version (a persisted snapshot table + cron flush) is a deliberate
-  future increment, not attempted here. Baseline stats (row counts for a fixed list
+  future increment, not attempted here. **Superseded 2026-11-08** by per-minute rollups — see
+  "Osta Monitoring" below. Baseline stats (row counts for a fixed list
   of the heaviest tables, migration-status comparison of `prisma/migrations/` on
   disk against the `_prisma_migrations` table via `$queryRaw` — no shelling out to
   the CLI — and DB file size when `DATABASE_URL` is a local `file:` path, `null`
@@ -3613,3 +3614,79 @@ and #86 is stacked on `release/8.9.0`), and each carries its own release-notes e
 - 8.9.1: "Figures, charts and movement" section; Tape Chart pulse noted; MOTION_PLAN.md says 8.9.1.
 Do NOT rename a branch that is the head of an open PR on GitHub — it closes the PR (it happened to #85 and was
 reopened). Merge in order; after each merge retarget the next PR to `master`.
+
+## Osta console: a customer's people and activity are not Osta's to browse (2026-11-07)
+
+- Owner: "for Osta users no need to see activity and people for each enterprise as it's
+  classified." The Osta enterprise workspace (`/osta/enterprises/[id]`) therefore has **no
+  People tab and no Activity tab**, and the Ctrl+K search (`/api/osta/search`) does **not**
+  search a customer's users. Old `?tab=people` / `?tab=activity` links fall back to Overview.
+- Also removed for the same reason: the Overview setup step "First sign-in by the client"
+  (it read the customer's own LOGIN trail).
+- Same day, follow-up: the **user count** is not shown either (it was in the workspace header and
+  the directory preview). The workspace only checks *whether* a customer has any user, to offer
+  **Create initial user** and tick that setup step; the number is never displayed, and the
+  directory no longer loads it. Osta's **own** activity trail on the Today page is unaffected
+  (it is Osta staff's actions, not a customer's).
+- Do not add a customer user list, a customer activity feed, or user search back to the Osta
+  console without asking the owner first. Support-mode staff see a customer's data only inside
+  an approved support session, through the customer's own screens.
+
+## Osta console: an enterprise's own channel-manager connection is running / not running only (2026-11-07)
+
+- Owner: for channel manager, Osta does not need to see a connection's details or logs when the
+  enterprise set it up from its own end — only whether it is actively running. Full detail stays
+  for connections Uppsolut set up from the Osta console.
+- `ChannelConnection.managedBy`: `OSTA` (created from the Osta console, master Beds24 account) or
+  `ENTERPRISE` (created from the property's Hub, the customer's own account; also the default).
+  Migration `20261107210000_channel_connection_managed_by` back-fills `OSTA` for rows created before
+  2026-10-14 (when only Osta could connect) or whose creation the Osta route logged.
+- For an `ENTERPRISE` connection the Osta console gets, from the server: name, property,
+  enterprise, provider and `running` (status CONNECTED) — never `lastError`, health/refresh times,
+  rate-limit credits, webhook, poll settings or `ChannelSyncLog` rows. Wording is "Running" /
+  "Not running", never "Failing". It is not in Today's inbox or the sidebar's failing count, and
+  DB Health's channel statistics count only `OSTA` connections' logs.
+- Every `/api/osta/channels/connections/[id]*` route refuses an `ENTERPRISE` connection
+  (`assertOstaManaged`, 403): no check, resync, webhook, settings, re-authorize or delete from
+  Osta. The enterprise manages it from its Hub; Osta staff see it there only inside an approved
+  support session.
+
+## Osta Monitoring: DB Health redesigned, load history persisted (2026-11-08)
+
+- Owner asked for a Vercel-style monitoring page with a clear overview, an enterprise-filtered
+  view and an easier enterprise/property choice; approved "build it with rollups" over the design
+  (canvas screens 5–6). `/osta/db-health` now redirects to **`/osta/monitoring`**; the nav item is
+  "Monitoring".
+- **Load history is persisted, per minute** (`DbMetricRollup`, migration
+  `20261107220000_db_metric_rollup`), superseding the "deliberately not a persisted table" call
+  above. Write amplification is bounded: one row per (minute, enterprise, property) that had any
+  operations, written in one `createMany` per minute by `src/lib/db-rollups.ts`; nothing is written
+  while the server is idle (the flush timer is armed by the first event, not an interval). Kept
+  8 days, pruned hourly from the same flush. Each instance writes its own rows; readers SUM.
+- p95 is estimated from latency bands (5/10/25/50/100/250/500/1000 ms and slower), so the page
+  shows it as "≤ N ms", never a precise figure.
+- The SQL-level views (statement text, slowest statements, model names) stay in-memory and
+  this-server-only; the Database tab and the property scope say so.
+- The page never refreshes on a timer (house rule): it re-fetches when the browser tab comes back
+  into view after 30 s, or on Refresh.
+- Channel figures are Uppsolut-run connections only; an enterprise's own connection shows as
+  "Own account · running / not running" (DECISIONS 2026-11-07).
+
+
+## Osta console: Billing replaces Licensing, approvals and support access simplified (2026-11-08, owner)
+
+- **Billing** (`/osta/billing`) is a read-only finance overview: outstanding and overdue, collected
+  and invoiced this month, monthly recurring, "up next to invoice", and Invoices / Payments recorded /
+  By enterprise tables. **Issuing an invoice and recording a payment stay on the enterprise's Billing
+  tab** — the overview only links there. Licensing is no longer a sidebar page; `/osta/licensing`
+  redirects (to the enterprise's Billing tab when `?enterprise=` is given).
+- **Property Approvals** has no page of its own: approvals happen in Today's inbox and on each
+  enterprise's Properties tab. The pending count shows on Enterprises in the sidebar.
+- **Support Access** is a simple log: request access (enterprise + reason), see what is live and
+  until when, what is pending, and what ended (expired / denied / revoked).
+- **Spa, Excursions and Transportation stay enterprise-level** (confirmed again; see 2026-08-02).
+  The Osta property page only shows them read-only; Transportation also needs the property's own
+  Hub switch (T-1), shown there as "Off at this property".
+- The Osta property page shows setup and health only (rooms, room types, business date vs the date
+  at the property, Night Audit, last activity as a time and kind) — never guests or people
+  (2026-11-07 rule).
