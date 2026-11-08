@@ -44,14 +44,14 @@ jobs:
             exit 0
           fi
           cp .env ".env.bak-$(date +%Y%m%d%H%M%S)"
-          KEYS=$(docker compose run --rm --no-deps -T app node -e "
+          KEYS=$(docker compose run --rm --no-deps -T --entrypoint node app -e "
             const c=require('crypto');
             const k=c.generateKeyPairSync('ec',{namedCurve:'prime256v1'});
             const p=k.publicKey.export({format:'jwk'}), v=k.privateKey.export({format:'jwk'});
             const pub=Buffer.concat([Buffer.from([4]),Buffer.from(p.x,'base64url'),Buffer.from(p.y,'base64url')]).toString('base64url');
             console.log('VAPID_PUBLIC_KEY='+pub);
             console.log('VAPID_PRIVATE_KEY='+v.d);
-          " </dev/null)
+          " </dev/null | grep "^VAPID_")
           case "$KEYS" in VAPID_PUBLIC_KEY=*) ;; *) echo "key generation failed"; exit 1;; esac
           printf '\n%s\nVAPID_SUBJECT=mailto:%s\n' "$KEYS" "$SUBJECT" >> .env
           docker compose up -d app
