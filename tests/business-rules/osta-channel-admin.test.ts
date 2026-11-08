@@ -128,6 +128,7 @@ describe("Osta platform channel administration", () => {
           propertyId: property.id,
           provider: "BEDS24",
           name: `Conn ${label}`,
+          managedBy: "OSTA", // the Osta console only manages connections Uppsolut runs (#94)
           refreshToken: "x",
         },
       });
@@ -386,7 +387,7 @@ describe("Osta platform channel administration", () => {
 
     const doomedProperty = await makeChannelProperty(tenantBId, "Doomed hotel");
     const doomed = await prisma.channelConnection.create({
-      data: { enterpriseId: tenantBId, propertyId: doomedProperty.id, provider: "BEDS24", name: "Doomed", refreshToken: "x" },
+      data: { enterpriseId: tenantBId, propertyId: doomedProperty.id, provider: "BEDS24", name: "Doomed", refreshToken: "x", managedBy: "OSTA" },
     });
 
     const res = await connectionByIdRoute.DELETE(new Request("http://localhost", { method: "DELETE" }), {
