@@ -365,7 +365,7 @@ export function ChannelConnectionsAdmin({ canManage }: { canManage: boolean }) {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch">
         <p className="text-sm text-muted-foreground">
           One connection per customer property, each from an invite code generated in the master Beds24 account.
           Credentials are encrypted at rest and never shown again after saving.

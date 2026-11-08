@@ -17,6 +17,22 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.13.0",
+    date: "2026-11-08",
+    highlights: "The platform console now works on a phone, and notifications open as a sheet from the bottom of the screen on every phone.",
+    new: [
+      "Platform console on phones: a bar along the bottom goes to Today, Enterprises, Billing and Channels, and More opens the full menu. Counts of what is waiting show on the icons.",
+      "Notifications on phones open as a sheet from the bottom of the screen, with an All or Unread switch, Today, Yesterday and Earlier headings, larger rows, and the phone-notification switch within reach. Swipe down to close it.",
+    ],
+    improved: [
+      "Platform console on phones: search is an icon in the header, the summary tiles on Today sit two across, and lists on Billing, Support Access and a customer's Properties, Channel and Support tabs show as cards instead of wide tables.",
+      "Platform console on phones: the Monitoring chart, the invoice settings and preview on Controls, and a few headings on Billing and Channel Manager now fit the screen.",
+    ],
+    fixed: [
+      "Platform console: Today no longer stays highlighted in the menu while you are on the Notifications page.",
+    ],
+  },
+  {
     version: "8.12.0",
     date: "2026-11-08",
     highlights: "The notification bell comes to the Uppsolut platform console, so approvals, licences, billing and failing channels reach the team without opening Today.",

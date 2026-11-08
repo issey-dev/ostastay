@@ -266,8 +266,12 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
 - **Shell:** `<main>` is `overflow-x-clip` + `min-h-dvh` below `md` (3 shells); viewport
   `interactiveWidget: resizes-content`, `viewportFit: cover`, safe-area body padding; phone
   header shows the business date; toasts bottom-centre on phones; the phone menu closes on
-  navigation; **bottom nav** (`mobile-bottom-nav.tsx`, dashboard only, 4 role-ordered slots +
-  More, `--bottom-nav-offset` lifts other bottom-pinned UI).
+  navigation; **bottom nav** (`mobile-bottom-nav.tsx`, dashboard, 4 role-ordered slots +
+  More, `--bottom-nav-offset` lifts other bottom-pinned UI). **Osta console too since 2026-11-08**
+  (owner): `osta-mobile-bottom-nav.tsx` — Today, Enterprises, Billing, Channels + More (opens the
+  sidebar), sidebar counts as icon badges, a dot on More when a page not in the bar has something
+  waiting; the phone header drops the SidebarTrigger and + New and gains a search icon. The Hub
+  still has no bottom nav.
 - **`PageHeader`** (`ui/page-header.tsx`): actions wrap instead of clipping — Housekeeping,
   Maintenance; Cashiering and Group detail headers wrap too.
 - **Pickers:** `DateRangePicker` shows one month on phones and has a unique id.

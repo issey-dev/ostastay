@@ -89,6 +89,15 @@ Phase 1 is the Today page + sidebar; the other screens are not built.
 - [ ] Split Controls into "Mail & usage" and "Settings" (invoice templates); add an Invoices
   ledger page under Billing (today invoices live only inside Licensing).
 - [ ] "Send reminder" for an overdue licence invoice — no email path for it exists yet.
+- [x] Phones (2026-11-08): bottom nav (`osta-mobile-bottom-nav.tsx`), search icon, no + New in the
+  phone header; every Osta page checked at 375px for overflow. Fixed: Monitoring chart (fixed
+  800px first render), Controls invoice preview (grid column sized to the A4 page), unwrapped
+  PLATFORM_SMTP_* names, Billing "Up next" and Channel Manager intro rows, Today KPIs two
+  across; phone cards for Billing payments / by-enterprise, Support Access and the workspace
+  Properties / Channel / Support tabs; "Today" no longer lights up on /osta/notifications.
+- [ ] Phones, left as is: tab strips (enterprise workspace, Monitoring, Enterprises filter) scroll
+  sideways — fine on a real phone (overlay scrollbars), only desktop emulation shows a bar.
+  Monitoring's Database tab tables still side-scroll inside their cards.
 - [ ] Licence lifecycle actions (extend / renew) are links to Licensing, not inline: needs a
   small dialog reusing `/api/licenses` once the workspace exists.
 
@@ -102,6 +111,7 @@ before N1.
 - [x] N3 Preferences, full page, Hub announcements, 4 more kinds (task assigned, new device, support session, website excursion/spa booking)
 - [x] Housekeeping assignment, transport attention, open cashier shift, group cut-off alerts + retention sweep (job `notification-alerts`; make sure the external cron runs `/api/jobs/run` every few minutes, it already does for the other jobs)
 - [x] Osta console bell + platform notifications (8.12.0)
+- [x] Phones: the bell opens a swipe-down bottom sheet (All/Unread, day headings) instead of the cramped popover, in every shell (2026-11-08)
 - [ ] Leftovers: per-property default settings in the Hub, reminders ("remind me"), quiet hours, email digest; screenshots for the Announcements docs page (`docs:shots`)
 - [ ] N4 Optional: quiet hours, email digest, SSE, reminders
 

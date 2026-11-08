@@ -142,7 +142,7 @@ announcements, security notices.
 | Surface | Behaviour |
 |---|---|
 | **Header bell** (desktop, replaces Setup) | Icon + unread badge (`9+`). Opens a popover (≈ 380 px): tabs **All / Mine / Property / System**, grouped Today / Earlier, each row = icon, one line, relative time, unread dot; click → marks read and deep-links; "Mark all read"; footer links "Notification settings" and "View all". |
-| **Bell on phones** | Header is already tight (business date moves under the brand name on phones). Bell stays in the header; opening it is a **bottom sheet** (`DialogContent mobile="sheet"`), per `MOBILE_PLAN.md`. |
+| **Bell on phones** | Header is already tight (business date moves under the brand name on phones). Bell stays in the header; opening it is a **bottom sheet**, per `MOBILE_PLAN.md`. **Built 2026-11-08:** below `md` the bell opens the swipe-down `Drawer` (85dvh) instead of the popover: unread count + Mark all read, All/Unread switch, Today/Yesterday/Earlier headings, 64px rows with a 2-line body, phone toggle and a full-width link to the full page at the bottom. Same component in all three shells. |
 | **Full page** `/e/{slug}/dashboard/notifications` | Filter by type / property / read; search; the only place to see old items; mirrors the list-page standards in `DESKTOP_PLAN.md`; filters live in the URL. |
 | **Sticky banner** | URGENT items only, under the header (reuse the `SupportSessionNotice` style); stays until acknowledged. |
 | **Toast** | Only when the user is on the page that changed and it came from *someone else's* action ("Room 214 is now clean"). Never a toast for what the user just did themself. |

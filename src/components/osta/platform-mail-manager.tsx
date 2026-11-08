@@ -129,10 +129,10 @@ export function PlatformMailManager() {
           <div className="rounded-md border border-warning/40 bg-warning-muted p-3 text-sm text-warning">
             Platform email is not configured. Enterprise handover credentials will not be emailed — they are still
             shown on screen for manual handover — and channel-manager alerts will not be sent. Set
-            <code className="mx-1 font-mono text-xs">PLATFORM_SMTP_HOST</code>,
-            <code className="mx-1 font-mono text-xs">PLATFORM_SMTP_USERNAME</code>,
-            <code className="mx-1 font-mono text-xs">PLATFORM_SMTP_PASSWORD</code> and
-            <code className="mx-1 font-mono text-xs">PLATFORM_SMTP_FROM_ADDRESS</code> in the environment.
+            <code className="mx-1 font-mono text-xs break-all">PLATFORM_SMTP_HOST</code>,
+            <code className="mx-1 font-mono text-xs break-all">PLATFORM_SMTP_USERNAME</code>,
+            <code className="mx-1 font-mono text-xs break-all">PLATFORM_SMTP_PASSWORD</code> and
+            <code className="mx-1 font-mono text-xs break-all">PLATFORM_SMTP_FROM_ADDRESS</code> in the environment.
           </div>
         )}
 

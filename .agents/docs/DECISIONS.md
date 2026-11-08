@@ -3690,3 +3690,12 @@ reopened). Merge in order; after each merge retarget the next PR to `master`.
 - The Osta property page shows setup and health only (rooms, room types, business date vs the date
   at the property, Night Audit, last activity as a time and kind) — never guests or people
   (2026-11-07 rule).
+
+## 2026-11-08 — Osta console on phones
+
+- The Osta console gets the phone **bottom nav** (Today, Enterprises, Billing, Channels + More,
+  which opens the sidebar) — this reverses MOBILE_PLAN Q1 ("dashboard only") for Osta. The Hub
+  still has none.
+- **No create button in the phone header** (owner): the + New menu is tablet/desktop only. On a
+  phone, creating goes through search (Ctrl+K palette actions) or the page's own button.
+- The notification bell opens a bottom sheet on phones, in every shell (tenant, Hub, Osta).

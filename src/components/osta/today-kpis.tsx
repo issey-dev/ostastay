@@ -22,8 +22,12 @@ export type TodayKpiValues = {
 
 export function TodayKpis({ k }: { k: TodayKpiValues }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <StatTile label="Monthly recurring" value={k.mrr} icon={DollarSign} href="/osta/billing" footnote="Active and grace licences" />
+    // Phones: two across (one tall tile per row made Today a long scroll); the money tile
+    // takes the whole first row so an amount like "USD 12,450.00" never wraps.
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+      <div className="max-sm:col-span-2">
+        <StatTile label="Monthly recurring" value={k.mrr} icon={DollarSign} href="/osta/billing" footnote="Active and grace licences" />
+      </div>
       <StatTile
         label="Customers"
         value={String(k.enterpriseCount)}

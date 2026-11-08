@@ -65,13 +65,18 @@ export const OSTA_NAV_GROUPS: { label: string | null; items: Item[] }[] = [
   },
 ]
 
+/** The nav item for this path, shared by the sidebar and the phone bottom nav. Longest
+ *  prefix wins; a property page belongs to its enterprise; "/osta" (Today) only matches
+ *  itself, so a page with no nav item (Notifications) lights nothing up. */
+export function ostaActiveUrl(pathname: string): string {
+  if (pathname.startsWith("/osta/properties")) return "/osta/enterprises"
+  const best = activeHref(pathname, OSTA_NAV_GROUPS.flatMap((g) => g.items.map((i) => i.url)))
+  return best === "/osta" && pathname !== "/osta" ? "" : best
+}
+
 export function OstaSidebarNav({ counts }: { counts: OstaNavCounts | null }) {
   const pathname = usePathname() ?? ""
-  // Longest prefix wins, so "/osta" (Today) doesn't light up on every console page.
-  // A property page belongs to its enterprise.
-  const current = pathname.startsWith("/osta/properties")
-    ? "/osta/enterprises"
-    : activeHref(pathname, OSTA_NAV_GROUPS.flatMap((g) => g.items.map((i) => i.url)))
+  const current = ostaActiveUrl(pathname)
 
   return (
     <>

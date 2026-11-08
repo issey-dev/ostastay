@@ -219,7 +219,9 @@ export function OstaInvoicingManager() {
         </TabsList>
 
         <TabsContent value="invoice" className="pt-4">
-          <div className="grid gap-6 lg:grid-cols-2">
+          {/* grid-cols-1 (minmax 0): without it the one phone column sizes to the A4 preview
+              (794px) and the whole block runs off the screen. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="invHeader">Header text</Label>
@@ -270,7 +272,9 @@ export function OstaInvoicingManager() {
         </TabsContent>
 
         <TabsContent value="receipt" className="pt-4">
-          <div className="grid gap-6 lg:grid-cols-2">
+          {/* grid-cols-1 (minmax 0): without it the one phone column sizes to the A4 preview
+              (794px) and the whole block runs off the screen. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="rcptFooter">Footer text</Label>

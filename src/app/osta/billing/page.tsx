@@ -58,7 +58,7 @@ export default async function OstaBillingPage() {
 
       <WidgetReveal index={1}>
         <section className="border bg-card shadow-elevation-1">
-          <div className="flex items-center gap-3 border-b px-4 py-3">
+          <div className="flex items-center gap-3 border-b px-4 py-3 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
             <h2 className="text-base font-semibold">Up next to invoice</h2>
             <span className="text-xs text-muted-foreground">monthly periods starting in the next 30 days that have no invoice yet</span>
           </div>

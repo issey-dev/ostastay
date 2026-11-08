@@ -166,6 +166,24 @@ export function BillingTables({ invoices, enterprises }: { invoices: BillingInvo
           defaultSort={{ key: "paid", dir: "desc" }}
           exportName="payments"
           empty={{ icon: ReceiptText, title: payments.length === 0 ? "No payments recorded yet" : "No payments match", description: payments.length === 0 ? "Mark an invoice paid on the enterprise's Billing tab." : undefined }}
+          mobile={
+            <MobileCardList>
+              {paymentRows.map((i) => (
+                <MobileCard
+                  key={i.id}
+                  onClick={() => router.push(billingHref(i.enterpriseId))}
+                  title={fmtMoney(i.amount, i.currency)}
+                  subtitle={i.enterpriseName}
+                  meta={[
+                    { label: "Paid", value: fmtDate(i.paidAt) },
+                    { label: "Receipt", value: <span className="font-mono">{i.receiptNo ?? "—"}</span> },
+                    { label: "For invoice", value: <span className="font-mono">{i.invoiceNo}</span> },
+                    { label: "Reference", value: i.paymentReference ?? "—" },
+                  ]}
+                />
+              ))}
+            </MobileCardList>
+          }
         />
       )}
       {view === "enterprises" && (
@@ -177,6 +195,25 @@ export function BillingTables({ invoices, enterprises }: { invoices: BillingInvo
           defaultSort={{ key: "outstanding", dir: "desc" }}
           exportName="billing-by-enterprise"
           empty={{ icon: ReceiptText, title: "No customer enterprises yet" }}
+          mobile={
+            <MobileCardList>
+              {enterpriseRows.map((e) => (
+                <MobileCard
+                  key={e.enterpriseId}
+                  onClick={() => router.push(billingHref(e.enterpriseId))}
+                  title={e.enterpriseName}
+                  badge={<StatusBadge label={LICENCE[e.licenseState]?.label ?? e.licenseState} tone={LICENCE[e.licenseState]?.tone ?? "neutral"} dot />}
+                  tone={e.overdue > 0 ? "danger" : undefined}
+                  meta={[
+                    { label: "Outstanding", value: e.outstanding ? <span className={cn("tabular-nums", e.overdue > 0 && "font-semibold text-destructive")}>{fmtMoney(e.outstanding, e.currency)}</span> : "—" },
+                    { label: "Monthly", value: e.monthly ? fmtMoney(e.monthly, e.currency) : "Not set" },
+                    { label: "Expires", value: e.expiresAt ? fmtDate(e.expiresAt) : "No expiry" },
+                    { label: "Last payment", value: fmtDate(e.lastPaidAt) },
+                  ]}
+                />
+              ))}
+            </MobileCardList>
+          }
         />
       )}
     </div>
