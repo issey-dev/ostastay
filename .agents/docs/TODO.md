@@ -98,6 +98,16 @@ Phase 1 is the Today page + sidebar; the other screens are not built.
 - [ ] Phones, left as is: tab strips (enterprise workspace, Monitoring, Enterprises filter) scroll
   sideways — fine on a real phone (overlay scrollbars), only desktop emulation shows a bar.
   Monitoring's Database tab tables still side-scroll inside their cards.
+- [x] Phones, operational pages (2026-11-08): Transportation (week calendar with ↓/↑ counts, full-width
+  Board / Airport rep / Dispatch and direction switches, search + `MobileFilterSheet`, time-first Board
+  rows, call button on Airport rep cards), Excursions + Spa schedules (`MobileWeekStrip` + day list),
+  Sales History rows, Cashiering tabs (4 across), Housekeeping (3×2 status tiles, compact room cards),
+  Hub list categories (dropdown), Inventory and Mapping tabs (grids). Every dashboard and Hub page
+  scanned at 375px (puppeteer: elements past the edge + sideways scrollers): none left except the
+  permission matrix (an A4 print document).
+- [ ] Phones, not done: bulk selection on the Transportation board stays desktop-only (no checkboxes on
+  phones, as before). The scan only sees what the demo data renders — pages with empty lists (e.g.
+  Monitoring tables, Cashiering breakdown) should be re-checked with real data.
 - [ ] Licence lifecycle actions (extend / renew) are links to Licensing, not inline: needs a
   small dialog reusing `/api/licenses` once the workspace exists.
 

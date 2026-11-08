@@ -75,30 +75,37 @@ export function SalesHistory({
       ) : (
         <div className="divide-y rounded-lg border">
           {rows.map((r) => (
-            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">
-                  {r.guest} <span className="text-muted-foreground font-normal">· {r.item}</span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
-                  {r.time ? ` · ${r.time}` : ""}
-                  {r.taxInvoiceNumber ? ` · ${r.taxInvoiceNumber}` : ""}
-                </p>
+            // Phones: name and amount on top, badges under them, the buttons as a full-width
+            // row — instead of one wrapping line that broke anywhere. Desktop unchanged.
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-4 max-md:flex-col max-md:items-stretch max-md:gap-2">
+              <div className="min-w-0 max-md:flex max-md:items-start max-md:justify-between max-md:gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground md:truncate">
+                    {r.guest} <span className="text-muted-foreground font-normal">· {r.item}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(r.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
+                    {r.time ? ` · ${r.time}` : ""}
+                    {r.taxInvoiceNumber ? ` · ${r.taxInvoiceNumber}` : ""}
+                  </p>
+                </div>
+                <span className="shrink-0 font-semibold text-foreground tabular-nums md:hidden">{money(r.amount)}</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 max-md:flex-wrap max-md:gap-2">
                 <Badge variant="outline" className="text-[10px] uppercase">{r.source === "walkin" ? "Walk-in" : "Guest"}</Badge>
                 <StatusBadge label={r.status.replace(/_/g, " ")} status={r.status} />
-                <span className="font-semibold text-foreground">{money(r.amount)}</span>
+                <span className="font-semibold text-foreground max-md:hidden">{money(r.amount)}</span>
                 {r.folioId && (
-                  <Button size="sm" variant="outline" onClick={() => setPrintFolioId(r.folioId)}>
-                    <Printer className="w-4 h-4 mr-1.5" /> Reprint
-                  </Button>
-                )}
-                {r.folioId && r.source === "walkin" && (
-                  <Button size="sm" variant="outline" onClick={() => onOpenWalkInBill(r.folioId!)}>
-                    <Receipt className="w-4 h-4 mr-1.5" /> Bill
-                  </Button>
+                  <span className="flex items-center gap-3 max-md:w-full max-md:gap-2 max-md:[&>*]:flex-1">
+                    <Button size="sm" variant="outline" onClick={() => setPrintFolioId(r.folioId)}>
+                      <Printer className="w-4 h-4 mr-1.5" /> Reprint
+                    </Button>
+                    {r.source === "walkin" && (
+                      <Button size="sm" variant="outline" onClick={() => onOpenWalkInBill(r.folioId!)}>
+                        <Receipt className="w-4 h-4 mr-1.5" /> Bill
+                      </Button>
+                    )}
+                  </span>
                 )}
               </div>
             </div>

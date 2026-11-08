@@ -48,11 +48,11 @@ const statusLabel = (status: string) => {
 const taskLabel = (taskType: string) => statusLabel(taskType)
 
 /** One label + value pair of the card's list. */
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">{children}</dd>
+      <dt className={cn("text-xs text-muted-foreground", className)}>{label}</dt>
+      <dd className={cn("flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1", className)}>{children}</dd>
     </>
   )
 }
@@ -155,7 +155,8 @@ export function RoomStatusCard({
   return (
     <div
       className={cn(
-        "group relative flex h-full min-w-0 flex-col border border-border bg-card px-5 py-4 text-sm transition-colors hover:border-foreground/25",
+        // Phones: tighter padding (the card is full width there and a floor can hold 20 rooms).
+        "group relative flex h-full min-w-0 flex-col border border-border bg-card px-5 py-4 text-sm transition-colors hover:border-foreground/25 max-md:px-4 max-md:py-3",
         loading && "opacity-60",
         isSelected && "border-primary ring-2 ring-primary/40"
       )}
@@ -235,7 +236,7 @@ export function RoomStatusCard({
               {isSelected && <CheckCircle2 className="h-3.5 w-3.5" />}
             </span>
           )}
-          <span className="text-3xl leading-none font-semibold tracking-tight text-foreground tabular-nums">{room.roomNumber}</span>
+          <span className="text-3xl leading-none font-semibold tracking-tight text-foreground tabular-nums max-md:text-2xl">{room.roomNumber}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {activeTicket && (
@@ -259,7 +260,7 @@ export function RoomStatusCard({
         </div>
       </div>
 
-      <div aria-hidden className="my-3.5 h-px bg-border" />
+      <div aria-hidden className="my-3.5 h-px bg-border max-md:my-2.5" />
 
       <dl className="pointer-events-none grid grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5">
         <Row label="Type">
@@ -287,7 +288,8 @@ export function RoomStatusCard({
           {f.hasArrivalToday && <span className="font-bold text-info">Arrival today</span>}
         </Row>
 
-        <Row label="Task">
+        {/* Phones drop the row when there is no task: one less line per room. */}
+        <Row label="Task" className={regularTasks.length === 0 ? "max-md:hidden" : undefined}>
           {regularTasks.length === 0 ? (
             <span className="text-muted-foreground/70">—</span>
           ) : (

@@ -40,8 +40,9 @@ export function FacilitiesManager({ propertyId }: { propertyId: string }) {
             horizontally-scrollable strip instead, stacked above a full-width Add
             button rather than sharing its row. */}
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-          <div className="overflow-x-auto">
-            <TabsList className="bg-muted h-auto w-max flex-nowrap">
+          {/* Phones: a 2×2 grid — nothing scrolls sideways (owner, 2026-11-08). */}
+          <div className="md:overflow-x-auto">
+            <TabsList className="bg-muted h-auto w-max flex-nowrap max-md:grid max-md:h-auto! max-md:w-full max-md:grid-cols-2 max-md:gap-0.5">
               {TABS.map((t) => (
                 <TabsTrigger key={t.id} value={t.id} className="shrink-0 grow-0">
                   <t.icon className="w-4 h-4 mr-2" /> {t.label}

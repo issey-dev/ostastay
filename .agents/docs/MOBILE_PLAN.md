@@ -272,6 +272,12 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
   sidebar), sidebar counts as icon badges, a dot on More when a page not in the bar has something
   waiting; the phone header drops the SidebarTrigger and + New and gains a search icon. The Hub
   still has no bottom nav.
+- **No sideways scrolling on phones (owner, 2026-11-08, PWA released).** Shared pieces:
+  `ui/mobile-filter-sheet.tsx` (a Filters button → bottom sheet with Clear all + "Show N …") and
+  `ui/mobile-week-strip.tsx` (month label, prev/next week, Today, 7 day cells with a count). Tab rows
+  on phones: full-width grid (`max-md:grid max-md:grid-cols-N max-md:h-auto!` — the `!` beats the
+  `pointer-coarse:data-horizontal:h-11` height on touch screens), a segmented switch, or a dropdown.
+  Check with a 375px pass that also lists elements inside `overflow-x: auto` that scroll.
 - **`PageHeader`** (`ui/page-header.tsx`): actions wrap instead of clipping — Housekeeping,
   Maintenance; Cashiering and Group detail headers wrap too.
 - **Pickers:** `DateRangePicker` shows one month on phones and has a unique id.

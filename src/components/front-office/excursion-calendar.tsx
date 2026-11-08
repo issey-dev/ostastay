@@ -23,6 +23,7 @@ import {
 import { ChevronLeft, ChevronRight, MapPin } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { MobileWeekStrip } from "@/components/ui/mobile-week-strip"
 
 type Departure = {
   id: string
@@ -83,9 +84,9 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
   const [departures, setDepartures] = useState<Departure[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Phones always get today's agenda, stepping day by day (the Day/Week/Month toggle is
-  // hidden there — the agenda list is the only layout a phone gets). Desktop: unchanged.
-  const view: ViewMode = isMobile ? "day" : viewState
+  // Phones load the whole week (for the week strip's counts) and list the selected day under
+  // it; the Day/Week/Month toggle is desktop-only. Desktop: unchanged.
+  const view: ViewMode = isMobile ? "week" : viewState
 
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getRange(view, anchorDate), [view, anchorDate])
 
@@ -227,36 +228,54 @@ export function ExcursionCalendar({ propertyId, onSelectDeparture }: ExcursionCa
   // same instinct as the Reservations tape chart's mobile fallback, a cramped 7-column
   // grid isn't practical on a phone regardless of which view is selected.
   if (isMobile) {
-    const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
+    const list = departuresByDay.get(format(anchorDate, "yyyy-MM-dd")) ?? []
+    const counts = new Map([...departuresByDay].map(([k, v]) => [k, v.filter((d) => d.status !== "CANCELLED").length]))
     return (
-      <div>
-        {headerControls}
-        {legendRow}
+      <div className="space-y-4">
+        <MobileWeekStrip value={anchorDate} onChange={(d) => setAnchorDate(startOfDay(d))} counts={counts} countLabel="departures" />
+        <p className="text-sm font-semibold">{format(anchorDate, "EEEE, d MMMM")}</p>
         {loading ? (
-          <InlineLoading lines={4} label="Loading departures" />
+          <InlineLoading lines={3} label="Loading departures" />
+        ) : list.length === 0 ? (
+          <EmptyState size="inline" title="No departures on this day" />
         ) : (
-          <div className="space-y-4">
-            {days.map((day) => {
-              const key = format(day, "yyyy-MM-dd")
-              const list = departuresByDay.get(key) ?? []
-              if (list.length === 0) return null
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {list.map((d) => {
+              const cancelled = d.status === "CANCELLED"
+              const full = d.bookedHeadcount >= d.capacity
+              const atRisk = d.minCapacity != null && d.bookedHeadcount < d.minCapacity
               return (
-                <div key={key}>
-                  <p className={`text-xs font-semibold mb-1.5 ${isToday(day) ? "text-primary" : "text-muted-foreground"}`}>
-                    {format(day, "EEE, d MMM")}
-                  </p>
-                  <div className="space-y-1.5">
-                    {list.map((d) => (
-                      <Chip key={d.id} d={d} dense={false} />
-                    ))}
-                  </div>
-                </div>
+                <li key={d.id}>
+                  <button type="button" onClick={() => onSelectDeparture(d.id)} className={`flex w-full gap-3 px-3 py-3 text-left active:bg-muted ${cancelled ? "opacity-60" : ""}`}>
+                    <span className={`w-1 shrink-0 self-stretch rounded-full ${chipColor(d.excursionTypeId).dot}`} aria-hidden />
+                    <span className="w-12 shrink-0 font-mono text-base font-semibold tabular-nums">{d.departureTime}</span>
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className={`block font-medium leading-snug ${cancelled ? "line-through" : ""}`}>{d.excursionType.name}</span>
+                      {d.meetingPoint && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3 shrink-0" /> {d.meetingPoint}
+                          {d.meetingTime ? ` (${d.meetingTime})` : ""}
+                        </span>
+                      )}
+                      {cancelled ? (
+                        <span className="block text-xs text-muted-foreground">Cancelled</span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <span className="h-1.5 flex-1 rounded-full bg-muted" aria-hidden>
+                            <span className={`block h-full rounded-full ${full ? "bg-warning" : "bg-success"}`} style={{ width: `${Math.min(100, (d.bookedHeadcount / Math.max(1, d.capacity)) * 100)}%` }} />
+                          </span>
+                          <span className={`shrink-0 text-xs tabular-nums ${full ? "text-warning" : "text-muted-foreground"}`}>
+                            {d.bookedHeadcount}/{d.capacity}
+                            {atRisk ? " · at risk" : ""}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
               )
             })}
-            {days.every((day) => (departuresByDay.get(format(day, "yyyy-MM-dd")) ?? []).length === 0) && (
-              <EmptyState size="inline" title="No departures in this range" />
-            )}
-          </div>
+          </ul>
         )}
       </div>
     )

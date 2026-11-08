@@ -3699,3 +3699,7 @@ reopened). Merge in order; after each merge retarget the next PR to `master`.
 - **No create button in the phone header** (owner): the + New menu is tablet/desktop only. On a
   phone, creating goes through search (Ctrl+K palette actions) or the page's own button.
 - The notification bell opens a bottom sheet on phones, in every shell (tenant, Hub, Osta).
+- **Nothing scrolls sideways on a phone** (owner, 2026-11-08 — the PWA is officially released for
+  phones). Tables become cards, tab rows become full-width grids, segmented switches or a dropdown,
+  secondary filters go into a bottom sheet (`MobileFilterSheet`). Print documents (A4 reports such as
+  the permission matrix) are the only exception. Features stay the same; only the phone layout changes.

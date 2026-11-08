@@ -96,9 +96,17 @@ export default function TransportationOperations() {
 
       <H2>At the airport, on a phone</H2>
       <p>
-        The <strong>Airport rep</strong> view lists the day&apos;s flights in time order, each with the guest, party, phone (tap to call), the
-        meeting notes and which boat they go on. Filter by your own name under <strong>More filters › airport rep</strong>. Tap a card for
-        everything else. <strong>Dispatch</strong> shows each boat with its passenger list — the view for the jetty.
+        On a phone the top of the page is the day and a week calendar: each day shows its date and how many pickups (↓) and drop-offs (↑) it
+        has, so tap a day to jump to it. Under it, switch between <strong>Board</strong>, <strong>Airport rep</strong> and{" "}
+        <strong>Dispatch</strong>, and between all transfers, pickups and drop-offs. Search sits next to a <strong>Filters</strong> button,
+        which opens every other filter (type, status, airport rep, route, provider, group and the two switches) in a sheet from the bottom.
+      </p>
+      <p>
+        The <strong>Airport rep</strong> view lists the day&apos;s flights in time order, each with the guest, party, a <strong>call</strong>{" "}
+        button for the guest&apos;s phone, the meeting notes and which boat they go on. Filter by your own name under{" "}
+        <strong>Filters › airport rep</strong>. Tap a card for everything else. On the <strong>Board</strong>, each transfer is one line with the
+        time on the left, then the guest, room, party, flight and boat. <strong>Dispatch</strong> shows each boat with its passenger list — the
+        view for the jetty. Selecting several transfers at once is done from a computer.
       </p>
 
       <H2>Charges and Night Audit</H2>

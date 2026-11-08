@@ -19,15 +19,20 @@ export const RELEASES: Release[] = [
   {
     version: "8.13.0",
     date: "2026-11-08",
-    highlights: "The platform console now works on a phone, and notifications open as a sheet from the bottom of the screen on every phone.",
+    highlights: "Phones get a proper layout for Transportation, Excursions, Spa, Cashiering and Housekeeping, nothing on a phone scrolls sideways any more, the platform console works on a phone, and notifications open as a sheet from the bottom of the screen.",
     new: [
+      "Transportation on phones: a week calendar at the top shows each day's pickups and drop-offs, the Board, Airport rep and Dispatch switch spans the screen, and every filter is in one Filters sheet next to the search. Each transfer is one line with its time on the left, then the guest, room, party, flight and boat, and airport reps get a call button for the guest's phone.",
+      "Excursions and Spa schedules on phones: the same week calendar with how many departures or appointments each day has; tap a day to list it, each in time order with its fill level, meeting point, therapist and room.",
       "Platform console on phones: a bar along the bottom goes to Today, Enterprises, Billing and Channels, and More opens the full menu. Counts of what is waiting show on the icons.",
       "Notifications on phones open as a sheet from the bottom of the screen, with an All or Unread switch, Today, Yesterday and Earlier headings, larger rows, and the phone-notification switch within reach. Swipe down to close it.",
     ],
     improved: [
       "Platform console on phones: search is an icon in the header, the summary tiles on Today sit two across, and lists on Billing, Support Access and a customer's Properties, Channel and Support tabs show as cards instead of wide tables.",
       "Platform console on phones: the Monitoring chart, the invoice settings and preview on Controls, and a few headings on Billing and Channel Manager now fit the screen.",
-      "Housekeeping on phones: the room status filters are one row you swipe sideways, each with its colour and count, the attendant filter sits full width under it, and a line shows how many rooms match with a button to clear the filters.",
+      "Housekeeping on phones: the room statuses are a grid of six tiles with their counts that filter the list, the attendant filter sits full width under them, a line shows how many rooms match with a button to clear the filters, and each room card is more compact.",
+      "Cashiering on phones: the Payments, Exchanges, Paid-outs and History tabs share the width instead of scrolling sideways.",
+      "Excursions and Spa on phones: the Book, Schedule and History switch spans the screen, and each sale in History shows its amount at the top with Reprint and Bill as full-width buttons.",
+      "Setup on phones: list categories are a dropdown, and the room and channel-mapping tabs fit the screen instead of scrolling sideways.",
     ],
     fixed: [
       "Platform console: Today no longer stays highlighted in the menu while you are on the Notifications page.",

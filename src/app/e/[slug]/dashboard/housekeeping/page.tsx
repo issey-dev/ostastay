@@ -470,39 +470,35 @@ export default function HousekeepingDashboard() {
         }
       />
 
-      {/* Phone filter: one swipeable row of status chips (a coloured dot + count, so the
-          row doubles as the status summary), the attendant picker full width under it, and
-          a result line with Clear while anything is filtered. Desktop keeps the bar below. */}
+      {/* Phone filter: the six statuses as a 3×2 grid of tiles (count big, coloured dot, all
+          visible at once — nothing scrolls sideways), so the grid doubles as the status
+          summary; the attendant picker full width under it, and a result line with Clear
+          while anything is filtered. Desktop keeps the bar below. */}
       <div className="md:hidden mb-5 space-y-2.5">
-        <div className="relative -mx-4">
-          <div
-            role="group"
-            aria-label="Filter by status"
-            className="flex gap-2 overflow-x-auto px-4 pb-0.5 snap-x scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {STATUS_FILTERS.map((opt) => {
-              const active = filterStatus === opt.value
-              const count = opt.value ? rooms.filter((r: any) => r.status === opt.value).length : rooms.length
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setFilterStatus(opt.value)}
-                  className={cn(
-                    "inline-flex h-9 shrink-0 snap-start items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors",
-                    active ? "border-foreground bg-foreground text-background" : "border-border bg-card text-foreground active:bg-muted",
-                  )}
-                >
-                  {opt.value && <span aria-hidden className={cn("h-2 w-2 rounded-full", TONE_DOT[statusTone(opt.value)])} />}
-                  {opt.label}
-                  <span className={cn("tabular-nums text-xs", active ? "opacity-80" : "text-muted-foreground")}>{count}</span>
-                </button>
-              )
-            })}
-          </div>
-          {/* Fade on the right edge: the cue that the row scrolls. */}
-          <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
+        <div role="group" aria-label="Filter by status" className="grid grid-cols-3 gap-2">
+          {STATUS_FILTERS.map((opt) => {
+            const active = filterStatus === opt.value
+            const count = opt.value ? rooms.filter((r: any) => r.status === opt.value).length : rooms.length
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={active}
+                aria-label={`${opt.label}: ${count} rooms`}
+                onClick={() => setFilterStatus(opt.value)}
+                className={cn(
+                  "flex min-w-0 flex-col items-start gap-0.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
+                  active ? "border-foreground bg-foreground text-background" : "border-border bg-card text-foreground active:bg-muted",
+                )}
+              >
+                <span className="text-lg font-semibold leading-none tabular-nums">{count}</span>
+                <span className={cn("flex w-full min-w-0 items-center gap-1.5 text-xs", !active && "text-muted-foreground")}>
+                  {opt.value && <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", TONE_DOT[statusTone(opt.value)])} />}
+                  <span className="leading-tight">{opt.label}</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
         {housekeepers.length > 0 && (
           <OptionSelect
