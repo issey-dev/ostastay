@@ -17,8 +17,8 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
-    version: "8.13.0",
-    date: "2026-11-08",
+    version: "8.13.4",
+    date: "2026-11-09",
     highlights: "Phones get a proper layout for Transportation, Excursions, Spa, Cashiering and Housekeeping, nothing on a phone scrolls sideways any more, the platform console works on a phone, and notifications open as a sheet from the bottom of the screen.",
     new: [
       "Transportation on phones: a week calendar at the top shows each day's pickups and drop-offs, the Board, Airport rep and Dispatch switch spans the screen, and every filter is in one Filters sheet next to the search. Each transfer is one line with its time on the left, then the guest, room, party, flight and boat, and airport reps get a call button for the guest's phone.",

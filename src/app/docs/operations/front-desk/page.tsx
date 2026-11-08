@@ -25,11 +25,13 @@ export default function FrontDesk() {
         <li><strong>Check payment</strong> means the amount the website reported differs from the total — check with your online payments before the trip.</li>
         <li>Seats held by the website while a guest pays show above the manifest as &quot;held online&quot;. They are released automatically if not booked.</li>
         <li>Cancel, mark no-show, cancel the whole departure or move guests exactly as for any booking. The website is told automatically.</li>
+        <li>On a phone the <strong>Schedule</strong> tab is a week calendar showing how many departures each day has; tap a day to list its departures in time order, with how full each one is.</li>
       </ul>
 
       <H2>Spa</H2>
       <ul>
         <li>On the spa schedule, online bookings show <strong>· Online</strong>. A time a website is holding while its guest pays shows as <strong>Held online</strong> with a dashed border; it is released automatically if not booked.</li>
+        <li>On a phone the schedule is a week calendar showing how many appointments each day has, with the therapist filter under it; tap a day to list its appointments in time order.</li>
         <li>Click an appointment to open its panel: guests and therapists, room, price, payment, notes and the online reference.</li>
         <li>From the panel: <strong>Check in</strong> when the guest arrives, <strong>Start treatment</strong>, <strong>Complete</strong>; or <strong>No-show</strong> and <strong>Cancel</strong>.</li>
       </ul>

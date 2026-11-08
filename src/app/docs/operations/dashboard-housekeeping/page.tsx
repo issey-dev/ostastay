@@ -15,7 +15,8 @@ export default function DashboardHousekeepingGuide() {
       <p>
         The dashboard is the first page after you sign in. Under the welcome line a row of <strong>status chips</strong> shows the day at a glance, and below it
         are the tiles you have chosen: figures, charts and lists for the property you are working in. The{" "}
-        <strong>7d / 14d / 30d</strong> switch sets how many days the charts cover, and <strong>Refresh</strong> reloads the figures.
+        <strong>7d / 14d / 30d</strong> switch sets how many days the charts cover, and <strong>Refresh</strong> reloads the figures. On a phone the page
+        is simply titled <strong>Dashboard</strong>, with the switch, Refresh and the cog on a row under the title.
       </p>
       <Table
         head={["Chip", "Means", "Opens"]}
@@ -66,6 +67,11 @@ export default function DashboardHousekeepingGuide() {
         (who is in the room and how many, or Vacant) and the open <strong>Task</strong>. A <strong>Request</strong>, <strong>Staff</strong> or <strong>Tech</strong>{" "}
         line appears only when the room has a special request, an attendant or a technician, so most cards stay short. The tabs above the board filter by status and show
         how many rooms are in each; a second filter shows one attendant&apos;s rooms.
+      </p>
+      <p>
+        On a phone the statuses are six tiles in two rows (All, Dirty, Clean, Inspected, Out of order, Out of service), each with its count; tap one to filter
+        the board and tap <strong>All</strong> to go back. The attendant filter sits full width under them, and while a filter is on a line shows how many
+        rooms match, with <strong>Clear filters</strong>. A card leaves out the Task line when the room has no task.
       </p>
       <p>
         A room whose guest is <strong>due out today</strong> shows <strong>Due out</strong> in bold amber on its Stay line, and a room with someone arriving shows{" "}

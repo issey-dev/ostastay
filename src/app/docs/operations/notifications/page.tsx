@@ -23,6 +23,11 @@ export default function NotificationsGuide() {
         <li><strong>Show older</strong> at the bottom of the list loads earlier ones.</li>
         <li>Unread notifications are in bold with a coloured dot: red for urgent, amber for something to act on, grey for information.</li>
         <li>The bell updates when you come back to the window. It does not need the page to be refreshed.</li>
+        <li>
+          On a phone the bell opens as a sheet from the bottom of the screen: switch between <strong>All</strong> and <strong>Unread</strong>, and the list is
+          grouped under <strong>Today</strong>, <strong>Yesterday</strong> and <strong>Earlier</strong>. The phone-notification switch and{" "}
+          <strong>All notifications and settings</strong> are at the bottom. Swipe down to close it.
+        </li>
       </ul>
 
       <H2>All notifications and your settings</H2>
