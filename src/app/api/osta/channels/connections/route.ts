@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { listAllConnections, createConnection } from "@/lib/channels/connection";
+import { listAllConnections, createConnection, MANAGED_BY } from "@/lib/channels/connection";
 import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
 // Platform-side channel-manager administration — the Osta console counterpart of
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     }
     const enterpriseId = property.enterpriseId;
 
-    const connection = await createConnection({ propertyId, externalPropertyId, name, inviteCode });
+    const connection = await createConnection({ propertyId, externalPropertyId, name, inviteCode, managedBy: MANAGED_BY.OSTA });
 
     // Logged into the TENANT's trail — the enterprise whose channel manager was just
     // wired up is the one whose auditors need to see it. logActivity snapshots the Osta

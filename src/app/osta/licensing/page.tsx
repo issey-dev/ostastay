@@ -1,13 +1,9 @@
-import { LicensingManager } from "@/components/controls/licensing-manager"
-import { PageHeader } from "@/components/ui/page-header"
-import { DesktopOnlyNotice } from "@/components/ui/mobile"
+import { redirect } from "next/navigation"
 
-export default function OstaLicensingPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Licensing" tabTitle="Licensing · Osta" hint={<>Each enterprise&apos;s license: validity and price, per-property attribute caps, invoices, and module access.</>} />
-      <DesktopOnlyNotice feature="Licensing" description="You can still read everything below. To make changes comfortably, open the console on a tablet or computer." />
-      <LicensingManager />
-    </div>
-  )
+// Licensing no longer has its own console page (owner, 2026-11-08): a licence, its
+// allowances and invoices are managed on the enterprise's Billing tab, and the finance
+// overview is /osta/billing. Old links (?enterprise=) land on the right enterprise.
+export default async function OstaLicensingRedirect({ searchParams }: { searchParams: Promise<{ enterprise?: string }> }) {
+  const { enterprise } = await searchParams
+  redirect(enterprise ? `/osta/enterprises/${encodeURIComponent(enterprise)}?tab=billing` : "/osta/billing")
 }

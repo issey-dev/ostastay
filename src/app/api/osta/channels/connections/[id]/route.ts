@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
-import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours, listAllConnections } from "@/lib/channels/connection";
+import { reauthorizeConnection, setRateLimitPauseThreshold, setPollLookbackHours, listAllConnections, assertOstaManaged } from "@/lib/channels/connection";
 import { ChannelAuthError, ChannelApiError } from "@/lib/channels/beds24";
 
 // Osta-console per-connection management — see ../route.ts for why this reaches across
@@ -35,6 +35,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
+    // An enterprise's own Beds24 connection is theirs to run, from their Hub.
+    assertOstaManaged(existing);
 
     const body = await request.json().catch(() => null);
 
@@ -126,6 +128,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
+    // An enterprise's own Beds24 connection is theirs to run, from their Hub.
+    assertOstaManaged(existing);
 
     await prisma.channelConnection.delete({ where: { id } });
 

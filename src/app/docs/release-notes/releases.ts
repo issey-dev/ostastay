@@ -17,6 +17,22 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.11.0",
+    date: "2026-11-08",
+    highlights: "A redesigned platform console for the Uppsolut team: a Today page of what needs action, a searchable customer directory, a workspace per customer, a finance overview and a monitoring page with history.",
+    new: [
+      "Platform console: a Today page lists what needs action, such as properties waiting for approval, unpaid or overdue invoices, licences about to expire and failing channel connections, with the action next to each item.",
+      "Platform console: a Billing page shows what is owed, what came in this month, monthly recurring income and which invoices are due next. Invoices are still issued from the customer's own page.",
+      "Platform console: a Monitoring page shows database load, query time, errors, channel calls and background jobs over the last hour, day or week, for the whole platform, one customer or one property.",
+      "Platform console: press Ctrl K to search customers, properties and invoices, or use the + New menu to start common tasks.",
+    ],
+    improved: [
+      "Platform console: each customer has one page with tabs for overview, properties, billing, modules, channel and support access.",
+      "Platform console: each property page shows its rooms and room types against the licence, its business date with a warning when it does not match the date at the hotel, today's occupancy, the last Night Audit and when the property was last used.",
+      "Platform console: Support Access is a simple log. Request access, see which sessions are live and until when, and look back at requests that ended.",
+    ],
+  },
+  {
     version: "8.9.5",
     date: "2026-11-07",
     highlights: "A tidier Front Desk: the card and list switch moves to the end of the toolbar and cards get breathing room.",

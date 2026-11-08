@@ -3490,6 +3490,12 @@ model ChannelConnection {
   provider     String     @default("BEDS24")
   // Operator-facing label, so several accounts stay tellable apart.
   name         String
+  // Who runs this connection: "OSTA" (Uppsolut connected it from the Osta console, on the
+  // master Beds24 account) or "ENTERPRISE" (the customer connected their own Beds24 account
+  // from their Hub). The Osta console sees an ENTERPRISE connection only as running / not
+  // running — no errors, health detail, credits, webhook or logs — and cannot act on it
+  // (owner, 2026-11-07; DECISIONS.md). Defaults to the private side.
+  managedBy    String     @default("ENTERPRISE")
 
   // The long-lived credential. ENCRYPTED AT REST via src/lib/secret-crypto.ts, exactly
   // like the SMTP/SFTP secrets in EnterpriseSettings — encrypt on write, decrypt only at
@@ -4605,4 +4611,28 @@ model TransportBooking {
   @@index([vesselId])
   @@index([rateId])
   @@index([propertyId, billingStatus])
+}
+
+// Per-minute rollup of database load, feeding the Osta Monitoring page's 1h / 24h / 7d
+// charts (owner, 2026-11-07). Written by src/lib/db-rollups.ts from the same model-operation
+// timings as the live view (src/lib/db.ts), one row per (minute, enterprise, property) that
+// had any operations, per server instance — readers SUM. Engine errors / warnings carry no
+// tenant, so they land on the row with no enterprise. Kept 8 days, then pruned.
+// No foreign keys on purpose: a metrics row must never block deleting an enterprise.
+model DbMetricRollup {
+  id           String   @id @default(uuid())
+  bucketStart  DateTime
+  // Null: work with no signed-in tenant (sign-in, public pages, jobs, Osta itself).
+  enterpriseId String?
+  propertyId   String?
+  ops          Int      @default(0)
+  totalMs      Float    @default(0)
+  maxMs        Float    @default(0)
+  // Operation counts per latency band; band edges are LATENCY_EDGES_MS in db-rollups.ts.
+  latencyHist  Int[]
+  engineErrors   Int    @default(0)
+  engineWarnings Int    @default(0)
+
+  @@index([bucketStart])
+  @@index([enterpriseId, bucketStart])
 }

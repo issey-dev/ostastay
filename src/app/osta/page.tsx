@@ -1,147 +1,172 @@
-import { Building2, ClipboardCheck, ShieldCheck, DollarSign, CalendarClock, ReceiptText } from "@/components/icons"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import Link from "next/link"
+import { ShieldCheck, CalendarClock, History } from "@/components/icons"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { InfoHint } from "@/components/ui/info-hint"
 import { PageHeader } from "@/components/ui/page-header"
 import { EmptyState } from "@/components/ui/empty-state"
+import { WidgetReveal } from "@/components/dashboard/motion-kit"
+import { TodayInbox } from "@/components/osta/today-inbox"
+import { TodayKpis } from "@/components/osta/today-kpis"
+import { getOstaToday } from "@/lib/osta/attention"
+import { getOstaEnterpriseId } from "@/lib/scope"
 import { prisma } from "@/lib/db"
-import { computeLicenseState } from "@/lib/license"
 
-const EXPIRING_SOON_DAYS = 30
+// The Osta console's landing page. It used to be six counters; it is now a work page:
+// everything waiting on Osta in one list with the action on each row (TodayInbox), the
+// portfolio figures above it, and what is coming up (renewals, live support sessions)
+// beside it. The list itself is computed in src/lib/osta/attention.ts, which also feeds
+// the sidebar's counts.
 
 function formatMoney(amountsByCurrency: Record<string, number>): string {
   const entries = Object.entries(amountsByCurrency).filter(([, amount]) => amount !== 0)
   if (entries.length === 0) return "0.00"
   return entries
-    .map(([currency, amount]) => `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    .map(([currency, amount]) => `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
     .join(" · ")
 }
 
-export default async function OstaOverviewPage() {
-  const [enterpriseCount, pendingPropertyCount, activeGrantCount, enterprises, unpaidInvoices] = await Promise.all([
-    prisma.enterprise.count({ where: { type: "STANDARD" } }),
-    prisma.property.count({ where: { status: "PENDING" } }),
-    prisma.supportAccessGrant.count({ where: { status: "APPROVED" } }),
-    prisma.enterprise.findMany({
-      where: { type: "STANDARD" },
-      select: { id: true, name: true, slug: true, license: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.licenseInvoice.findMany({
-      where: { status: "ISSUED" },
-      select: { amount: true, discountAmount: true, currency: true },
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit" })
+const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { month: "short" }).toUpperCase()
+const fmtTime = (d: Date, now: Date) =>
+  d.toDateString() === now.toDateString()
+    ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+
+function timeLeft(iso: string, now: Date) {
+  const mins = Math.max(0, Math.round((new Date(iso).getTime() - now.getTime()) / 60_000))
+  if (mins < 60) return `${mins} min left`
+  const h = Math.floor(mins / 60)
+  return h < 48 ? `${h} h ${mins % 60} min left` : `${Math.floor(h / 24)} days left`
+}
+
+function Panel({ title, href, linkLabel, children }: { title: string; href?: string; linkLabel?: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-card border shadow-elevation-1">
+      <div className="flex items-center gap-3 px-4 pt-3.5 pb-2.5">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {href && <Link href={href} className="ml-auto text-xs text-primary hover:underline">{linkLabel}</Link>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+export default async function OstaTodayPage() {
+  const now = new Date()
+  const ostaId = await getOstaEnterpriseId()
+  const [{ inbox, kpis, renewals, liveGrants }, activity] = await Promise.all([
+    getOstaToday(now),
+    // Osta's own trail: what the console's staff did (sign-ins left out).
+    prisma.userActivityLog.findMany({
+      where: { enterpriseId: ostaId, module: { not: "AUTH" } },
+      select: { id: true, createdAt: true, userName: true, description: true },
+      orderBy: { createdAt: "desc" },
+      take: 8,
     }),
   ])
 
-  const now = new Date()
-  const expiringSoonCutoff = new Date(now.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000)
-
-  // Portfolio rollup — every STANDARD enterprise's license state, computed the same
-  // pure way the login/session enforcement does, so this dashboard can never disagree
-  // with what actually gates access.
-  const licensed = enterprises.map((e) => ({
-    ...e,
-    ...computeLicenseState(e.license, now),
-  }))
-
-  const mrrByCurrency: Record<string, number> = {}
-  for (const e of licensed) {
-    if ((e.state === "ACTIVE" || e.state === "GRACE") && e.license?.monthlyPrice) {
-      const currency = e.license.priceCurrency || "USD"
-      mrrByCurrency[currency] = (mrrByCurrency[currency] ?? 0) + e.license.monthlyPrice
-    }
-  }
-
-  const expiringSoon = licensed.filter(
-    (e) => (e.state === "ACTIVE" || e.state === "GRACE") && e.license?.expiresAt && e.license.expiresAt <= expiringSoonCutoff
-  )
-  const needingAttention = licensed.filter((e) => e.state === "GRACE" || e.state === "EXPIRED")
-
-  const unpaidByCurrency: Record<string, number> = {}
-  for (const inv of unpaidInvoices) {
-    unpaidByCurrency[inv.currency] = (unpaidByCurrency[inv.currency] ?? 0) + inv.amount - inv.discountAmount
-  }
-
-  const cards = [
-    { title: "Enterprises", value: enterpriseCount, icon: Building2, href: "/osta/enterprises" },
-    { title: "Pending property approvals", value: pendingPropertyCount, icon: ClipboardCheck, href: "/osta/properties" },
-    { title: "Active support grants", value: activeGrantCount, icon: ShieldCheck, href: "/osta/support-access" },
-  ]
-
-  const licenseCards = [
-    { title: "Monthly recurring revenue", value: formatMoney(mrrByCurrency), icon: DollarSign, href: "/osta/licensing" },
-    { title: `Expiring within ${EXPIRING_SOON_DAYS}d`, value: expiringSoon.length, icon: CalendarClock, href: "/osta/licensing" },
-    { title: "Unpaid invoices", value: `${unpaidInvoices.length} · ${formatMoney(unpaidByCurrency)}`, icon: ReceiptText, href: "/osta/licensing" },
-  ]
+  const attention = inbox.length
+  const dateLine = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+  const needs = attention === 0 ? "nothing needs you" : `${attention} thing${attention === 1 ? " needs" : "s need"} you`
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Overview" tabTitle="Overview · Osta" hint="Every enterprise, property, and support grant on the platform, in one place." />
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-        {cards.map((c) => (
-          <a key={c.title} href={c.href}>
-            <Card className="shadow-elevation-1 hover:bg-muted/40 transition-colors">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                <c.icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{c.value}</div>
-              </CardContent>
-            </Card>
-          </a>
-        ))}
-      </div>
+      <PageHeader
+        title="Today"
+        tabTitle="Today · Osta"
+        description={`${dateLine} · ${needs} across ${kpis.enterpriseCount} enterprise${kpis.enterpriseCount === 1 ? "" : "s"}`}
+        hint="Everything waiting on Osta across every enterprise, with the action on each row. The counts in the sidebar come from the same list."
+      />
 
-      <div>
-        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold tracking-tight">
-          Licensing
-          <InfoHint label="Licensing">Portfolio-wide rollup across every enterprise&apos;s license. Manage individual licenses from the Licensing screen.</InfoHint>
-        </h3>
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-          {licenseCards.map((c) => (
-            <a key={c.title} href={c.href}>
-              <Card className="shadow-elevation-1 hover:bg-muted/40 transition-colors">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                  <c.icon className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{c.value}</div>
-                </CardContent>
-              </Card>
-            </a>
-          ))}
+      <TodayKpis
+        k={{
+          ...kpis,
+          mrr: formatMoney(kpis.mrrByCurrency),
+          receivables: formatMoney(kpis.receivablesByCurrency),
+        }}
+      />
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <WidgetReveal index={0}>
+            <TodayInbox items={inbox} now={now.getTime()} />
+          </WidgetReveal>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-6">
+          <WidgetReveal index={1}>
+            <Panel title="Renewals" href="/osta/billing" linkLabel="Billing">
+              {renewals.length === 0 ? (
+                <div className="border-t px-4 py-3"><EmptyState size="inline" icon={CalendarClock} title="No licence ends in the next 60 days" /></div>
+              ) : (
+                <ul className="divide-y border-t">
+                  {renewals.map((r) => (
+                    <li key={r.enterpriseId}>
+                      <Link href={`/osta/enterprises/${r.enterpriseId}?tab=billing`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50">
+                        <span className="w-10 shrink-0 text-center leading-tight">
+                          <span className="block font-mono text-[10px] text-muted-foreground">{fmtMonth(r.date)}</span>
+                          <span className="block text-lg font-bold tabular-nums">{fmtDay(r.date)}</span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{r.enterpriseName}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {r.state === "GRACE"
+                              ? "Access locks at end of grace"
+                              : r.monthlyPrice
+                                ? `${r.currency} ${r.monthlyPrice.toLocaleString("en-US")} / month`
+                                : "Licence expires"}
+                          </span>
+                        </span>
+                        <StatusBadge label={r.state === "GRACE" ? "Grace" : "Active"} status={r.state} dot />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </WidgetReveal>
+
+          <WidgetReveal index={2}>
+            <Panel title="Support access" href="/osta/support-access" linkLabel="Request access">
+              {liveGrants.length === 0 ? (
+                <div className="border-t px-4 py-3"><EmptyState size="inline" icon={ShieldCheck} title="No live support sessions" /></div>
+              ) : (
+                <ul className="divide-y border-t">
+                  {liveGrants.map((g) => (
+                    <li key={g.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <StatusBadge label="Live" tone="info" dot />
+                      <span className="min-w-0 flex-1">
+                        <Link href={`/osta/enterprises/${g.enterpriseId}`} className="block truncate text-sm font-semibold hover:underline">{g.enterpriseName}</Link>
+                        <span className="block truncate text-xs text-muted-foreground">{timeLeft(g.expiresAt, now)}{g.reason ? ` · ${g.reason}` : ""}</span>
+                      </span>
+                      <Link href="/osta/support-access" className="text-xs text-primary hover:underline">Enter</Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </WidgetReveal>
+
+          <WidgetReveal index={3}>
+            <Panel title="Recent activity">
+              {activity.length === 0 ? (
+                <div className="border-t px-4 py-3"><EmptyState size="inline" icon={History} title="Nothing recorded yet" /></div>
+              ) : (
+                <ul className="divide-y border-t">
+                  {activity.map((a) => (
+                    <li key={a.id} className="flex gap-3 px-4 py-2.5">
+                      <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground tabular-nums">{fmtTime(a.createdAt, now)}</span>
+                      <span className="min-w-0 flex-1 text-[13px]">
+                        {a.userName && <b className="font-semibold">{a.userName} </b>}
+                        <span className="text-muted-foreground">{a.description}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </WidgetReveal>
         </div>
       </div>
-
-      <Card className="shadow-elevation-1">
-        <CardHeader>
-          <CardTitle className="text-base">Needs attention</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {needingAttention.length === 0 ? (
-            <EmptyState icon={ShieldCheck} title="No licenses in grace period or expired" />
-          ) : (
-            <div className="flex flex-col gap-1">
-              {needingAttention.map((e) => (
-                <a
-                  key={e.id}
-                  href={`/osta/enterprises/${e.id}`}
-                  className="flex items-center justify-between gap-3 rounded-none border-b px-2 py-2.5 last:border-0 hover:bg-muted/50"
-                >
-                  <span className="text-sm font-medium">{e.name}</span>
-                  <StatusBadge
-                    label={e.state === "GRACE" ? "Grace period" : "Expired"}
-                    status={e.state}
-                    dot
-                  />
-                </a>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

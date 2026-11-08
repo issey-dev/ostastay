@@ -38,6 +38,9 @@ Motion in the app is built on the `motion` package through ONE kit:
 
 - Lists (ListTable, every `TableBody`, `MobileCardList`): rows/cards POP IN ONE BY ONE on first load — 55 ms apart, 14px rise + slight scale, first 14 then the rest together (none past 30). Pure CSS: `.cascade` in globals.css, toggled by `useIntro()` for 1.6 s. Filter / page / refresh rows never animate; sorting never remounts. `<TableBody cascade={false}>` opts out. Containers that remount while data reloads are remembered per scope (module-level, 30 s) so a refetch does not replay it. Also wired into the Reservations card view, the four Front Desk card lists and Client Relations; any new raw card list should use `<FirstLoadFade hasItems>`.
 - Page transition: `src/app/e/[slug]/dashboard/template.tsx`, 180 ms fade + 6 px rise, no exit.
+  The Osta console has the same one (`src/app/osta/template.tsx`). Its Today page uses
+  `WidgetReveal` for the inbox and side panels, `StatTile` count-up, and the `.cascade`
+  first-load row pop (`useIntro`, scope `osta-today-inbox`) — an action's refresh never replays it.
 
 - Tape Chart and Availability grid: one 300 ms fade-in when the grid first appears (tw-animate
   `animate-in fade-in-0`, off under reduced motion). Bars do not animate in.

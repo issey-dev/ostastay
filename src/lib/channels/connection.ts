@@ -93,6 +93,19 @@ export const CONNECTION_STATUS = {
 
 export type ConnectionStatus = (typeof CONNECTION_STATUS)[keyof typeof CONNECTION_STATUS];
 
+// Who runs a connection (ChannelConnection.managedBy). OSTA: Uppsolut connected it from the
+// Osta console on the master Beds24 account. ENTERPRISE: the customer connected their own
+// account from their Hub. The Osta console sees an ENTERPRISE connection only as running /
+// not running and may not act on it (owner, 2026-11-07; DECISIONS.md).
+export const MANAGED_BY = { OSTA: "OSTA", ENTERPRISE: "ENTERPRISE" } as const;
+
+/** For the Osta console's per-connection routes: refuse a connection the enterprise runs. */
+export function assertOstaManaged(connection: { managedBy: string }) {
+  if (connection.managedBy !== MANAGED_BY.OSTA) {
+    throw new ForbiddenError("This connection is the enterprise's own: it is managed from their Hub, not the Osta console");
+  }
+}
+
 // The only shape ever sent to the browser. Deliberately has no token fields at all,
 // rather than masked ones — a field that cannot be serialised cannot be leaked by a
 // future careless spread.
@@ -161,10 +174,23 @@ export async function getPropertyConnection(propertyId: string): Promise<PublicC
 // The Osta console's cross-tenant shape: a PublicConnection plus which enterprise owns
 // it. Same no-token-fields guarantee — going through toPublicConnection is the point.
 export type PlatformConnection = PublicConnection & {
+  managedBy: typeof MANAGED_BY.OSTA;
   enterprise: { id: string; name: string; slug: string };
   property: { id: string; name: string; code: string };
   /** The Beds24 property id linked when the connection was created. */
   externalPropertyId: string | null;
+};
+
+/** An enterprise-run connection as the Osta console sees it: whether it runs, nothing more —
+ *  no error text, health times, credits, webhook or logs ever leave the server for it. */
+export type RestrictedPlatformConnection = {
+  id: string;
+  managedBy: typeof MANAGED_BY.ENTERPRISE;
+  provider: string;
+  name: string;
+  running: boolean;
+  enterprise: { id: string; name: string; slug: string };
+  property: { id: string; name: string; code: string };
 };
 
 /**
@@ -177,7 +203,7 @@ export type PlatformConnection = PublicConnection & {
  * already verified ctx.isInternal, exactly like the cross-tenant property list in
  * /api/osta/properties. Tenant-facing code uses getPropertyConnection() and never this.
  */
-export async function listAllConnections(): Promise<PlatformConnection[]> {
+export async function listAllConnections(): Promise<(PlatformConnection | RestrictedPlatformConnection)[]> {
   const rows = await prisma.channelConnection.findMany({
     include: {
       enterprise: { select: { id: true, name: true, slug: true } },
@@ -186,12 +212,25 @@ export async function listAllConnections(): Promise<PlatformConnection[]> {
     },
     orderBy: [{ enterprise: { name: "asc" } }, { property: { name: "asc" } }],
   });
-  return rows.map((r) => ({
-    ...toPublicConnection(r),
-    enterprise: r.enterprise,
-    property: r.property,
-    externalPropertyId: r.propertyLinks[0]?.externalPropertyId ?? null,
-  }));
+  return rows.map((r): PlatformConnection | RestrictedPlatformConnection =>
+    r.managedBy === MANAGED_BY.OSTA
+      ? {
+          ...toPublicConnection(r),
+          managedBy: MANAGED_BY.OSTA,
+          enterprise: r.enterprise,
+          property: r.property,
+          externalPropertyId: r.propertyLinks[0]?.externalPropertyId ?? null,
+        }
+      : {
+          id: r.id,
+          managedBy: MANAGED_BY.ENTERPRISE,
+          provider: r.provider,
+          name: r.name,
+          running: r.status === CONNECTION_STATUS.CONNECTED,
+          enterprise: r.enterprise,
+          property: r.property,
+        }
+  );
 }
 
 /**
@@ -215,8 +254,10 @@ export async function createConnection(params: {
   /** Which channel manager this connection talks to. Defaults to Beds24 — the only
    *  provider registered today — but every caller is free to name another once one exists. */
   provider?: string;
+  /** OSTA from the Osta console (master account); ENTERPRISE (default) from the Hub. */
+  managedBy?: (typeof MANAGED_BY)[keyof typeof MANAGED_BY];
 }): Promise<PublicConnection> {
-  const { propertyId, externalPropertyId, name, inviteCode, provider: providerId = DEFAULT_PROVIDER_ID } = params;
+  const { propertyId, externalPropertyId, name, inviteCode, provider: providerId = DEFAULT_PROVIDER_ID, managedBy = MANAGED_BY.ENTERPRISE } = params;
   const provider = getProvider(providerId);
 
   // Everything that could refuse the connection is checked BEFORE the invite code is
@@ -270,6 +311,7 @@ export async function createConnection(params: {
       propertyId,
       propertyLinks: { create: { propertyId, externalPropertyId, syncEnabled: false } },
       provider: provider.id,
+      managedBy,
       name,
       refreshToken: encryptSecret(tokens.refreshToken),
       accessToken: encryptSecret(tokens.accessToken || null),

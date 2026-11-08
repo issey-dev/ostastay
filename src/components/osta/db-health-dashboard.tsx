@@ -2,11 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SearchableSelect } from "@/components/ui/searchable-select"
-import { RefreshCw, AlertTriangle } from "@/components/icons"
+import { AlertTriangle } from "@/components/icons"
 import { InfoHint } from "@/components/ui/info-hint"
 import { StatTile } from "@/components/ui/stat-tile"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -93,14 +90,28 @@ function StatCard({ label, value, sub, alert }: { label: string; value: string; 
   return <StatTile label={label} value={value} footnote={sub} accent={alert ? "var(--destructive)" : undefined} />
 }
 
-export function DbHealthDashboard() {
+// The detail sections of the Osta Monitoring page (src/components/osta/monitoring/…):
+// "queries" (live in-memory query metrics), "api" (channel-manager API, Uppsolut-run
+// connections only), "jobs" and "storage". The page owns the enterprise / property scope
+// and the refresh, and passes them in; "" = everything.
+export type DbHealthView = "queries" | "api" | "jobs" | "storage"
+
+export function DbHealthDashboard({
+  view,
+  enterpriseId = "",
+  propertyId = "",
+  refreshKey = 0,
+}: {
+  view: DbHealthView
+  enterpriseId?: string
+  propertyId?: string
+  refreshKey?: number
+}) {
   const [data, setData] = useState<DbHealth | null>(null)
   const [loading, setLoading] = useState(true)
-  // Queries-tab filters. "" = all. Property list narrows to the chosen enterprise.
-  const [entFilter, setEntFilter] = useState("")
-  const [propFilter, setPropFilter] = useState("")
-  // API-tab enterprise filter, independent of the Queries tab's.
-  const [apiEntFilter, setApiEntFilter] = useState("")
+  const entFilter = enterpriseId
+  const propFilter = propertyId
+  const apiEntFilter = enterpriseId
 
   const fetchHealth = useCallback(async () => {
     setLoading(true)
@@ -112,7 +123,7 @@ export function DbHealthDashboard() {
     }
   }, [])
 
-  useEffect(() => { fetchHealth() }, [fetchHealth])
+  useEffect(() => { fetchHealth() }, [fetchHealth, refreshKey])
 
   const entName = useCallback(
     (id: string | null) => (id === null ? "(unauthenticated)" : data?.enterprises.find((e) => e.id === id)?.name ?? id.slice(0, 8)),
@@ -170,34 +181,11 @@ export function DbHealthDashboard() {
   if (loading && !data) return <InlineLoading lines={6} label="Loading database health" />
   if (!data) return <ErrorState title="Couldn't load database health" onRetry={fetchHealth} />
 
-  const entOptions = [
-    { label: "All enterprises", value: "" },
-    ...data.enterprises.map((e) => ({ label: e.type === "INTERNAL" ? `${e.name} (internal)` : e.name, value: e.id })),
-  ]
-  const propOptions = [
-    { label: "All properties", value: "" },
-    ...data.properties
-      .filter((p) => !entFilter || p.enterpriseId === entFilter)
-      .map((p) => ({ label: p.name, value: p.id })),
-  ]
-
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={fetchHealth} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
-      </div>
-
-      <Tabs defaultValue="storage">
-        <TabsList>
-          <TabsTrigger value="storage">Storage</TabsTrigger>
-          <TabsTrigger value="queries">Queries</TabsTrigger>
-          <TabsTrigger value="api">API & channels</TabsTrigger>
-        </TabsList>
-
         {/* ============================== STORAGE ============================== */}
-        <TabsContent value="storage" className="space-y-6 pt-4">
+        {view === "storage" && (
+        <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 max-sm:grid-cols-1">
             {/* Development runs SQLite and production PostgreSQL, so every card below
                 states which engine it is describing rather than implying one. */}
@@ -317,36 +305,17 @@ export function DbHealthDashboard() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+        )}
 
         {/* ============================== QUERIES ============================== */}
-        <TabsContent value="queries" className="space-y-6 pt-4">
+        {view === "queries" && (
+        <div className="space-y-6">
           <div className="rounded-md border border-warning/30 bg-warning-muted p-3 text-sm text-warning flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>
               Query metrics reflect <strong>this server instance only</strong>, since the last restart — {data.tenantOpsBufferInfo.eventCount} of {data.tenantOpsBufferInfo.bufferCapacity} operation slots and {data.bufferInfo.queryEventCount} of {data.bufferInfo.bufferCapacity} SQL slots used. Not a historical trend.
             </span>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 max-w-2xl">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Enterprise</p>
-              <SearchableSelect
-                value={entFilter}
-                onChange={(v) => { setEntFilter(v); setPropFilter("") }}
-                placeholder="All enterprises"
-                options={entOptions}
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Property</p>
-              <SearchableSelect
-                value={propFilter}
-                onChange={setPropFilter}
-                placeholder="All properties"
-                options={propOptions}
-              />
-            </div>
           </div>
 
           <Card>
@@ -497,25 +466,17 @@ export function DbHealthDashboard() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
+        </div>
+        )}
 
         {/* ============================ API & CHANNELS ============================ */}
-        <TabsContent value="api" className="space-y-6 pt-4">
+        {view === "api" && (
+        <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 max-sm:grid-cols-1">
             <StatCard label={`Channel calls (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.calls.toLocaleString()} sub={data.channelApi.truncated ? "Truncated at 5,000 — real total is higher" : undefined} />
             <StatCard label={`Failures (${data.channelApi.windowDays}d)`} value={data.channelApi.totals.failures.toLocaleString()} alert={data.channelApi.totals.failures > 0} />
             <StatCard label="Calls (24h)" value={data.channelApi.totals.calls24h.toLocaleString()} />
             <StatCard label="Failures (24h)" value={data.channelApi.totals.failures24h.toLocaleString()} alert={data.channelApi.totals.failures24h > 0} />
-          </div>
-
-          <div className="max-w-sm">
-            <p className="text-xs text-muted-foreground mb-1">Enterprise</p>
-            <SearchableSelect
-              value={apiEntFilter}
-              onChange={setApiEntFilter}
-              placeholder="All enterprises"
-              options={entOptions}
-            />
           </div>
 
           <Card>
@@ -559,6 +520,12 @@ export function DbHealthDashboard() {
             </CardContent>
           </Card>
 
+        </div>
+        )}
+
+        {/* ============================== JOBS ============================== */}
+        {view === "jobs" && (
+        <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -604,8 +571,12 @@ export function DbHealthDashboard() {
               )}
             </CardContent>
           </Card>
+        </div>
+        )}
 
-          {data.channelApi.recentFailures.length > 0 && (
+        {view === "api" && data.channelApi.recentFailures.length > 0 && (
+        <div className="space-y-6">
+          {(
             <Card>
               <CardHeader><CardTitle className="text-lg">Recent channel failures</CardTitle></CardHeader>
               <CardContent className="flex flex-col gap-2">
@@ -624,8 +595,8 @@ export function DbHealthDashboard() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+        )}
     </div>
   )
 }

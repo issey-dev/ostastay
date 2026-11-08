@@ -7,15 +7,13 @@ import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
 import { OstaSidebarNav } from "@/components/osta-sidebar-nav"
+import { getOstaNavCounts } from "@/lib/osta/attention"
 import Link from "next/link"
 
 // The Osta platform-admin console's sidebar. Its item list and active state live in the
@@ -29,6 +27,8 @@ export async function OstaSidebar() {
   // A user may hold several roles; the chrome shows them joined rather than
   // picking one arbitrarily.
   const roleName = user?.roles.map((ur) => ur.role.name).join(", ") ?? ""
+  // What is waiting on each page, shown as counts on the nav items.
+  const counts = ctx ? await getOstaNavCounts() : null
 
   return (
     <Sidebar collapsible="icon">
@@ -45,13 +45,8 @@ export async function OstaSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Osta</SidebarGroupLabel>
-          <SidebarGroupContent>
-            {/* Client half: it needs the pathname for the active item. */}
-            <OstaSidebarNav />
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Client half: it needs the pathname for the active item. */}
+        <OstaSidebarNav counts={counts} />
       </SidebarContent>
       <div className="mt-auto p-4 border-t border-sidebar-border">
         <SidebarMenu>
