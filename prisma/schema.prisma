@@ -54,6 +54,7 @@ model Enterprise {
   emailLogs              EmailLog[]
 
   supportGrantsReceived SupportAccessGrant[] @relation("GrantTarget")
+  notifications         Notification[]
 }
 
 // Tier: STANDARD, PRO, MAX — governs maxProperties today; TierModuleAccess is a
@@ -307,15 +308,18 @@ model User {
   assignedMaintenance RoomMaintenance[] @relation("MaintenanceAssignedTo")
   resolvedMaintenance RoomMaintenance[] @relation("MaintenanceResolvedBy")
 
-  supportGrantsRequested   SupportAccessGrant[]  @relation("GrantRequestedBy")
-  supportGrantsApproved    SupportAccessGrant[]  @relation("GrantApprovedBy")
-  currencyExchangesCreated CurrencyExchange[]    @relation("CurrencyExchangeCreatedBy")
-  propertiesReviewed       Property[]            @relation("PropertyReviewedBy")
-  spaTherapistProfile      SpaTherapist?         @relation("SpaTherapistUser")
-  websiteApiKeysCreated    WebsiteApiKey[]       @relation("WebsiteApiKeyCreatedBy")
+  supportGrantsRequested   SupportAccessGrant[]     @relation("GrantRequestedBy")
+  supportGrantsApproved    SupportAccessGrant[]     @relation("GrantApprovedBy")
+  currencyExchangesCreated CurrencyExchange[]       @relation("CurrencyExchangeCreatedBy")
+  propertiesReviewed       Property[]               @relation("PropertyReviewedBy")
+  spaTherapistProfile      SpaTherapist?            @relation("SpaTherapistUser")
+  websiteApiKeysCreated    WebsiteApiKey[]          @relation("WebsiteApiKeyCreatedBy")
   // One per property this user has arranged — see UserDashboardLayout.
   dashboardLayouts         UserDashboardLayout[]
-  transportRepBookings     TransportBooking[]    @relation("TransportAirportRep")
+  transportRepBookings     TransportBooking[]       @relation("TransportAirportRep")
+  notifications            NotificationRecipient[]
+  pushSubscriptions        PushSubscription[]
+  notificationPrefs        NotificationPreference[]
 
   @@index([enterpriseId])
   @@index([propertyId])
@@ -1818,17 +1822,17 @@ model CurrencyExchange {
   shiftId    String
   shift      CashierShift @relation(fields: [shiftId], references: [id])
 
-  guestName    String?
+  guestName     String?
   // The in-house guest the exchange was done for, when the cashier linked one. Null for a
   // walk-in. A link only: it puts the guest's name and room on the receipt and the shift
   // list — nothing is posted to their folio.
   reservationId String?
   reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  fromCurrency String
-  toCurrency   String
-  rate         Float
-  amountFrom   Float
-  amountTo     Float
+  fromCurrency  String
+  toCurrency    String
+  rate          Float
+  amountFrom    Float
+  amountTo      Float
 
   // Assigned once, the first time a receipt is printed (via the property's
   // RECEIPT_NO PropertySequence) — never reallocated on reprint.
@@ -2426,16 +2430,16 @@ model GroupBlock {
   payeeProfileId String?
   payeeProfile   Profile? @relation("GroupBlockPayee", fields: [payeeProfileId], references: [upid])
 
-  reservations       Reservation[]
-  masterFolios       Folio[]
+  reservations               Reservation[]
+  masterFolios               Folio[]
   // The Posting Master reservation created for this block (see Reservation.isPostingMaster).
-  postingMasterReservationId String? @unique
+  postingMasterReservationId String?             @unique
   // Per-room-type rooms held for the block. totalRoomsHeld is kept in sync as the sum.
-  roomHolds          GroupBlockRoom[]
+  roomHolds                  GroupBlockRoom[]
   // A group-scoped eRegistration link: sent to the block's organizer (payeeProfile),
   // fanning out to every current pickup's own reservation-level slots.
-  eRegistrationLinks ERegistrationLink[]
-  transportBookings  TransportBooking[]
+  eRegistrationLinks         ERegistrationLink[]
+  transportBookings          TransportBooking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4605,4 +4609,86 @@ model TransportBooking {
   @@index([vesselId])
   @@index([rateId])
   @@index([propertyId, billingStatus])
+}
+
+// ── Notifications (see .agents/docs/NOTIFICATIONS_PLAN.md) ─────────────────────────────
+// One row per event; WHO gets it is a NotificationRecipient row each, fanned out when the
+// notification is created (so a later role change never rewrites history). Read state is
+// per recipient. Personal and global are the same shape: `scope` only records how it was
+// addressed.
+model Notification {
+  id              String     @id @default(uuid())
+  enterpriseId    String
+  enterprise      Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  // Null = enterprise-wide.
+  propertyId      String?
+  // A code from src/lib/notifications/types.ts (free string, like the rest of the schema).
+  type            String
+  severity        String     @default("INFO") // INFO | ACTION | URGENT
+  scope           String     @default("GLOBAL") // PERSONAL | GLOBAL
+  title           String
+  body            String?
+  // Same-origin path to open on click. Never an absolute URL.
+  url             String?
+  entityType      String?
+  entityId        String?
+  // Makes a producer safe to run twice (cron is at-least-once): one row per key.
+  dedupeKey       String?
+  createdByUserId String?
+  createdAt       DateTime   @default(now())
+
+  recipients NotificationRecipient[]
+
+  @@unique([enterpriseId, dedupeKey])
+  @@index([enterpriseId, createdAt])
+}
+
+model NotificationRecipient {
+  id             String       @id @default(uuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([notificationId, userId])
+  // The unread-count and the list queries.
+  @@index([userId, readAt, createdAt])
+}
+
+// One installed browser/phone that agreed to receive push notifications for a user. Tied to
+// the USER, not the session, so it survives a re-login; removed when the device signs out,
+// when the push service reports it gone (404/410), or when the user turns it off.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enterpriseId  String
+  // The push service URL for this device. Unique: re-subscribing the same device replaces it.
+  endpoint      String    @unique
+  // Browser-generated public key and auth secret; the auth secret is encrypted at rest.
+  p256dh        String
+  authEncrypted String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime?
+  // Consecutive failed sends; the row is dropped after a few.
+  failureCount  Int       @default(0)
+
+  @@index([userId])
+}
+
+// A person's choice, per kind of notification, about the bell and their phone. No row = the
+// default (both on). Muting never deletes anything already received. Types marked `locked`
+// in src/lib/notifications/types.ts ignore an in-app opt-out (security notices, announcements).
+model NotificationPreference {
+  id     String  @id @default(uuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   String
+  inApp  Boolean @default(true)
+  push   Boolean @default(true)
+
+  @@unique([userId, type])
 }

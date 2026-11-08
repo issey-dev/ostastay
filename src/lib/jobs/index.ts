@@ -1,3 +1,6 @@
+import { notifyChannelConnectionFailed } from "@/lib/notifications/producers";
+import { scanGroupCutoffs, scanOpenShifts, scanTransportAttention } from "@/lib/notifications/scans";
+import { pruneNotifications } from "@/lib/notifications/retention";
 import { prisma } from "@/lib/db";
 import { runScheduledAudits } from "@/lib/night-audit/scheduled";
 import { getProvider } from "@/lib/channels/providers/registry";
@@ -85,7 +88,7 @@ export const channelKeepAliveJob: Job = {
     // Alerting on "is currently failing" instead would re-send every sweep for as long as
     // the fault lasts, which is how an alert mailbox becomes one nobody reads. A
     // connection that was already ERROR is a known problem and stays silent.
-    const newlyFailed: { name: string; provider: string; error: string | null }[] = [];
+    const newlyFailed: { id: string; name: string; provider: string; error: string | null }[] = [];
 
     for (const c of due) {
       // testConnection records its own outcome on the connection and never throws — a
@@ -97,6 +100,7 @@ export const channelKeepAliveJob: Job = {
         failures.push(c.name);
         if (c.status === CONNECTION_STATUS.CONNECTED) {
           newlyFailed.push({
+            id: c.id,
             name: c.name,
             provider: c.provider,
             // Redacted again on the way out: lastError is short and operator-readable, but
@@ -108,6 +112,7 @@ export const channelKeepAliveJob: Job = {
     }
 
     if (newlyFailed.length > 0) {
+      for (const f of newlyFailed) await notifyChannelConnectionFailed({ enterpriseId, connectionId: f.id, connectionName: f.name });
       const enterprise = await prisma.enterprise.findUnique({
         where: { id: enterpriseId },
         select: { name: true },
@@ -356,6 +361,38 @@ const nightAuditScheduleJob: Job = {
   run: (enterpriseId) => runScheduledAudits(enterpriseId),
 };
 
+/**
+ * Alerts that come from the clock rather than from a click — a transfer that no longer fits
+ * its flight, a cashier shift left open, a group cut-off coming up — and the retention sweep
+ * for old notifications. Each alert has a dedupe key, so the frequent cron raises it once.
+ * A scan that fails must not stop the others, so each is isolated and reported.
+ */
+const notificationAlertsJob: Job = {
+  name: "notification-alerts",
+  description: "Raise time-based notifications and prune old ones",
+  async run(enterpriseId) {
+    const parts: string[] = [];
+    let total = 0;
+    const scans: [string, () => Promise<number>][] = [
+      ["transport", () => scanTransportAttention(enterpriseId)],
+      ["cashier shifts", () => scanOpenShifts(enterpriseId)],
+      ["group cut-offs", () => scanGroupCutoffs(enterpriseId)],
+    ];
+    for (const [label, scan] of scans) {
+      try {
+        const n = await scan();
+        total += n;
+        if (n > 0) parts.push(`${n} ${label}`);
+      } catch (e) {
+        parts.push(`${label} scan failed: ${e instanceof Error ? e.message : "unknown"}`);
+      }
+    }
+    const pruned = await pruneNotifications().catch(() => ({ recipients: 0, notifications: 0 }));
+    if (pruned.notifications > 0) parts.push(`${pruned.notifications} old notifications removed`);
+    return { itemsProcessed: total, summary: parts.length ? parts.join(", ") : "Nothing to raise" };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
@@ -366,6 +403,7 @@ export const JOBS: readonly Job[] = [
   bookingApiWebhooksJob,
   bookingApiHoldSweepJob,
   nightAuditScheduleJob,
+  notificationAlertsJob,
 ];
 
 export function findJob(name: string): Job | undefined {

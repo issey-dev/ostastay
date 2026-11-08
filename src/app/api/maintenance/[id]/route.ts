@@ -4,6 +4,7 @@ import { requireSession, requirePermission, assertPropertyAccess, toErrorRespons
 import { logActivity } from "@/lib/activity-log";
 import { resolveBusinessDate } from "@/lib/business-date";
 import { isValidMaintenanceStatus, isValidMaintenancePriority } from "@/lib/maintenance";
+import { notifyTaskAssigned } from "@/lib/notifications/producers";
 
 // The one maintenance update endpoint (the old body-based PATCH on the
 // collection route is gone) — accepts any subset of status / priority /
@@ -76,6 +77,18 @@ export async function PATCH(
       data: dataToUpdate,
       include: { room: true, assignedTo: true }
     });
+
+    // Tell the person who was just given the task (not when it is unchanged or cleared).
+    if (typeof assignedToId === "string" && assignedToId !== existing.assignedToId) {
+      await notifyTaskAssigned({
+        enterpriseId: ctx.enterpriseId,
+        propertyId: existing.room.propertyId,
+        assigneeId: assignedToId,
+        actorUserId: ctx.userId,
+        taskId: id,
+        roomNumber: order.room.roomNumber,
+      });
+    }
 
     // Resolving a ticket brings an out-of-order room back to service as DIRTY
     // (post-repair rooms need a housekeeping pass before sale).

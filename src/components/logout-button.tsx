@@ -1,5 +1,6 @@
 "use client"
 
+import { signOutCleanup } from "@/lib/notifications/push-client"
 import { LogOut } from "@/components/icons"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 
@@ -7,6 +8,7 @@ export function LogoutButton() {
   return (
     <SidebarMenuButton 
       onClick={async () => {
+        await signOutCleanup();
         await fetch("/api/auth/logout", { method: "POST" });
         window.location.href = "/login";
       }}

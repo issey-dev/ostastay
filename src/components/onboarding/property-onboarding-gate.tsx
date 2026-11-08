@@ -1,5 +1,6 @@
 "use client"
 
+import { signOutCleanup } from "@/lib/notifications/push-client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { Building2, ClipboardCheck, ShieldAlert, Plus, LogOut } from "@/components/icons"
@@ -170,6 +171,7 @@ export function PropertyOnboardingGate({
             size="sm"
             className="text-muted-foreground"
             onClick={async () => {
+              await signOutCleanup()
               await fetch("/api/auth/logout", { method: "POST" })
               window.location.href = "/login"
             }}
