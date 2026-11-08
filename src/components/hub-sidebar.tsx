@@ -90,7 +90,7 @@ export async function HubSidebar({ slug }: { slug: string }) {
 
       </SidebarContent>
 
-      <div className="mt-auto p-4 border-t border-sidebar-border">
+      <div className="mt-auto p-4 border-t border-sidebar-border group-data-[collapsible=icon]:p-2">
         <SidebarMenu>
           <HubUserMenu
             slug={slug}

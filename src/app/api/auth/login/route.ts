@@ -6,6 +6,9 @@ import { lockoutRemainingSeconds, recordLoginFailure, recordLoginSuccess } from 
 import { logAuthActivity } from "@/lib/activity-log";
 import { getOstaEnterpriseId } from "@/lib/scope";
 import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
+import { deviceLabel, isNewDevice } from "@/lib/notifications/device";
+import { notifyNewDeviceSignIn } from "@/lib/notifications/producers";
+import { inviteToInstall } from "@/lib/notifications/install-offer";
 
 const GENERIC_ERROR = "Incorrect enterprise code, email, or password.";
 
@@ -133,6 +136,15 @@ export async function POST(request: Request) {
     }
 
     recordLoginSuccess(email);
+    // Compared with the account's earlier sessions BEFORE this one is recorded.
+    const userAgent = request.headers.get("user-agent");
+    const priorSessions = await prisma.session.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: { userAgent: true },
+    });
+    const newDevice = isNewDevice(priorSessions.map((s) => s.userAgent), userAgent);
     // Session metadata for the Hub's active-sessions list. Both headers are
     // client-controlled and are recorded for recognition only — never for auth.
     await createSession(user.id, {
@@ -141,8 +153,11 @@ export async function POST(request: Request) {
         request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
         request.headers.get("x-real-ip") ||
         null,
-      userAgent: request.headers.get("user-agent"),
+      userAgent,
     });
+    if (newDevice) await notifyNewDeviceSignIn({ enterpriseId: user.enterpriseId, userId: user.id, device: deviceLabel(userAgent) });
+    // The one-time "install the app" invitation (once per person, ever; see install-offer.ts).
+    await inviteToInstall({ enterpriseId: user.enterpriseId, userId: user.id });
     await logAuthActivity({
       action: "LOGIN",
       email,

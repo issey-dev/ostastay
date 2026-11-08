@@ -1,3 +1,4 @@
+import { notifyBusinessDateRolled } from "@/lib/notifications/producers"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePropertySetup, requirePermission, toErrorResponse } from "@/lib/scope"
@@ -42,6 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       entityType: "Property",
       entityId: id,
     })
+    await notifyBusinessDateRolled({ enterpriseId: ctx.enterpriseId, propertyId: id, newDate: target, actorUserId: ctx.userId })
     return NextResponse.json(result)
   } catch (error) {
     const { status, body } = toErrorResponse(error)

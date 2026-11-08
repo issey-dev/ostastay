@@ -1,4 +1,14 @@
-# Notifications — plan (drafted 2026-11-07, status: PLAN ONLY, nothing built)
+# Notifications — plan (drafted 2026-11-07)
+
+> **Install prompt (owner, 2026-11-07):** the floating "Install" card was removed. The invitation is a one-time INSTALL_APP notification (personal, INFO, dedupe key per user, sent at sign-in); `Install app` shows in the Account dialog only after it was read (`/api/notifications/install-offer`). `beforeinstallprompt` is kept by `InstallCapture` (root layout) in `src/lib/pwa/install-store.ts` until the person asks.
+
+> **Status 2026-11-07 (8.10.0, PR #93):** N0, N1, N2 N3 are BUILT (plus the four clock-based alerts). N0: manifest, push-only service worker,
+> install prompt. N1: `Notification`/`NotificationRecipient` tables, `src/lib/notifications/`
+> (catalogue, audience by permission, `notify()` with dedupe, producers), `/api/notifications`
+> (list, mark read), the bell in both headers, five producers (business date rolled, Night Audit
+> failed, channel booking received/failed, channel connection failed). N2 (push): `PushSubscription` table, `src/lib/notifications/push.ts` (VAPID via `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`; off when unset), `/api/notifications/push` (config, register, forget), the bell's phone toggle, `signOutCleanup()` on every sign-out path (incl. idle/EOD forced ones), sent after commit for ACTION/URGENT only. **Deviation from section 6.3:** no outbox/retry job — push is best-effort, a failing device is counted and dropped after 5 failures (410/404 at once); the bell is the source of truth. N3: `NotificationPreference` (bell/phone per kind; `locked` kinds ignore a bell opt-out), the full page `/dashboard/notifications` and `/hub/notifications` (Inbox + Settings), Hub Announcements (`/api/announcements`, `announcements.ts`, read counts), personal notifications (`audience.userIds`), and kinds TASK_ASSIGNED (maintenance), NEW_DEVICE_SIGN_IN (browser family + OS vs earlier sessions), SUPPORT_SESSION_OPENED, ACTIVITY_BOOKING_RECEIVED (website excursion/spa). No PASSWORD_CHANGED kind: the only password change is the first-login temporary-password replacement. Also built: ROOMS_ASSIGNED (housekeeping PATCH, one notice per assignment batch), and the job `notification-alerts` (`src/lib/notifications/scans.ts`: TRANSPORT_ATTENTION for the next 2 days via `listBookings({attentionOnly})` deduped on booking+codes+flightAt, CASHIER_SHIFT_OPEN after 16 h to the cashier and CASHIERING-update users, GROUP_CUTOFF today/tomorrow with rooms unpicked) plus `retention.ts` (read 90 d, all 180 d, orphans 1 d). NOT built (N4 ideas): City Ledger payment-blocked alert (it already blocks in the user's face), reminders, quiet hours, email digest, per-property defaults in the Hub. Older text follows. (Superseded: the full
+> `/notifications` page (the bell has "Show older" instead), preferences, push (N2), the rest of
+> section 4's catalogue (N3), quiet hours (N4). **Production needs the three VAPID_* variables added to the VPS `.env`** (`npx web-push generate-vapid-keys`); until then the phone toggle is hidden. Setup/Operations were NOT moved: both were already in the Account menu.
 
 > Owner ask: replace the header's **Setup** button with a **notification bell**; have personal and
 > global notifications; and, because staff will install the app as a PWA, deliver them as **phone
@@ -9,7 +19,7 @@
 
 | Area | State |
 |---|---|
-| Header | `src/app/e/[slug]/dashboard/layout.tsx` → `CommandPaletteTrigger`, `HeaderBusinessDate`, `HeaderSetupLink` (only for `hasHubAccess`, hidden below `md`), `ThemeToggle`. The bell replaces `HeaderSetupLink` in `src/components/ui/dashboard-header.tsx`. There is no "Operations" button in the header today (the Operations dashboard is `operations-dashboard.tsx`) — **OWNER: did you mean something else?** |
+| Header | `src/app/e/[slug]/dashboard/layout.tsx` → `CommandPaletteTrigger`, `HeaderBusinessDate`, `HeaderSetupLink` (only for `hasHubAccess`, hidden below `md`), `ThemeToggle`. The bell replaces `HeaderSetupLink` in `src/components/ui/dashboard-header.tsx`. The **Hub** header (`src/app/e/[slug]/hub/layout.tsx`) has the mirror button, **Operations** (the way back to the dashboard). Owner confirmed 2026-11-07: the bell appears in **both** headers, replacing Setup and Operations. |
 | Notification model / UI | None. Only transient toasts (`src/lib/toast.ts`) and per-screen "needs attention" (`src/lib/transport/attention.ts`, computed live, never stored). |
 | PWA | `public/site.webmanifest` (name, icons, `display: standalone`, theme colour) and apple-touch-icon. **No service worker, no `start_url`/`scope`/`id`, no push.** |
 | Background work | No scheduler in-process: an **external cron calls `/api/jobs/run`**; jobs live in `src/lib/jobs/index.ts` (idempotent, locked, at-least-once). |
@@ -138,6 +148,8 @@ announcements, security notices.
 | **Browser tab / app icon** | `navigator.setAppBadge(unread)` in the installed PWA; tab title prefix `(3)` in the browser. |
 | **Phone push** | The same notification, delivered by Web Push to every installed device the user opted in on (§6). |
 | **Email** | Not a channel in v1. Only URGENT system mails that exist today (channel alerts) stay as they are. **OWNER** may add a digest later. |
+
+**Where do Setup and Operations go?** (Owner confirmed the bell replaces both; the destinations below are my proposal.) Operations (Hub → dashboard) takes the same three places, mirrored: account menu, Ctrl K, bell footer.
 
 **Where does Setup go?** It must not disappear — Hub access is how admins configure everything.
 Proposed: (1) an entry in the **account menu / sidebar footer** ("Setup (Hub)"), (2) an action in
@@ -324,6 +336,8 @@ ship first and independently.
 | Push service outage | Bell is the source of truth; push is best-effort; failures recorded, never block the action. |
 
 ## 12. Open questions for the owner (answer before N1)
+
+**Answered 2026-11-07:** Q1 (Operations is the Hub header's button; bell goes in both headers) and Q2 (see N-6/N-7 below). Q3-Q8 carry a default; building proceeds on the defaults unless the owner objects.
 1. **"Setup / Operations"** — the header shows only *Setup*. Is *Operations* a link you expect there
    (or the Operations dashboard)? Is moving Setup into the account menu + command palette fine?
 2. Who should receive **Night Audit failed** and **channel booking** alerts by default — a job
@@ -340,4 +354,7 @@ ship first and independently.
 - N-2 (proposed): Web Push via VAPID + hand-written service worker; no offline caching; no `next-pwa`.
 - N-3 (proposed): outbox + the existing cron job for delivery, same shape as Booking API webhooks.
 - N-4 (proposed): no polling — focus refresh + push `postMessage`.
+- N-6 (owner, 2026-11-07): **business date rolled** is sent to **all users of that property**.
+- N-7 (owner, 2026-11-07): **any failure** (Night Audit, channel, jobs…) goes to users who **have access to that module** — recipients resolved by permission, not by role name or job function.
+- N-8 (owner, 2026-11-07): the bell lives in the dashboard header **and** the Hub header (Hub: enterprise- and property-scoped items; same list component).
 - N-5 (proposed): lock-screen text is privacy-safe; subscription is removed at sign-out.

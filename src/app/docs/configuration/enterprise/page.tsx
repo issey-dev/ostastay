@@ -21,6 +21,7 @@ export default function EnterpriseSetup() {
           ["Email & SFTP", "The mail account guest emails are sent from.", <a key="e" href="/docs/configuration/enterprise/email">Email & SFTP</a>],
           ["Booking API Keys", "Keys for your own website to show availability and take bookings.", <a key="b" href="/docs/configuration/enterprise/booking-api">Booking API keys</a>],
           ["Support Access", "Approving Uppsolut support when they need to look at your data.", <a key="a" href="/docs/configuration/enterprise/security#support-access">Sessions & support access</a>],
+          ["Announcements", "Send a message to everyone, or to one property, in the notification bell.", <a key="n" href="/docs/configuration/enterprise/announcements">Announcements</a>],
           ["Guest Lists", "Nationalities, titles, VIP levels and other guest-profile lists.", <a key="g" href="/docs/configuration/enterprise/guest-lists">Guest lists</a>],
         ]}
       />

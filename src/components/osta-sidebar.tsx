@@ -48,10 +48,10 @@ export async function OstaSidebar() {
         {/* Client half: it needs the pathname for the active item. */}
         <OstaSidebarNav counts={counts} />
       </SidebarContent>
-      <div className="mt-auto p-4 border-t border-sidebar-border">
+      <div className="mt-auto p-4 border-t border-sidebar-border group-data-[collapsible=icon]:p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="h-auto py-2" tooltip={name}>
+            <SidebarMenuButton className="h-auto py-2 group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:justify-center" tooltip={name}>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
                 {initials(name) || "U"}
               </span>

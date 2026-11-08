@@ -71,6 +71,7 @@ import {
   MoonOutline,
   MoreOutline,
   Notification1Outline,
+  NotificationOutline,
   NotificationBingOutline,
   PeopleOutline,
   PercentageSquareOutline,
@@ -133,6 +134,9 @@ export const ArrowUp = outline(ArrowUp2Outline)
 export const Ban = outline(Forbidden2Outline)
 export const BarChart3 = outline(Chart2Outline)
 export const Bell = outline(Notification1Outline)
+// The real bell glyph, for the notification system. `Bell` above is Iconsax "notification-1",
+// which draws as a rounded square and is kept as is for the screens already using it.
+export const NotificationBell = outline(NotificationOutline)
 export const BellDot = outline(NotificationBingOutline)
 export const Boxes = outline(Box1Outline)
 export const Briefcase = outline(BriefcaseOutline)

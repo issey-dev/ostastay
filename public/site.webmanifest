@@ -1,6 +1,10 @@
 {
+  "id": "/",
   "name": "Uppsolut Stay",
   "short_name": "Uppsolut Stay",
+  "description": "Property management for guesthouses and resorts",
+  "start_url": "/dashboard",
+  "scope": "/",
   "icons": [
     { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" },
@@ -8,5 +12,10 @@
   ],
   "theme_color": "#8B0000",
   "background_color": "#0D0F11",
-  "display": "standalone"
+  "display": "standalone",
+  "orientation": "any",
+  "shortcuts": [
+    { "name": "Front Desk", "url": "/dashboard/front-office", "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }] },
+    { "name": "Reservations", "url": "/dashboard/reservations", "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }] }
+  ]
 }

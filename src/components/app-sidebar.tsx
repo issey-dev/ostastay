@@ -93,7 +93,7 @@ export async function AppSidebar() {
       <SidebarContent>
         <AppSidebarNav allowedModules={allowedModules} enterprisePrefix={enterprisePrefix} />
       </SidebarContent>
-      <div className="mt-auto p-4 border-t border-sidebar-border">
+      <div className="mt-auto p-4 border-t border-sidebar-border group-data-[collapsible=icon]:p-2">
         <SidebarMenu>
           <SidebarUserMenu
             name={name}

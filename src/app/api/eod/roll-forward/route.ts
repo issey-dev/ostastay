@@ -1,3 +1,4 @@
+import { notifyBusinessDateRolled } from "@/lib/notifications/producers"
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -114,6 +115,8 @@ export async function POST(request: Request) {
       entityId: propertyId,
       description: `Rolled the business date forward ${preview.days} day${preview.days > 1 ? "s" : ""}, ${preview.from} → ${preview.to}, without End-of-Day (closed period)`,
     });
+
+    await notifyBusinessDateRolled({ enterpriseId: ctx.enterpriseId, propertyId, newDate: target, actorUserId: ctx.userId });
 
     return NextResponse.json({ ok: true, from: preview.from, to: preview.to, days: preview.days });
   } catch (error) {
