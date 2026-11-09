@@ -17,6 +17,13 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.13.5",
+    date: "2026-11-09",
+    fixed: [
+      "The platform console's Monitoring page no longer fills up with repeated notification errors. The scheduled checks that run every 15 minutes were logging an error each time they found an alert had already been sent; no alert was ever lost or sent twice, but the page made it look like something was broken.",
+    ],
+  },
+  {
     version: "8.13.4",
     date: "2026-11-09",
     highlights: "Phones get a proper layout for Transportation, Excursions, Spa, Cashiering and Housekeeping, nothing on a phone scrolls sideways any more, the platform console works on a phone, and notifications open as a sheet from the bottom of the screen.",

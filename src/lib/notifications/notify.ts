@@ -40,6 +40,17 @@ export function safeUrl(url: string | undefined): string | null {
 
 export async function notify(input: NotifyInput): Promise<string | null> {
   try {
+    // Scans re-run every few minutes with the same key. Look first, so the normal "already
+    // raised" case is not a failed INSERT: Prisma's engine logs every failed query as an
+    // error, which filled the Osta monitoring page with P2002 noise. The P2002 catch below
+    // still covers two runs racing past this check.
+    if (input.dedupeKey) {
+      const existing = await prisma.notification.findFirst({
+        where: { enterpriseId: input.enterpriseId, dedupeKey: input.dedupeKey },
+        select: { id: true },
+      })
+      if (existing) return null
+    }
     const personal = input.audience.userIds !== undefined
     const wanted = personal
       ? (
