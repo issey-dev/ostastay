@@ -17,6 +17,13 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.13.6",
+    date: "2026-11-10",
+    fixed: [
+      "Opening a window (a dialog) from a button, or a second window from inside one, now moves keyboard focus into it cleanly, and closing it puts you back on the button you used. Screen readers no longer read the page behind an open window.",
+    ],
+  },
+  {
     version: "8.13.5",
     date: "2026-11-09",
     improved: [
