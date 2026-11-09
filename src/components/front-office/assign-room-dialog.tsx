@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -37,6 +38,7 @@ type FormValues = z.infer<typeof schema>
 export function AssignRoomDialog({
   isOpen, onClose, reservationId, assignmentId, roomTypeId, roomTypeName, checkInDate, checkOutDate, propertyId, onAssigned,
 }: AssignRoomDialogProps) {
+  const { slug } = useParams<{ slug: string }>()
   const [availableRooms, setAvailableRooms] = useState<{ id: string; roomNumber: string }[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -92,6 +94,17 @@ export function AssignRoomDialog({
             </DialogHeader>
 
             <div className="grid gap-4 py-4">
+              {/* No room line = no room type or rate: nothing to assign from. Send them to the
+                  booking to choose a room & rate first (owner, 2026-11-09). */}
+              {(!assignmentId || !roomTypeId) && (
+                <div className="space-y-3 rounded-lg border border-warning/40 bg-warning-muted p-4 text-sm">
+                  <p className="font-medium text-warning">This booking has no room type or rate yet.</p>
+                  <p className="text-muted-foreground">Choose a room type and rate on the booking first, then assign the room.</p>
+                  <Button type="button" onClick={() => (window.location.href = `/e/${slug}/dashboard/reservations/${reservationId}/edit`)}>
+                    Choose room &amp; rate
+                  </Button>
+                </div>
+              )}
               {roomTypeName && (
                 <div className="grid gap-2">
                   <Label>Room type</Label>

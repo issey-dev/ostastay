@@ -12,6 +12,7 @@ import { toast } from "@/lib/toast"
 import { apiError } from "@/lib/api-error"
 import { useConfirm } from "@/components/providers/confirm-provider"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { OptionSelect } from "@/components/ui/option-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import {
@@ -228,7 +229,16 @@ export function DropdownsManager({
               those into 4+ rows before any content was visible on a phone. A single
               horizontally-scrollable row keeps every tab reachable without pushing the
               list below the fold. */}
-          <div className="overflow-x-auto">
+          {/* Phones: a dropdown of the categories — nothing scrolls sideways (owner,
+              2026-11-08). Tablet and desktop keep the single tab row. */}
+          <OptionSelect
+            className="w-full md:hidden"
+            aria-label="List"
+            value={category}
+            onChange={(v) => v && setCategory(v)}
+            options={categories.map((cat) => ({ value: cat.code, label: cat.label }))}
+          />
+          <div className="overflow-x-auto max-md:hidden">
             <TabsList className="h-auto w-max flex-nowrap">
               {categories.map(cat => (
                 <TabsTrigger key={cat.code} value={cat.code} className="shrink-0 grow-0">{cat.label}</TabsTrigger>

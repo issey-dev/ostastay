@@ -16,7 +16,7 @@ export default function DeskGuide() {
         The tabs follow the guest&apos;s journey: <strong>Arrivals</strong>, <strong>In-House</strong>, <strong>Room moves</strong> and{" "}
         <strong>Departures</strong>, and the tiles above them show the same four numbers in the same order. On a wide screen a switch at
         the right of the search box changes the list between a <strong>table</strong> and <strong>cards</strong>; the choice is
-        remembered on that computer. Phones always show cards.
+        remembered on that computer. Phones always show cards, and skip the tiles: the four tabs carry the same counts.
       </p>
       <p>Each row or card shows the two buttons you reach for in that tab, and everything else sits behind the <strong>…</strong> menu:</p>
       <Table
@@ -34,7 +34,13 @@ export default function DeskGuide() {
       </p>
       <p>
         <strong>Check in</strong> opens the check-in steps. If the booking has no room yet, the button reads <strong>Assign &amp; check in</strong> and the first
-        step is choosing a room.
+        step is choosing a room. If the booking has no room type or rate either, that step says so and offers <strong>Choose room &amp; rate</strong>,
+        which opens the booking to pick them; then come back and check the guest in.
+      </p>
+      <p>
+        <strong>The folio on a phone:</strong> the header with the close button stays at the top while you scroll, and{" "}
+        <strong>Post charge</strong> and <strong>Post payment</strong> are pinned at the bottom of the screen. Each opens its form as a sheet from the
+        bottom; posting closes it.
       </p>
       <p>
         <strong>Auto-Assign</strong> (a button on the Arrivals tab, and under <strong>More</strong> at the top of Reservations, next to Tape Chart) gives rooms to every booking that has none. It first shows a

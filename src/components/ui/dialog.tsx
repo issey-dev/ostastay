@@ -125,7 +125,9 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2"
+                // z-20: above the phone sheet's sticky header (bg-popover, z-10), which otherwise
+                // painted over it and left a sliver of the button showing (owner, 2026-11-09).
+                className="absolute top-2 right-2 z-20"
                 size="icon-sm"
               />
             }

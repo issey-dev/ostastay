@@ -266,8 +266,22 @@ Rough size: Phase 1 is the largest single change set but mostly in `src/componen
 - **Shell:** `<main>` is `overflow-x-clip` + `min-h-dvh` below `md` (3 shells); viewport
   `interactiveWidget: resizes-content`, `viewportFit: cover`, safe-area body padding; phone
   header shows the business date; toasts bottom-centre on phones; the phone menu closes on
-  navigation; **bottom nav** (`mobile-bottom-nav.tsx`, dashboard only, 4 role-ordered slots +
-  More, `--bottom-nav-offset` lifts other bottom-pinned UI).
+  navigation; **bottom nav** (`mobile-bottom-nav.tsx`, dashboard, 4 role-ordered slots +
+  More, `--bottom-nav-offset` lifts other bottom-pinned UI). **Osta console too since 2026-11-08**
+  (owner): `osta-mobile-bottom-nav.tsx` — Today, Enterprises, Billing, Channels + More (opens the
+  sidebar), sidebar counts as icon badges, a dot on More when a page not in the bar has something
+  waiting; the phone header drops the SidebarTrigger and + New and gains a search icon. The Hub
+  still has no bottom nav.
+- **No sideways scrolling on phones (owner, 2026-11-08, PWA released).** Shared pieces:
+  `ui/mobile-filter-sheet.tsx` (a Filters button → bottom sheet with Clear all + "Show N …") and
+  `ui/mobile-week-strip.tsx` (month label, prev/next week, Today, 7 day cells with a count). Tab rows
+  on phones: full-width grid (`max-md:grid max-md:grid-cols-N max-md:h-auto!` — the `!` beats the
+  `pointer-coarse:data-horizontal:h-11` height on touch screens), a segmented switch, or a dropdown.
+  Check with a 375px pass that also lists elements inside `overflow-x: auto` that scroll.
+- **Built-in phone rules (2026-11-09):** `PageHeader` keeps title + actions on one row (h-9 buttons;
+  `phoneActionsBelow` for filter-type actions); `TabsList` (horizontal) becomes a grid of ≤4 per row;
+  bottom navs and `MobileActionBar` sit at `--z-banner` so card content (z-10 links) never paints over
+  them; dialog/sheet close buttons are z-20 above the sticky phone dialog header.
 - **`PageHeader`** (`ui/page-header.tsx`): actions wrap instead of clipping — Housekeeping,
   Maintenance; Cashiering and Group detail headers wrap too.
 - **Pickers:** `DateRangePicker` shows one month on phones and has a unique id.

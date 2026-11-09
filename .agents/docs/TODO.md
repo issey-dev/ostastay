@@ -89,6 +89,25 @@ Phase 1 is the Today page + sidebar; the other screens are not built.
 - [ ] Split Controls into "Mail & usage" and "Settings" (invoice templates); add an Invoices
   ledger page under Billing (today invoices live only inside Licensing).
 - [ ] "Send reminder" for an overdue licence invoice — no email path for it exists yet.
+- [x] Phones (2026-11-08): bottom nav (`osta-mobile-bottom-nav.tsx`), search icon, no + New in the
+  phone header; every Osta page checked at 375px for overflow. Fixed: Monitoring chart (fixed
+  800px first render), Controls invoice preview (grid column sized to the A4 page), unwrapped
+  PLATFORM_SMTP_* names, Billing "Up next" and Channel Manager intro rows, Today KPIs two
+  across; phone cards for Billing payments / by-enterprise, Support Access and the workspace
+  Properties / Channel / Support tabs; "Today" no longer lights up on /osta/notifications.
+- [ ] Phones, left as is: tab strips (enterprise workspace, Monitoring, Enterprises filter) scroll
+  sideways — fine on a real phone (overlay scrollbars), only desktop emulation shows a bar.
+  Monitoring's Database tab tables still side-scroll inside their cards.
+- [x] Phones, operational pages (2026-11-08): Transportation (week calendar with ↓/↑ counts, full-width
+  Board / Airport rep / Dispatch and direction switches, search + `MobileFilterSheet`, time-first Board
+  rows, call button on Airport rep cards), Excursions + Spa schedules (`MobileWeekStrip` + day list),
+  Sales History rows, Cashiering tabs (4 across), Housekeeping (3×2 status tiles, compact room cards),
+  Hub list categories (dropdown), Inventory and Mapping tabs (grids). Every dashboard and Hub page
+  scanned at 375px (puppeteer: elements past the edge + sideways scrollers): none left except the
+  permission matrix (an A4 print document).
+- [ ] Phones, not done: bulk selection on the Transportation board stays desktop-only (no checkboxes on
+  phones, as before). The scan only sees what the demo data renders — pages with empty lists (e.g.
+  Monitoring tables, Cashiering breakdown) should be re-checked with real data.
 - [ ] Licence lifecycle actions (extend / renew) are links to Licensing, not inline: needs a
   small dialog reusing `/api/licenses` once the workspace exists.
 
@@ -102,6 +121,7 @@ before N1.
 - [x] N3 Preferences, full page, Hub announcements, 4 more kinds (task assigned, new device, support session, website excursion/spa booking)
 - [x] Housekeeping assignment, transport attention, open cashier shift, group cut-off alerts + retention sweep (job `notification-alerts`; make sure the external cron runs `/api/jobs/run` every few minutes, it already does for the other jobs)
 - [x] Osta console bell + platform notifications (8.12.0)
+- [x] Phones: the bell opens a swipe-down bottom sheet (All/Unread, day headings) instead of the cramped popover, in every shell (2026-11-08)
 - [ ] Leftovers: per-property default settings in the Hub, reminders ("remind me"), quiet hours, email digest; screenshots for the Announcements docs page (`docs:shots`)
 - [ ] N4 Optional: quiet hours, email digest, SSE, reminders
 
@@ -3182,3 +3202,13 @@ Shipped as 8.9.0 (see DECISIONS 2026-11-07 "Keyboard-first front desk"). Still o
 - [ ] Docs screenshots of the cheat sheet / palette actions are not in the guide yet
   (`scripts/docs-shots.config.ts`); the guide is text + key tables only.
 - [ ] Parked by the owner: role-based landing page (Housekeeping → task sheet, Cashier → open shift).
+
+## Phone consistency pass (2026-11-09) — DONE in PR #101
+- [x] Icons: chevrons, plain close ×, Sun 2 Linear; dialog/sheet close above the sticky phone header.
+- [x] PageHeader phone row (Housekeeping style), TabsList max-4-per-row, Front Desk counts strip off,
+  Dashboard title, bottom nav / action bar above card content (z-banner).
+- [x] Folio phone layout (sticky header + close, pinned post bar → bottom sheet).
+- [x] Booking form: nights badge in the Stay heading; invalid save names the problem and scrolls/focuses;
+  room-less bookings load with a room line spanning the stay; check-in / Assign room explain and link to
+  Choose room & rate.
+- [x] Bookings with no room line: local seed data only — production has none (owner, 2026-11-09).

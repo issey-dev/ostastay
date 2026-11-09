@@ -16,8 +16,8 @@ export const segmentSchema = z
     ratePlanId: z.string().min(1, "Pick a room & rate from the grid"),
     // Kept as the raw input string; numeric-ness checked here, parsed at submit.
     overrideRate: z.string(),
-    startDate: z.string().min(1, "Required"),
-    endDate: z.string().min(1, "Required"),
+    startDate: z.string().min(1, "Pick the date this room starts"),
+    endDate: z.string().min(1, "Pick the date this room ends"),
   })
   .superRefine((a, ctx) => {
     if (a.startDate && a.endDate && a.endDate <= a.startDate) {

@@ -2,7 +2,7 @@
 
 import { GoldStar } from "@/components/ui/gold-star"
 import { conflictPrompt, conflictFlags } from "@/lib/conflict-prompt"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useForm, type Resolver, type Path, type PathValue } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -85,7 +85,16 @@ type AllocationOption = {
 const money = (n: number) => `$${n.toFixed(2)}`
 
 const FieldError = ({ message }: { message?: string }) =>
-  message ? <p className="text-xs text-destructive font-medium">{message}</p> : null
+  message ? <p data-field-error className="text-xs text-destructive font-medium">{message}</p> : null
+
+/** Every error message in a react-hook-form errors tree, in field order. */
+function errorMessages(node: unknown, out: string[] = []): string[] {
+  if (!node || typeof node !== "object") return out
+  const msg = (node as { message?: unknown }).message
+  if (typeof msg === "string" && msg) out.push(msg)
+  for (const [k, v] of Object.entries(node)) if (k !== "ref" && k !== "message" && k !== "type") errorMessages(v, out)
+  return out
+}
 
 /** Phones only: the one-line stand-in for a folded secondary section ("+ Add remarks").
  *  `md:hidden` — desktop always shows the section itself. */
@@ -240,7 +249,14 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
             overrideRate: a.overrideRate?.toString() || "",
             startDate: a.startDate ? new Date(a.startDate).toISOString().split('T')[0] : "",
             endDate: a.endDate ? new Date(a.endDate).toISOString().split('T')[0] : "",
-          })) : [emptySegment()],
+          // A booking with NO room line (old/imported data) gets one spanning its stay, so
+          // picking a room & rate from the grid is enough to save. With empty segment dates
+          // the save failed on a hidden "Required" no one could find (owner, 2026-11-09).
+          })) : [{
+            ...emptySegment(),
+            startDate: res.checkInDate ? new Date(res.checkInDate).toISOString().split('T')[0] : "",
+            endDate: res.checkOutDate ? new Date(res.checkOutDate).toISOString().split('T')[0] : "",
+          }],
         })
         setActiveSegmentIndex(0)
       })
@@ -567,8 +583,24 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     }
   }
 
-  const onInvalid = () => {
-    toast.error("Fix the highlighted fields before saving")
+  // A failed save says WHAT is wrong and takes you there: the toast names the first problem
+  // (and how many there are), and the page scrolls to the first highlighted field and
+  // focuses its control. Before, it only said "fix the highlighted fields" — with the field
+  // off screen (or not shown at all) there was no way to find it (owner, 2026-11-09).
+  const formRef = useRef<HTMLFormElement>(null)
+  const onInvalid = (errs: unknown) => {
+    const messages = [...new Set(errorMessages(errs))]
+    toast.error(messages.length > 1 ? `Fix ${messages.length} fields before saving` : "Fix this before saving", {
+      description: messages[0] ?? "A required field is missing.",
+    })
+    // After the error messages render.
+    requestAnimationFrame(() => {
+      const first = formRef.current?.querySelector<HTMLElement>("[data-field-error]")
+      if (!first) return
+      const field = first.parentElement
+      field?.scrollIntoView({ behavior: "smooth", block: "center" })
+      field?.querySelector<HTMLElement>("input:not([type=hidden]), button, textarea, [tabindex]:not([tabindex='-1'])")?.focus({ preventScroll: true })
+    })
   }
 
   const segmentErrors = errors.assignments as
@@ -641,7 +673,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   }
 
   return (
-    <form onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 pb-16">
+    <form ref={formRef} onSubmit={formCtl.handleSubmit(onValid, onInvalid)} className="flex flex-col gap-6 pb-16">
       {/* Back sits ABOVE the title on a phone and beside it on a tablet — on a narrow
           screen a bordered icon button next to a wrapping title pushed the heading into
           a cramped column. Borderless (ghost) and labelled, so it reads as navigation
@@ -681,7 +713,17 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
 
           {/* ── 1 · Stay ──────────────────────────────────────────────── */}
           <section className="flex flex-col gap-4">
-            <h3 className="text-base font-semibold">1 · Stay</h3>
+            {/* The night count sits in the heading, not in the Departure label: there it
+                wrapped in the narrow column and pushed the date below Arrival's
+                (owner, 2026-11-09). */}
+            <h3 className="flex items-center gap-2 text-base font-semibold">
+              1 · Stay
+              {form.checkInDate && form.checkOutDate && form.checkOutDate > form.checkInDate && (
+                <span className="bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums">
+                  {nightsBetween(form.checkInDate, form.checkOutDate)} {nightsBetween(form.checkInDate, form.checkOutDate) === 1 ? "night" : "nights"}
+                </span>
+              )}
+            </h3>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-md:grid-cols-6 max-md:gap-3">
                 <div className="grid content-start gap-2 max-md:col-span-3">
                   <Label>Arrival <span className="text-destructive">*</span></Label>
@@ -700,14 +742,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   <FieldError message={shownError(errors.checkInDate?.message, "checkInDate")} />
                 </div>
                 <div className="grid content-start gap-2 max-md:col-span-3">
-                  <Label className="flex items-center gap-2">
-                    Departure <span className="text-destructive">*</span>
-                    {form.checkInDate && form.checkOutDate && (
-                      <span className="text-[10px] font-semibold bg-muted text-foreground px-2 py-0.5 rounded-none">
-                        {nightsBetween(form.checkInDate, form.checkOutDate)} Nights
-                      </span>
-                    )}
-                  </Label>
+                  <Label>Departure <span className="text-destructive">*</span></Label>
                   <DatePicker value={form.checkOutDate} onChange={v => { touch("checkOutDate"); setStayDate("out", v) }} minDate={form.checkInDate ? dayAfter(form.checkInDate) : undefined} />
                   <FieldError message={shownError(errors.checkOutDate?.message, "checkOutDate")} />
                 </div>
@@ -893,10 +928,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           <FieldError message={segErr?.startDate?.message} />
                         </div>
                         <div className="grid content-start gap-2">
-                          <Label className="flex items-center gap-2">
+                          <Label className="flex items-center gap-1.5 whitespace-nowrap">
                             To <span className="text-destructive">*</span>
                             {assignment.startDate && assignment.endDate && (
-                              <span className="text-[10px] font-semibold bg-muted text-foreground px-2 py-0.5 rounded-none">
+                              <span className="whitespace-nowrap text-[10px] font-semibold leading-none bg-muted text-foreground px-1.5 py-1 rounded-none">
                                 {nightsBetween(assignment.startDate, assignment.endDate)} Nights
                               </span>
                             )}

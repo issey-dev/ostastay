@@ -247,12 +247,11 @@ function GroupsList() {
       <PageHeader
         title="Group Blocks"
         hint="Manage blocks of rooms for weddings, corporate events, and tours."
-        className="max-md:flex-col max-md:items-stretch max-md:gap-3"
         actions={
-          <Link href={`/e/${slug}/dashboard/groups/new`} className="max-md:w-full">
-            <Button className="flex items-center gap-2 max-md:w-full">
+          <Link href={`/e/${slug}/dashboard/groups/new`}>
+            <Button className="flex items-center gap-2">
               <Plus className="w-4 h-4" />
-              New group block
+              New<span className="max-sm:hidden"> group block</span>
             </Button>
           </Link>
         }

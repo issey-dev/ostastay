@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -12,6 +12,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import { ListTable, type ListColumn } from "@/components/ui/list-table"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { InlineLoading } from "@/components/ui/inline-loading"
 import { ErrorState } from "@/components/ui/error-state"
@@ -67,6 +68,7 @@ const requestSchema = z.object({
 type RequestValues = z.infer<typeof requestSchema>
 
 export function SupportAccessLog() {
+  const router = useRouter()
   const params = useSearchParams()
   const [grants, setGrants] = useState<Grant[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -217,6 +219,33 @@ export function SupportAccessLog() {
           defaultSort={{ key: "requested", dir: "desc" }}
           exportName="support-access"
           empty={{ icon: ShieldCheck, title: rows.length === 0 ? "No requests yet" : `Nothing under “${FILTER_LABEL[filter]}”`, description: rows.length === 0 ? "Request access when a customer needs help." : undefined }}
+          mobile={
+            <MobileCardList>
+              {[...visible].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)).map((r) => (
+                <MobileCard
+                  key={r.id}
+                  onClick={() => router.push(`/osta/enterprises/${r.enterprise.id}?tab=support`)}
+                  title={r.enterprise.name}
+                  subtitle={r.reason ?? undefined}
+                  badge={<StatusBadge label={STATE[r.state].label} tone={STATE[r.state].tone} dot />}
+                  meta={[
+                    { label: "Requested", value: fmt(r.requestedAt) },
+                    { label: "Answered", value: fmt(r.respondedAt) },
+                    ...(r.expiresAt && (r.state === "LIVE" || r.state === "EXPIRED" || r.state === "REVOKED")
+                      ? [{ label: "Access until", value: r.state === "LIVE" ? `${fmt(r.expiresAt)} · ${left(r.expiresAt, now)}` : fmt(r.expiresAt), wide: true }]
+                      : []),
+                  ]}
+                  actions={
+                    r.state === "LIVE" ? (
+                      <Button className="w-full" disabled={busy === r.id} onClick={(e) => { e.stopPropagation(); void enter(r) }}>
+                        <LogIn className="mr-1 h-4 w-4" /> Enter support mode
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </MobileCardList>
+          }
         />
       )}
 

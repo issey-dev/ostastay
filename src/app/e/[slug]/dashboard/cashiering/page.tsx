@@ -46,11 +46,18 @@ function Figure({ label, children, className }: { label: string; children: React
 }
 
 // A tab label with its count ("Payments 3").
-function TabLabel({ label, count }: { label: string; count?: number }) {
+function TabLabel({ label, short, count }: { label: string; short?: string; count?: number }) {
   return (
     <>
-      {label}
-      {count != null && count > 0 && <span className="text-xs tabular-nums text-muted-foreground">{count}</span>}
+      {short ? (
+        <>
+          <span className="max-md:hidden">{label}</span>
+          <span className="md:hidden">{short}</span>
+        </>
+      ) : (
+        label
+      )}
+      {count != null && count > 0 && <span className="text-xs tabular-nums text-muted-foreground max-md:text-[11px] max-md:leading-none">{count}</span>}
     </>
   );
 }
@@ -572,12 +579,14 @@ function CashieringContent() {
 
           {/* ONE tabbed list for everything the shift has recorded. */}
           <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-0 border border-border bg-card">
-            <div className="overflow-x-auto border-b border-border px-2">
-              <TabsList variant="line" className="h-10 data-horizontal:h-10">
-                <TabsTrigger value="payments"><TabLabel label="Payments" count={payments.length} /></TabsTrigger>
-                <TabsTrigger value="exchanges"><TabLabel label="Exchanges" count={exchanges.length} /></TabsTrigger>
-                <TabsTrigger value="paidouts"><TabLabel label="Paid-outs" count={paidOuts.length} /></TabsTrigger>
-                <TabsTrigger value="history"><TabLabel label="History" /></TabsTrigger>
+            {/* Phones: the four tabs share the width equally (no sideways scroll), with the
+                labels shortened and the count under each one. */}
+            <div className="border-b border-border px-2 md:overflow-x-auto max-md:px-0">
+              <TabsList variant="line" className="h-10 data-horizontal:h-10 max-md:grid max-md:h-12! max-md:w-full max-md:grid-cols-4">
+                <TabsTrigger value="payments" className="max-md:flex-col max-md:gap-0 max-md:px-1 max-md:text-[13px]"><TabLabel label="Payments" count={payments.length} /></TabsTrigger>
+                <TabsTrigger value="exchanges" className="max-md:flex-col max-md:gap-0 max-md:px-1 max-md:text-[13px]"><TabLabel label="Exchanges" short="Exchange" count={exchanges.length} /></TabsTrigger>
+                <TabsTrigger value="paidouts" className="max-md:flex-col max-md:gap-0 max-md:px-1 max-md:text-[13px]"><TabLabel label="Paid-outs" count={paidOuts.length} /></TabsTrigger>
+                <TabsTrigger value="history" className="max-md:flex-col max-md:gap-0 max-md:px-1 max-md:text-[13px]"><TabLabel label="History" /></TabsTrigger>
               </TabsList>
             </div>
 

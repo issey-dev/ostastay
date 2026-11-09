@@ -733,37 +733,9 @@ function FrontOfficeDashboardContent() {
         }
       />
 
-      {/* Phone: one compact counts strip instead of four KPI cards (~300px) — the guest
-          list is what the desk came for. Same numbers as the cards below. */}
-      <div className="grid grid-cols-4 divide-x divide-border rounded-xl border border-border bg-card py-2 text-center md:hidden">
-        <div className="px-1">
-          <div className="text-base font-bold tabular-nums leading-tight">
-            {data?.arrivalsSummary?.checkedIn ?? 0}
-            <span className="text-xs font-medium text-muted-foreground">/{data?.arrivalsSummary?.expected ?? 0}</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground">arrived</div>
-        </div>
-        <div className="px-1">
-          <div className="text-base font-bold tabular-nums leading-tight">
-            {data?.departuresSummary?.checkedOut ?? 0}
-            <span className="text-xs font-medium text-muted-foreground">/{data?.departuresSummary?.expected ?? 0}</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground">departed</div>
-        </div>
-        <div className="px-1">
-          <div className="text-base font-bold tabular-nums leading-tight">{data?.roomStatusSummary?.occupied ?? 0}</div>
-          <div className="text-[11px] text-muted-foreground">occupied</div>
-        </div>
-        <div className="px-1">
-          <div className="text-base font-bold tabular-nums leading-tight">{data?.roomStatusSummary?.vacant ?? 0}</div>
-          <div className="text-[11px] text-muted-foreground">
-            vacant
-            {(data?.roomStatusSummary?.dirty ?? 0) > 0 && <span className="text-warning"> · {data.roomStatusSummary.dirty} dirty</span>}
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Row — the shared StatTile (DESKTOP_PLAN D8). Phones use the counts strip above. */}
+      {/* Phones show no counts strip (owner, 2026-11-09): the tab counts below already say
+          how many arrivals, in-house guests, moves and departures there are. */}
+      {/* KPI Row — the shared StatTile (DESKTOP_PLAN D8). Tablet and desktop only. */}
       <div className="grid grid-cols-2 gap-3 max-md:hidden lg:grid-cols-4 lg:gap-4">
         <StatTile
           label="Arrivals"

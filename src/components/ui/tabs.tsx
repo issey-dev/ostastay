@@ -80,6 +80,16 @@ const tabsListVariants = cva(
   }
 )
 
+// Phones (owner, 2026-11-09): a horizontal tab row always fits the screen — never a sideways
+// scroll — with at most 4 tabs per row: up to 4 share one row equally; 5–6 go 3 per row;
+// 7–8 go 4 per row. Applied after the caller's classes so a page's `w-max`/`flex-nowrap`
+// can't undo it. Vertical tab lists are untouched.
+const PHONE_TABS_LIST =
+  "max-sm:data-horizontal:grid max-sm:data-horizontal:w-full max-sm:data-horizontal:h-auto! max-sm:data-horizontal:gap-0.5 max-sm:data-horizontal:grid-flow-col max-sm:data-horizontal:auto-cols-fr " +
+  "max-sm:data-horizontal:has-[>:nth-child(5)]:grid-flow-row max-sm:data-horizontal:has-[>:nth-child(5)]:grid-cols-3 max-sm:data-horizontal:has-[>:nth-child(7)]:grid-cols-4"
+// …and each tab may wrap its label onto two lines instead of overflowing its cell.
+const PHONE_TABS_TRIGGER = "max-sm:data-horizontal:min-h-9 max-sm:data-horizontal:min-w-0 max-sm:data-horizontal:whitespace-normal max-sm:data-horizontal:leading-tight max-sm:data-horizontal:text-center"
+
 function TabsList({
   className,
   variant = "default",
@@ -89,7 +99,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
+      className={cn(tabsListVariants({ variant }), className, PHONE_TABS_LIST)}
       {...props}
     />
   )
@@ -108,7 +118,8 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
         "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity data-horizontal:after:inset-x-0 data-horizontal:after:bottom-[-5px] data-horizontal:after:h-0.5 data-vertical:after:inset-y-0 data-vertical:after:-right-1 data-vertical:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
-        className
+        className,
+        PHONE_TABS_TRIGGER
       )}
       {...props}
     />

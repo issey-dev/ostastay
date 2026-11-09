@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Plus, ChevronDown, Building2, ReceiptText, ShieldCheck, ArrowLeftRight, ClipboardCheck } from "@/components/icons"
+import { Plus, ChevronDown, Search, Building2, ReceiptText, ShieldCheck, ArrowLeftRight, ClipboardCheck } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { CommandPaletteTrigger } from "@/components/shell/command-palette"
+import { CommandPaletteTrigger, OPEN_COMMAND_PALETTE } from "@/components/shell/command-palette"
 import { OstaCommandPalette } from "@/components/osta/osta-command-palette"
 import { CreateEnterpriseDialog, OPEN_CREATE_ENTERPRISE } from "@/components/osta/create-enterprise-button"
 
@@ -25,8 +25,19 @@ export function OstaHeaderTools() {
   return (
     <>
       <CommandPaletteTrigger />
+      {/* Phones: the search box above is hidden (max-md), so search is an icon. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Search"
+        className="text-muted-foreground md:hidden"
+        onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE))}
+      >
+        <Search className="h-5 w-5" />
+      </Button>
+      {/* Tablet and desktop only (owner, 2026-11-08): no create button in the phone header. */}
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button aria-label="New" />}>
+        <DropdownMenuTrigger render={<Button aria-label="New" className="max-md:hidden" />}>
           <Plus className="h-4 w-4" />
           <span className="max-sm:hidden">New</span>
           <ChevronDown className="h-3.5 w-3.5 opacity-80" />

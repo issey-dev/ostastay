@@ -294,7 +294,7 @@ function ExcursionsPage() {
       />
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>
-        <TabsList>
+        <TabsList className="max-md:grid max-md:w-full max-md:grid-cols-3">
           <TabsTrigger value="book"><CalendarClock className="w-4 h-4 mr-2" /> Book</TabsTrigger>
           <TabsTrigger value="schedule"><CalendarDays className="w-4 h-4 mr-2" /> Schedule</TabsTrigger>
           <TabsTrigger value="history"><ClipboardList className="w-4 h-4 mr-2" /> History</TabsTrigger>
@@ -304,7 +304,7 @@ function ExcursionsPage() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left: guest search / walk-in */}
         <div className="flex-1 space-y-6">
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 {mode === "guest" ? <Search className="w-5 h-5 text-primary" /> : <UserRound className="w-5 h-5 text-primary" />}
@@ -398,7 +398,7 @@ function ExcursionsPage() {
           </div>
 
           {/* Booking form */}
-          <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!canBook ? "opacity-50 pointer-events-none border-border" : "border-border shadow-md ring-1 ring-border"}`}>
+          <div className={`bg-card rounded-xl shadow-sm border p-6 max-md:p-4 transition-all ${!canBook ? "opacity-50 pointer-events-none border-border" : "border-border shadow-md ring-1 ring-border"}`}>
             <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
               <CalendarClock className="w-5 h-5 text-primary" />
               {mode === "guest" && selectedGuest ? `Book excursion for room ${selectedGuest.roomNumber}` : mode === "walkin" && walkInFolioId ? `Book excursion for ${walkInName}` : "Book excursion"}
@@ -595,7 +595,7 @@ function ExcursionsPage() {
         </TabsContent>
 
         <TabsContent value="schedule" className="m-0">
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
             {currentProperty && (
               <ExcursionCalendar propertyId={currentProperty.id} onSelectDeparture={(id) => setManifestDepartureId(id)} />
             )}
@@ -608,7 +608,7 @@ function ExcursionsPage() {
         </TabsContent>
 
         <TabsContent value="history" className="m-0">
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
             <SalesHistory
               slug={slug}
               refreshKey={historyRefresh}

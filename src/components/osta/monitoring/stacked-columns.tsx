@@ -78,7 +78,7 @@ export function StackedColumns({
   return (
     <div
       ref={ref}
-      className="relative w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative w-full min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
       tabIndex={0}
       role="application"
       aria-label={`${ariaLabel}. Use the left and right arrow keys to read each period.`}
@@ -86,7 +86,9 @@ export function StackedColumns({
       onBlur={() => setHover(null)}
       onMouseLeave={() => setHover(null)}
     >
-      <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block">
+      {/* width 100% + viewBox: the svg never pushes its container wider than the screen (a
+          fixed 800px first render widened the phone layout before the observer measured). */}
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="block">
         {ticks.map((t) => (
           <g key={t}>
             <line x1={padL} x2={padL + plotW} y1={y(t)} y2={y(t)} stroke={GRID} shapeRendering="crispEdges" />

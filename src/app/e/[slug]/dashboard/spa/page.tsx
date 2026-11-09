@@ -527,7 +527,7 @@ function SpaPage() {
       />
 
       <Tabs value={pageTab} onValueChange={(v) => setPageTab((v as "book" | "schedule" | "history") ?? "book")}>
-        <TabsList>
+        <TabsList className="max-md:grid max-md:w-full max-md:grid-cols-3">
           <TabsTrigger value="book"><Sparkles className="w-4 h-4 mr-2" /> Book</TabsTrigger>
           <TabsTrigger value="schedule"><Calendar className="w-4 h-4 mr-2" /> Schedule</TabsTrigger>
           <TabsTrigger value="history"><ClipboardList className="w-4 h-4 mr-2" /> History</TabsTrigger>
@@ -537,7 +537,7 @@ function SpaPage() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left: booking form */}
         <div className="flex-1 space-y-6">
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                 {mode === "guest" ? <Search className="w-5 h-5 text-primary" /> : <UserRound className="w-5 h-5 text-primary" />}
@@ -647,7 +647,7 @@ function SpaPage() {
             )}
           </div>
 
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
             <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
               <Sparkles className="w-5 h-5 text-primary" /> Treatment
             </h3>
@@ -703,7 +703,7 @@ function SpaPage() {
           </div>
 
           {selectedTreatmentId && (
-            <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
                 <Users className="w-5 h-5 text-primary" /> Guest{partySize > 1 ? "s" : ""}
               </h3>
@@ -856,7 +856,7 @@ function SpaPage() {
           )}
 
           {selectedTreatmentId && (
-            <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
                 <Clock className="w-5 h-5 text-primary" /> Date &amp; Time
               </h3>
@@ -941,7 +941,7 @@ function SpaPage() {
           )}
 
           {selectedTreatmentId && (
-            <div className={`bg-card rounded-xl shadow-sm border p-6 transition-all ${!canBook ? "opacity-60" : "border-primary/30 shadow-md"}`}>
+            <div className={`bg-card rounded-xl shadow-sm border p-6 max-md:p-4 transition-all ${!canBook ? "opacity-60" : "border-primary/30 shadow-md"}`}>
               <Form {...form}>
               <form id="spa-book-form" onSubmit={form.handleSubmit(handleBook)} className="space-y-4">
                 <FormField control={form.control} name="notes" render={({ field }) => (
@@ -990,7 +990,7 @@ function SpaPage() {
 
         <TabsContent value="schedule" className="m-0">
           {currentProperty && (
-            <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
               <SpaSchedule
                 propertyId={currentProperty.id}
                 refreshKey={scheduleRefresh}
@@ -1006,7 +1006,7 @@ function SpaPage() {
         </TabsContent>
 
         <TabsContent value="history" className="m-0">
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 max-md:p-4">
             <SalesHistory
               slug={slug}
               refreshKey={historyRefresh}

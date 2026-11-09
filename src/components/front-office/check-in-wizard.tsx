@@ -444,7 +444,21 @@ export function CheckInWizard({ reservationId, propertyId, isOpen, onClose, onDo
         ) : (
           <div className="py-2 space-y-4">
             {/* STEP: ROOM */}
-            {step === "room" && (
+            {/* A booking with no room line has no room type or rate, so there is nothing to
+                pick rooms from: say so and go to the booking to choose a room & rate first
+                (owner, 2026-11-09 — it used to show an empty "Select a room…"). */}
+            {step === "room" && !activeAssignment && (
+              <div className="space-y-3 rounded-lg border border-warning/40 bg-warning-muted p-4 text-sm">
+                <p className="flex items-center gap-1.5 font-medium text-warning">
+                  <AlertTriangle className="h-4 w-4 shrink-0" /> This booking has no room type or rate yet
+                </p>
+                <p className="text-muted-foreground">Choose a room type and rate on the booking first; then you can assign a room and check the guest in.</p>
+                <Button type="button" onClick={() => (window.location.href = `/e/${slug}/dashboard/reservations/${reservationId}/edit`)}>
+                  <BedDouble className="h-4 w-4" /> Choose room &amp; rate
+                </Button>
+              </div>
+            )}
+            {step === "room" && activeAssignment && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">A room must be assigned to check the guest in.</p>
                 <div className="space-y-1.5">

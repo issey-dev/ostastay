@@ -3690,3 +3690,32 @@ reopened). Merge in order; after each merge retarget the next PR to `master`.
 - The Osta property page shows setup and health only (rooms, room types, business date vs the date
   at the property, Night Audit, last activity as a time and kind) — never guests or people
   (2026-11-07 rule).
+
+## 2026-11-08 — Osta console on phones
+
+- The Osta console gets the phone **bottom nav** (Today, Enterprises, Billing, Channels + More,
+  which opens the sidebar) — this reverses MOBILE_PLAN Q1 ("dashboard only") for Osta. The Hub
+  still has none.
+- **No create button in the phone header** (owner): the + New menu is tablet/desktop only. On a
+  phone, creating goes through search (Ctrl+K palette actions) or the page's own button.
+- The notification bell opens a bottom sheet on phones, in every shell (tenant, Hub, Osta).
+- **Nothing scrolls sideways on a phone** (owner, 2026-11-08 — the PWA is officially released for
+  phones). Tables become cards, tab rows become full-width grids, segmented switches or a dropdown,
+  secondary filters go into a bottom sheet (`MobileFilterSheet`). Print documents (A4 reports such as
+  the permission matrix) are the only exception. Features stay the same; only the phone layout changes.
+
+## 2026-11-09 — Phone consistency pass (owner)
+
+- **Page header on phones = Housekeeping's**: title left, compact (h-9) buttons on the same row, main
+  action last, "More" keeps its label. Built into `PageHeader`; pages may not stretch header buttons
+  full width — shorten the label on phones instead ("New"). Pages whose header actions are filters
+  use `phoneActionsBelow` (Dashboard). The Dashboard title on phones is "Dashboard" (no welcome line).
+- **Tab rows on phones always fit, at most 4 per row** (1–4 one row; 5–6 three per row; 7–8 four):
+  built into `TabsList` for horizontal tabs.
+- Front Desk on phones: no counts strip above the tabs (the tabs carry the counts).
+- Folio on phones: sticky header with its own close; Post charge / Post payment pinned at the bottom,
+  each opening a bottom sheet (Fast Post pattern).
+- Icons: light-mode icon is Iconsax **Sun 2 Linear**; plain × for close; ‹ › ˅ ˄ are the plain chevrons
+  (mx-icons ArrowRight2/ArrowDown2 are circled — do not use them for chevrons).
+- A booking always has a room line (room type + rate); a room NUMBER is optional. UI that meets one
+  without a line sends the user to choose a room & rate first.

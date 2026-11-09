@@ -103,7 +103,8 @@ export function MappingManager({ propertyId, canManage }: { propertyId: string; 
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-muted">
+        {/* Phones: the five tabs in a 3-column grid instead of one row off the screen. */}
+        <TabsList className="bg-muted max-md:grid max-md:h-auto! max-md:w-full max-md:grid-cols-3 max-md:gap-0.5">
           <TabsTrigger value="sharing">
             <Building2 className="h-4 w-4 mr-2" /> Sharing
           </TabsTrigger>

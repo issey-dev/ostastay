@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar"
 import { UppsolutIcon, UppsolutWordmark } from "@/components/brand/uppsolut-logo"
 import { OstaSidebarNav } from "@/components/osta-sidebar-nav"
+import { OstaMobileBottomNav } from "@/components/osta-mobile-bottom-nav"
 import { getOstaNavCounts } from "@/lib/osta/attention"
 import Link from "next/link"
 
@@ -31,6 +32,7 @@ export async function OstaSidebar() {
   const counts = ctx ? await getOstaNavCounts() : null
 
   return (
+    <>
     <Sidebar collapsible="icon">
       {/* Same product mark as the tenant AppSidebar's rail, so the platform console
           doesn't read as a different, unbranded app. "Osta" replaces "Stay" as the
@@ -70,5 +72,8 @@ export async function OstaSidebar() {
         </p>
       </div>
     </Sidebar>
+    {/* Phones: the bottom bar; its "More" opens this sidebar as a sheet. */}
+    <OstaMobileBottomNav counts={counts} />
+    </>
   )
 }

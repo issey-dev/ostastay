@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Building2, ArrowLeftRight, ShieldCheck } from "@/components/icons"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ListTable, type ListColumn } from "@/components/ui/list-table"
+import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { LicensingManager } from "@/components/controls/licensing-manager"
 import { useReasonPrompt } from "@/components/providers/confirm-provider"
@@ -191,6 +192,34 @@ export function PropertiesTable({ rows, now }: { rows: WorkspaceProperty[]; now:
       rowHref={(p) => `/osta/properties/${p.id}`}
       exportName="properties"
       empty={{ icon: Building2, title: "No properties yet", description: "Add the first one with Add property above." }}
+      mobile={
+        <MobileCardList>
+          {rows.map((p) => (
+            <MobileCard
+              key={p.id}
+              onClick={() => router.push(`/osta/properties/${p.id}`)}
+              title={p.name}
+              subtitle={<span className="font-mono text-[11px]">{p.code}</span>}
+              badge={<StatusBadge label={PROPERTY_STATUS_LABEL[p.status] ?? p.status} status={p.status} dot />}
+              meta={[
+                { label: "Rooms", value: p.facts ? ofMax(p.facts.rooms, p.facts.maxRooms) : "—" },
+                { label: "Room types", value: p.facts ? ofMax(p.facts.roomTypes, p.facts.maxRoomTypes) : "—" },
+                { label: "Business date", value: p.facts && p.status === "ACTIVE" ? <BusinessDateCell facts={p.facts} compact /> : "—" },
+                { label: "Last activity", value: p.facts?.lastActivity ? ago(p.facts.lastActivity.at, now) : "None yet" },
+                ...(p.status === "REJECTED" && p.rejectionReason ? [{ label: "Reason", value: p.rejectionReason, wide: true }] : []),
+              ]}
+              actions={
+                p.status === "PENDING" ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" disabled={busy === p.id} onClick={() => post(p, "reject")}>Reject…</Button>
+                    <Button disabled={busy === p.id} onClick={() => post(p, "approve")}>Approve</Button>
+                  </div>
+                ) : undefined
+              }
+            />
+          ))}
+        </MobileCardList>
+      }
     />
   )
 }
@@ -292,6 +321,38 @@ export function ChannelTable({ rows }: { rows: WorkspaceConnection[] }) {
         description: "Connections are created from the Channel Manager screen.",
         action: <Link href="/osta/channel-manager" className={buttonVariants({ variant: "outline", size: "sm" })}>Open Channel Manager</Link>,
       }}
+      mobile={
+        <MobileCardList>
+          {rows.map((c) => (
+            <MobileCard
+              key={c.id}
+              title={c.name}
+              subtitle={`${c.propertyName}${c.ostaManaged ? "" : " · enterprise's own account"}`}
+              badge={
+                c.ostaManaged ? (
+                  <StatusBadge label={c.status === "CONNECTED" ? "Connected" : c.status === "ERROR" ? "Failing" : "Not connected"} tone={c.status === "CONNECTED" ? "success" : c.status === "ERROR" ? "danger" : "neutral"} dot />
+                ) : (
+                  <StatusBadge label={c.status === "CONNECTED" ? "Running" : "Not running"} tone={c.status === "CONNECTED" ? "success" : "neutral"} dot />
+                )
+              }
+              tone={c.status === "ERROR" ? "danger" : undefined}
+              meta={[
+                ...(c.status === "ERROR" && c.lastError ? [{ label: "Error", value: <span className="text-destructive">{c.lastError}</span>, wide: true }] : []),
+                { label: "Webhook", value: !c.ostaManaged ? "—" : c.webhook ? "Set" : "Not set" },
+                { label: "API credits", value: c.rateLimitTotal ? `${c.rateLimitRemaining ?? "?"} / ${c.rateLimitTotal}` : "—" },
+                { label: "Last checked", value: c.ostaManaged ? fmtDateTime(c.lastHealthCheckAt) : "—", wide: true },
+              ]}
+              actions={
+                c.ostaManaged ? (
+                  <Button variant="outline" className="w-full" disabled={busy === c.id} onClick={() => test(c)}>
+                    {busy === c.id ? "Testing…" : "Test now"}
+                  </Button>
+                ) : undefined
+              }
+            />
+          ))}
+        </MobileCardList>
+      }
     />
   )
 }
@@ -335,6 +396,27 @@ export function SupportTable({ rows }: { rows: WorkspaceGrant[] }) {
       rowKey={(g) => g.id}
       defaultSort={{ key: "requested", dir: "desc" }}
       empty={{ icon: ShieldCheck, title: "No support access requested yet" }}
+      mobile={
+        <MobileCardList>
+          {[...rows].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)).map((g) => (
+            <MobileCard
+              key={g.id}
+              title={g.reason ?? "No reason given"}
+              subtitle={`Requested by ${g.requestedBy}`}
+              badge={
+                g.live ? <StatusBadge label="Live" tone="info" dot />
+                : g.status === "APPROVED" ? <StatusBadge label="Ended" tone="neutral" dot />
+                : <StatusBadge label={GRANT_LABEL[g.status] ?? g.status} status={g.status} dot />
+              }
+              meta={[
+                { label: "Requested", value: fmtDateTime(g.requestedAt) },
+                { label: "Access until", value: fmtDateTime(g.expiresAt) },
+                { label: "Approved by", value: g.approvedBy ?? "—", wide: true },
+              ]}
+            />
+          ))}
+        </MobileCardList>
+      }
     />
   )
 }

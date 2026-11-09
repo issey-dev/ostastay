@@ -11,6 +11,7 @@ import { InlineLoading } from "@/components/ui/inline-loading"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { MobileWeekStrip } from "@/components/ui/mobile-week-strip"
 
 type Participant = {
   reservation: { primaryGuest: { firstName: string; lastName: string | null } } | null
@@ -82,9 +83,9 @@ export function SpaSchedule({
   const [appts, setAppts] = useState<SpaAppt[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Phones always get today's agenda, stepping day by day (the Day/Week/Month toggle is
-  // hidden there — the agenda list is the only layout a phone gets). Desktop: unchanged.
-  const view: ViewMode = isMobile ? "day" : viewState
+  // Phones load the whole week (for the week strip's counts) and list the selected day under
+  // it; the Day/Week/Month toggle is desktop-only. Desktop: unchanged.
+  const view: ViewMode = isMobile ? "week" : viewState
 
   const { start: rangeStart, end: rangeEnd } = useMemo(() => getRange(view, anchorDate), [view, anchorDate])
 
@@ -190,7 +191,51 @@ export function SpaSchedule({
     </div>
   )
 
-  if (isMobile || view === "day") {
+  if (isMobile) {
+    const list = byDay.get(format(anchorDate, "yyyy-MM-dd")) ?? []
+    const counts = new Map([...byDay].map(([k, v]) => [k, v.filter((a) => !cancelled(a)).length]))
+    return (
+      <div className="space-y-4">
+        <MobileWeekStrip value={anchorDate} onChange={(d) => setAnchorDate(startOfDay(d))} counts={counts} countLabel="appointments" />
+        <Select value={therapistId || "all"} onValueChange={(v) => setTherapistId(v === "all" ? "" : (v ?? ""))}>
+          <SelectTrigger className="w-full" aria-label="Therapist">
+            <SelectValue>{therapistId ? therapists.find((t) => t.id === therapistId)?.displayName : "All therapists"}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All therapists</SelectItem>
+            {therapists.map((t) => <SelectItem key={t.id} value={t.id}>{t.displayName}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-sm font-semibold">{format(anchorDate, "EEEE, d MMMM")}</p>
+        {loading ? <InlineLoading lines={3} label="Loading appointments" /> : list.length === 0 ? (
+          <EmptyState size="inline" title="No appointments on this day" />
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {list.map((a) => (
+              <li key={a.id}>
+                <button type="button" onClick={() => onSelectAppointment?.(a)} className={`flex w-full gap-3 px-3 py-3 text-left active:bg-muted ${cancelled(a) ? "opacity-60" : ""}`}>
+                  <span className={`w-1 shrink-0 self-stretch rounded-full ${chipColor(a).dot} ${heldOnline(a) ? "opacity-50" : ""}`} aria-hidden />
+                  <span className="w-12 shrink-0">
+                    <span className="block font-mono text-base font-semibold tabular-nums">{a.startTime}</span>
+                    <span className="block font-mono text-[11px] text-muted-foreground tabular-nums">{a.treatmentEndTime}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-0.5">
+                    <span className={`block font-medium leading-snug ${cancelled(a) ? "line-through" : ""}`}>{a.treatment.name}</span>
+                    <span className="block text-sm">{heldOnline(a) ? "Held online" : guestName(a)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {[therapistLabel(a), a.room?.name, a.source === "WEBSITE_API" && !heldOnline(a) ? "Online" : null, cancelled(a) ? "Cancelled" : null].filter(Boolean).join(" · ") || "No therapist yet"}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
+  if (view === "day") {
     const days = view === "day" ? [anchorDate] : eachDayOfInterval({ start: rangeStart, end: rangeEnd })
     return (
       <div>

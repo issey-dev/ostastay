@@ -42,25 +42,27 @@ export default async function OstaLayout({ children }: { children: React.ReactNo
       </div>
       <main id="main-content" tabIndex={-1} className="w-full min-w-0 bg-background min-h-screen max-md:min-h-dvh flex flex-col overflow-x-clip print:overflow-visible outline-none">
         <header className="print:hidden h-16 bg-card/70 backdrop-blur-md flex items-center px-4 w-full shadow-elevation-header gap-4 sticky top-0 z-[var(--z-sticky)]">
-          <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
-          <div>
+          {/* Phones open the menu from the bottom nav's "More", so no duplicate toggle here. */}
+          <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors max-md:hidden" />
+          <div className="min-w-0">
             {/* The plain wordmark, not the Stay lockup: this console administers every
                 module and every tenant, so it is not branded to one sub-brand. Not a
                 heading: the page title is the page's only <h1>. */}
             <div className="flex items-center gap-2.5 text-foreground leading-none">
             <UppsolutWordmark className="h-[15px] w-auto" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Platform admin</span>
-            <InfoHint label="Uppsolut Platform Admin">The Osta platform console — manages customer enterprises, licensing, and channel-manager connections across every property on Uppsolut.</InfoHint>
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground max-sm:hidden">Platform admin</span>
+            <InfoHint className="max-sm:hidden" label="Uppsolut Platform Admin">The Osta platform console — manages customer enterprises, licensing, and channel-manager connections across every property on Uppsolut.</InfoHint>
           </div>
           </div>
-          <div className="ml-auto flex items-center gap-2 print:hidden">
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 print:hidden">
             {/* Search (Ctrl+K palette) and the + New menu; also mounts both overlays. */}
             <OstaHeaderTools />
             <NotificationBell allHref="/osta/notifications" />
             <ThemeToggle />
           </div>
         </header>
-        <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0">
+        {/* Phones: room at the bottom for the bottom nav (and the home indicator). */}
+        <div className="flex-1 p-4 md:p-6 lg:p-8 print:p-0 max-md:pb-[calc(5rem+env(safe-area-inset-bottom))]">
           <div className="max-w-7xl mx-auto w-full print:max-w-none">
             {/* Same confirm-dialog provider the tenant shells mount — Osta pages with
                 destructive actions (Channel Manager's remove/replace-URL) need it too. */}

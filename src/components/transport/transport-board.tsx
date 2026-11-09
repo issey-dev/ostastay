@@ -16,7 +16,10 @@ import {
   UserCheck,
   X,
   Filter,
+  Search,
 } from "@/components/icons"
+import { Input } from "@/components/ui/input"
+import { MobileFilterSheet } from "@/components/ui/mobile-filter-sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -34,7 +37,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
 import { ContactLink } from "@/components/ui/contact-link"
-import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useProperty } from "@/components/providers/property-provider"
@@ -246,6 +248,22 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
     { label: "Export report", icon: Download, onSelect: () => setExportOpen(true) },
   ]
 
+  // The secondary filters: the desktop "More filters" popover and the phone Filters sheet.
+  const extraFilters = (
+    <>
+      <OptionSelect className="w-full" value={rep} onChange={setRep} aria-label="Airport rep" options={[{ value: "", label: "Any airport rep" }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
+      <OptionSelect className="w-full" value={route} onChange={setRoute} aria-label="Route" options={[{ value: "", label: "Any route" }, ...(config?.routes ?? []).map((r) => ({ value: r.id, label: `${r.code} — ${r.name}` }))]} />
+      <OptionSelect className="w-full" value={provider} onChange={setProvider} aria-label="Provider" options={[{ value: "", label: "Any provider" }, ...(config?.providers ?? []).map((p) => ({ value: p.id, label: p.name }))]} />
+      <OptionSelect className="w-full" value={group} onChange={setGroup} aria-label="Group block" options={[{ value: "", label: "Any group" }, ...groups.map((g) => ({ value: g.id, label: `${g.code} — ${g.name}` }))]} />
+      <Label className="flex items-center justify-between gap-3 font-normal max-md:min-h-11">
+        Needs attention only <Switch checked={!!attention} onCheckedChange={(c) => setAttention(c ? "1" : "")} />
+      </Label>
+      <Label className="flex items-center justify-between gap-3 font-normal max-md:min-h-11">
+        Not on a departure only <Switch checked={!!unassigned} onCheckedChange={(c) => setUnassigned(c ? "1" : "")} />
+      </Label>
+    </>
+  )
+
   if (!propertyId) return <Skeleton className="h-64 w-full" />
 
   return (
@@ -255,10 +273,10 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
         hint="Pickups and drop-offs by day. Put guests from different reservations on the same departure; warnings never stop you saving. Charges post at Night Audit."
         actions={
           <ActionBar
-            secondary={
+            primary={
               perms.manageBookings && (
                 <Button onClick={() => setBookingForm({ editing: null })}>
-                  <Plus className="mr-2 h-4 w-4" /> New transfer
+                  <Plus className="mr-2 h-4 w-4" /> New<span className="max-sm:hidden"> transfer</span>
                 </Button>
               )
             }
@@ -267,8 +285,92 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
         }
       />
 
-      {/* Date + week strip */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      {/* Phones: the day bar and a calendar-style week (weekday, date, pickups ↓ / drop-offs ↑),
+          then full-width view and direction switches, then search + one Filters sheet — the
+          controls take about half the height they did, so the first transfer is on screen. */}
+      <div className="space-y-3 md:hidden">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" aria-label="Previous day" onClick={() => setDate(addDays(day, -1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <DatePicker className="min-w-0 flex-1" value={day} onChange={(v) => v && setDate(v === businessToday ? "" : v)} />
+          <Button variant="outline" size="icon" aria-label="Next day" onClick={() => setDate(addDays(day, 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {day !== businessToday && (
+            <Button variant="ghost" size="sm" className="shrink-0 px-2" onClick={() => setDate("")}>
+              Today
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-7 gap-1" role="list" aria-label="Week overview">
+          {(board?.week ?? []).map((w) => {
+            const on = w.date === day
+            const none = w.pickups === 0 && w.dropOffs === 0
+            return (
+              <button
+                key={w.date}
+                type="button"
+                role="listitem"
+                onClick={() => setDate(w.date === businessToday ? "" : w.date)}
+                aria-current={on ? "date" : undefined}
+                aria-label={`${dayLabel(w.date, { weekday: "long", day: "numeric", month: "long" })}: ${w.pickups} pickups, ${w.dropOffs} drop-offs`}
+                className={cn(
+                  "relative flex flex-col items-center gap-0.5 rounded-lg py-1.5 transition-colors",
+                  on ? "bg-primary text-primary-foreground" : "active:bg-muted"
+                )}
+              >
+                <span className={cn("text-[10px] font-medium uppercase tracking-wide", !on && "text-muted-foreground")}>{dayLabel(w.date, { weekday: "short" })}</span>
+                <span className="text-base font-semibold leading-tight tabular-nums">{dayLabel(w.date, { day: "numeric" })}</span>
+                <span className={cn("text-[10px] leading-none tabular-nums", !on && (none ? "text-muted-foreground/50" : "text-muted-foreground"))}>
+                  {none ? "–" : `↓${w.pickups} ↑${w.dropOffs}`}
+                </span>
+                {w.date === businessToday && !on && <span aria-hidden className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary" />}
+              </button>
+            )
+          })}
+        </div>
+        <SegmentedSwitch
+          label="View"
+          value={view}
+          onChange={(v) => setView(v as (typeof VIEWS)[number])}
+          options={[
+            { value: "board", label: "Board" },
+            { value: "airport", label: "Airport rep" },
+            { value: "dispatch", label: "Dispatch" },
+          ]}
+        />
+        <SegmentedSwitch
+          label="Direction"
+          value={dir}
+          onChange={(v) => setDir(v as (typeof DIRS)[number])}
+          options={[
+            { value: "ALL", label: "All" },
+            { value: "PICKUP", label: "Pickups" },
+            { value: "DROP_OFF", label: "Drop-offs" },
+          ]}
+        />
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Guest, flight, group…" className="pl-8" aria-label="Search transfers" />
+          </div>
+          <MobileFilterSheet
+            activeCount={activeFilters - (q ? 1 : 0)}
+            onClear={() => {
+              for (const set of [setType, setStatus, setRep, setRoute, setProvider, setGroup, setAttention, setUnassigned]) set("")
+            }}
+            resultLabel={loading ? "Done" : `Show ${bookings.length} transfer${bookings.length === 1 ? "" : "s"}`}
+          >
+            <OptionSelect className="w-full" value={type} onChange={setType} aria-label="Transport type" options={[{ value: "", label: "All types" }, ...(config?.types ?? []).map((t) => ({ value: t.id, label: t.name }))]} />
+            <OptionSelect className="w-full" value={status} onChange={setStatus} aria-label="Status" options={[{ value: "", label: "Any status" }, ...BOOKING_STATUSES.map((s) => ({ value: s, label: BOOKING_STATUS_LABELS[s] }))]} />
+            {extraFilters}
+          </MobileFilterSheet>
+        </div>
+      </div>
+
+      {/* Date + week strip (tablet and desktop) */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center max-md:hidden">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" aria-label="Previous day" onClick={() => setDate(addDays(day, -1))}>
             <ChevronLeft className="h-4 w-4" />
@@ -305,8 +407,8 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
         </div>
       </div>
 
-      {/* View + filters */}
-      <div className="flex flex-col gap-3">
+      {/* View + filters (tablet and desktop) */}
+      <div className="flex flex-col gap-3 max-md:hidden">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as (typeof VIEWS)[number])}>
             <TabsList>
@@ -343,16 +445,7 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
               <Filter className="h-4 w-4" /> More filters{moreFilters ? ` (${moreFilters})` : ""}
             </PopoverTrigger>
             <PopoverContent align="start" className="grid w-72 gap-3">
-              <OptionSelect value={rep} onChange={setRep} aria-label="Airport rep" options={[{ value: "", label: "Any airport rep" }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
-              <OptionSelect value={route} onChange={setRoute} aria-label="Route" options={[{ value: "", label: "Any route" }, ...(config?.routes ?? []).map((r) => ({ value: r.id, label: `${r.code} — ${r.name}` }))]} />
-              <OptionSelect value={provider} onChange={setProvider} aria-label="Provider" options={[{ value: "", label: "Any provider" }, ...(config?.providers ?? []).map((p) => ({ value: p.id, label: p.name }))]} />
-              <OptionSelect value={group} onChange={setGroup} aria-label="Group block" options={[{ value: "", label: "Any group" }, ...groups.map((g) => ({ value: g.id, label: `${g.code} — ${g.name}` }))]} />
-              <Label className="flex items-center justify-between gap-3 font-normal">
-                Needs attention only <Switch checked={!!attention} onCheckedChange={(c) => setAttention(c ? "1" : "")} />
-              </Label>
-              <Label className="flex items-center justify-between gap-3 font-normal">
-                Not on a departure only <Switch checked={!!unassigned} onCheckedChange={(c) => setUnassigned(c ? "1" : "")} />
-              </Label>
+              {extraFilters}
             </PopoverContent>
           </Popover>
         </FilterBar>
@@ -523,6 +616,29 @@ export function TransportBoard({ perms }: { perms: TransportPerms }) {
   )
 }
 
+// ── Phone segmented switch ───────────────────────────────────────────────────────────────
+
+/** Full-width equal segments for a phone (the desktop Tabs list is content-width and left a
+ *  ragged half-row). Same values and URL state as the desktop tabs. */
+function SegmentedSwitch({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="grid rounded-lg bg-muted p-0.5" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn("h-9 truncate rounded-md px-2 text-sm font-medium transition-colors", value === o.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ── Board view: grouped by transport type ───────────────────────────────────────────────
 
 function BoardView({
@@ -572,30 +688,56 @@ function BoardView({
                 {rows.length} transfer{rows.length === 1 ? "" : "s"} · {rows.filter((r) => r.status !== "CANCELLED").reduce((s, r) => s + r.pax, 0)} pax
               </span>
             </header>
-            <MobileCardList className="p-3">
-              {rows.map((b) => (
-                <MobileCard
-                  key={b.id}
-                  tone={b.status === "CANCELLED" || b.status === "NO_SHOW" ? "muted" : undefined}
-                  onClick={() => onOpen(b.id)}
-                  title={
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <DirectionIcon direction={b.direction} /> {b.guestName} <GroupTag group={b.groupBlock} />
-                    </span>
-                  }
-                  subtitle={b.reservation ? `${b.reservation.confirmationNo}${b.reservation.roomNumber ? ` · Room ${b.reservation.roomNumber}` : ""}` : "No stay"}
-                  badge={<BookingStatus status={b.status} />}
-                  meta={[
-                    { label: "Time", value: timeOf(b) ?? "—" },
-                    { label: "Pax", value: b.pax },
-                    { label: "Flight", value: flightLabel(b) || "—" },
-                    { label: "Departure", value: b.manifest ? b.manifest.departureLocal.time : "Unassigned" },
-                  ]}
-                >
-                  {b.attention.length > 0 && <AttentionBadge reasons={b.attention} />}
-                </MobileCard>
-              ))}
-            </MobileCardList>
+            {/* Phones: a time-first list — the time and direction in a left column you can
+                scan down, then guest, stay, pax, flight and boat. One tap opens the panel. */}
+            <ul className="divide-y divide-border md:hidden">
+              {rows.map((b) => {
+                const off = b.status === "CANCELLED" || b.status === "NO_SHOW"
+                return (
+                  <li key={b.id}>
+                    <button type="button" onClick={() => onOpen(b.id)} className={cn("flex w-full gap-3 px-4 py-3 text-left transition-colors active:bg-muted", off && "opacity-60")}>
+                      <span className="w-14 shrink-0">
+                        <span className="block font-mono text-base font-semibold tabular-nums">{timeOf(b) ?? "--:--"}</span>
+                        <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <DirectionIcon direction={b.direction} className="h-3 w-3" />
+                          {b.direction === "PICKUP" ? "Pickup" : "Drop-off"}
+                        </span>
+                      </span>
+                      <span className="min-w-0 flex-1 space-y-1">
+                        <span className="flex items-start justify-between gap-2">
+                          <span className={cn("min-w-0 font-medium leading-snug", off && "line-through")}>
+                            {b.guestName} <GroupTag group={b.groupBlock} />
+                          </span>
+                          <span className="shrink-0">
+                            <BookingStatus status={b.status} />
+                          </span>
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {b.reservation ? `${b.reservation.confirmationNo}${b.reservation.roomNumber ? ` · Room ${b.reservation.roomNumber}` : ""}` : "No stay"} · {b.pax} pax ({paxLabel(b)})
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          {flightLabel(b) && (
+                            <span className="inline-flex items-center gap-1">
+                              <Plane className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="font-mono">{flightLabel(b)}</span>
+                            </span>
+                          )}
+                          <span className={cn("inline-flex items-center gap-1", !b.manifest && "text-muted-foreground")}>
+                            <Ship className="h-3.5 w-3.5 text-muted-foreground" />
+                            {b.manifest ? <span className="font-mono">{b.manifest.departureLocal.time}</span> : "Not on a departure"}
+                            {b.route && <span className="text-muted-foreground">· {b.route.from.code} → {b.route.to.code}</span>}
+                          </span>
+                        </span>
+                        <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <BillingStatus status={b.billing.status} />
+                          <AttentionBadge reasons={b.attention} />
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
             <div className="overflow-x-auto max-md:hidden">
               <table className="w-full text-sm">
                 <thead>
@@ -698,7 +840,13 @@ function AirportView({ bookings, onOpen }: { bookings: BookingView[]; onOpen: (i
             </span>
             {b.guestContact && (
               <span onClick={(e) => e.stopPropagation()}>
-                <ContactLink type="phone" value={b.guestContact} showIcon className="text-sm" />
+                {/* Phones: a real button to call the guest from the arrivals hall. */}
+                <ContactLink
+                  type="phone"
+                  value={b.guestContact}
+                  showIcon
+                  className="text-sm max-md:inline-flex max-md:h-10 max-md:items-center max-md:gap-2 max-md:rounded-md max-md:border max-md:border-border max-md:bg-background max-md:px-3 max-md:font-medium"
+                />
               </span>
             )}
             {b.meetingNotes && <span className="text-sm text-muted-foreground">{b.meetingNotes}</span>}
@@ -806,7 +954,7 @@ function DispatchView({
               </li>
             ))}
           </ul>
-          <p className="text-xs text-muted-foreground">Select them on the Board to put several on one departure at once.</p>
+          <p className="text-xs text-muted-foreground max-md:hidden">Select them on the Board to put several on one departure at once.</p>
         </div>
       )}
     </div>
