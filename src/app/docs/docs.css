@@ -285,7 +285,7 @@
 
 /* Release notes: a jump list of versions, then one section per version. */
 .docs-release-index { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
-.docs-release-index a {
+.docs-release-index button {
   padding: 4px 10px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -293,7 +293,10 @@
   font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
-.docs-release-index a:hover { border-color: var(--accent); }
+.docs-release-index button { cursor: pointer; color: inherit; font-family: inherit; }
+.docs-release-index button:hover { border-color: var(--accent); }
+.docs-release-index button[aria-selected="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.docs-release-index .docs-release-more { border-style: dashed; color: var(--ink-muted); }
 .docs-release h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .docs-release-date { font-size: 14px; font-weight: 400; color: var(--ink-muted); }
 .docs-lead-sm { color: var(--ink-muted); }
@@ -301,3 +304,5 @@
 .docs-release ul { list-style: disc; }
 .docs-release li::marker { color: var(--ink-muted); }
 @media print { .docs-release-index { display: none; } .docs-release { break-inside: auto; } }
+@media screen { .docs-release[data-off] { display: none; } }
+.docs-sidebar-count { margin-left: 4px; font-size: 12px; color: var(--ink-muted); font-weight: 400; }

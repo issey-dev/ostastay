@@ -17,6 +17,16 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "8.13.5",
+    date: "2026-11-09",
+    improved: [
+      "Release notes now show one version at a time: the newest opens first, and clicking a version at the top switches to its notes. The sidebar pages them by major version (8.x, 7.x and so on); each lists up to ten releases with an Older versions button for the rest. The PDF still contains every version.",
+    ],
+    fixed: [
+      "The platform console's Monitoring page no longer fills up with repeated notification errors. The scheduled checks that run every 15 minutes were logging an error each time they found an alert had already been sent; no alert was ever lost or sent twice, but the page made it look like something was broken.",
+    ],
+  },
+  {
     version: "8.13.4",
     date: "2026-11-09",
     highlights: "Phones get a proper layout for Transportation, Excursions, Spa, Cashiering and Housekeeping, nothing on a phone scrolls sideways any more, the platform console works on a phone, and notifications open as a sheet from the bottom of the screen.",
@@ -739,3 +749,13 @@ export const EARLIER_DEVELOPMENT = {
 
 /** The heading anchor for a version: 8.2.0 → "v8-2-0". */
 export const releaseAnchor = (version: string) => `v${version.replace(/\./g, "-")}`
+
+/** The major number of a version: "8.13.5" -> "8". Release notes are grouped by it. */
+export const majorOf = (version: string) => version.split(".")[0]
+
+/** Major versions that have notes, newest first, with how many releases each holds. */
+export const RELEASE_MAJORS: { major: string; count: number }[] = (() => {
+  const counts = new Map<string, number>()
+  for (const r of RELEASES) counts.set(majorOf(r.version), (counts.get(majorOf(r.version)) ?? 0) + 1)
+  return [...counts].map(([major, count]) => ({ major, count }))
+})()
