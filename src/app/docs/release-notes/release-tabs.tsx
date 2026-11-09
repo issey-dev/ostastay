@@ -1,68 +1,75 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { EARLIER_DEVELOPMENT, RELEASES, releaseAnchor } from "./releases"
+import { useSearchParams } from "next/navigation"
+import { EARLIER_DEVELOPMENT, RELEASES, majorOf, releaseAnchor } from "./releases"
 
-// Release notes: one version at a time. The tab row shows the newest VISIBLE versions and a
-// button for older ones. Every section is still in the page (hidden on screen) and all of
-// them show in print, so the PDF built from this page keeps the full history.
+// Release notes: one version at a time. The sidebar picks a MAJOR version (8.x, 7.x, ...,
+// the ?major= query); the tab row lists that major's releases, ten at a time, with a button
+// for the rest. Every section is still in the page (hidden on screen only) and all of them
+// show in print, so the PDF built from this page keeps the full history.
 const VISIBLE = 10
 const EARLIER = "earlier"
 
+const inMajor = (major: string) => RELEASES.filter((r) => majorOf(r.version) === major)
+
 export function ReleaseTabs() {
+  const majorParam = useSearchParams().get("major")
   const [selected, setSelected] = useState<string>(RELEASES[0].version)
   const [showOlder, setShowOlder] = useState(false)
 
-  // A link like /docs/release-notes#v8-12-0 opens that version (and reveals older tabs).
-  useEffect(() => {
-    const hash = window.location.hash.slice(1)
-    if (!hash) return
-    if (hash === EARLIER) {
-      setSelected(EARLIER)
-      setShowOlder(true)
-      return
-    }
-    const i = RELEASES.findIndex((r) => releaseAnchor(r.version) === hash)
-    if (i >= 0) {
-      setSelected(RELEASES[i].version)
-      if (i >= VISIBLE) setShowOlder(true)
-    }
-  }, [])
+  const currentMajor = selected === EARLIER ? EARLIER : majorOf(selected)
 
-  function select(key: string) {
+  function choose(key: string, older = false) {
     setSelected(key)
+    setShowOlder(older)
     const anchor = key === EARLIER ? EARLIER : releaseAnchor(key)
-    window.history.replaceState(null, "", `#${anchor}`)
+    const major = key === EARLIER ? EARLIER : majorOf(key)
+    window.history.replaceState(null, "", `?major=${major}#${anchor}`)
   }
 
-  const tabs = showOlder ? RELEASES : RELEASES.slice(0, VISIBLE)
-  const hasOlder = RELEASES.length > VISIBLE
+  // A link like /docs/release-notes#v8-12-0 opens that version, once, on load.
+  useEffect(() => {
+    const hash = window.location.hash.slice(1)
+    if (hash === EARLIER) return setSelected(EARLIER)
+    const r = RELEASES.find((x) => releaseAnchor(x.version) === hash)
+    if (r) {
+      setSelected(r.version)
+      setShowOlder(inMajor(majorOf(r.version)).indexOf(r) >= VISIBLE)
+    } else if (majorParam && majorParam !== EARLIER && inMajor(majorParam)[0]) {
+      setSelected(inMajor(majorParam)[0].version)
+    } else if (majorParam === EARLIER) setSelected(EARLIER)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The sidebar changed the major: open that major's newest release.
+  useEffect(() => {
+    if (!majorParam || majorParam === currentMajor) return
+    setShowOlder(false)
+    if (majorParam === EARLIER) setSelected(EARLIER)
+    else if (inMajor(majorParam)[0]) setSelected(inMajor(majorParam)[0].version)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [majorParam])
+
+  const versions = currentMajor === EARLIER ? [] : inMajor(currentMajor)
+  const tabs = showOlder ? versions : versions.slice(0, VISIBLE)
 
   return (
     <>
-      <div role="tablist" aria-label="Versions" className="docs-release-index">
-        {tabs.map((r) => (
-          <button
-            key={r.version}
-            type="button"
-            role="tab"
-            aria-selected={selected === r.version}
-            onClick={() => select(r.version)}
-          >
-            {r.version}
-          </button>
-        ))}
-        {showOlder && (
-          <button type="button" role="tab" aria-selected={selected === EARLIER} onClick={() => select(EARLIER)}>
-            Earlier
-          </button>
-        )}
-        {hasOlder && (
-          <button type="button" className="docs-release-more" onClick={() => setShowOlder((v) => !v)}>
-            {showOlder ? "Show fewer" : "Older versions"}
-          </button>
-        )}
-      </div>
+      {versions.length > 0 && (
+        <div role="tablist" aria-label={`Versions ${currentMajor}.x`} className="docs-release-index">
+          {tabs.map((r) => (
+            <button key={r.version} type="button" role="tab" aria-selected={selected === r.version} onClick={() => choose(r.version, showOlder)}>
+              {r.version}
+            </button>
+          ))}
+          {versions.length > VISIBLE && (
+            <button type="button" className="docs-release-more" onClick={() => setShowOlder((v) => !v)}>
+              {showOlder ? "Show fewer" : "Older versions"}
+            </button>
+          )}
+        </div>
+      )}
 
       {RELEASES.map((r) => (
         <section key={r.version} className="docs-release" data-off={selected !== r.version ? "" : undefined} data-release>

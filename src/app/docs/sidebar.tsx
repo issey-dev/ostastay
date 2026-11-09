@@ -1,8 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { Suspense } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
 import { DOC_AREAS, OPENAPI_URL, areaFor } from "./nav"
+import { RELEASE_MAJORS, RELEASES, majorOf } from "./release-notes/releases"
 
 export const DOCS_MENU_ID = "docs-menu"
 
@@ -31,7 +33,7 @@ export function DocsSidebar() {
           </Link>
         ))}
       </div>
-      {area?.sections.map((section) => (
+      {area?.key !== "release-notes" && area?.sections.map((section) => (
         <div key={section.title}>
           <h4>{section.title}</h4>
           {section.links.map((l) => (
@@ -41,7 +43,29 @@ export function DocsSidebar() {
           ))}
         </div>
       ))}
+      {pathname === "/docs/release-notes" && (
+        <Suspense>
+          <ReleaseMajors />
+        </Suspense>
+      )}
     </nav>
+  )
+}
+
+/** Release notes are paged by major version: 8.x, 7.x, ... each lists its own releases. */
+function ReleaseMajors() {
+  const param = useSearchParams().get("major") ?? majorOf(RELEASES[0].version)
+  const link = (major: string, label: string, note: string) => (
+    <Link key={major} href={`/docs/release-notes?major=${major}`} scroll={false} aria-current={param === major ? "page" : undefined} onClick={closeMenu}>
+      {label} <span className="docs-sidebar-count">{note}</span>
+    </Link>
+  )
+  return (
+    <div>
+      <h4>Versions</h4>
+      {RELEASE_MAJORS.map(({ major, count }) => link(major, `Version ${major}`, `${count}`))}
+      {link("earlier", "Earlier development", "")}
+    </div>
   )
 }
 

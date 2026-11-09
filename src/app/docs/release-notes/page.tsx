@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 import { DocTitle, Pager } from "../components"
 import { RELEASES } from "./releases"
@@ -16,7 +17,9 @@ export default function ReleaseNotes() {
         lead={`What each version of Uppsolut Stay added, improved and fixed. The current version is ${latest.version}.`}
       />
 
-      <ReleaseTabs />
+      <Suspense>
+        <ReleaseTabs />
+      </Suspense>
       <Pager href="/docs/release-notes" />
     </>
   )

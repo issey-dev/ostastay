@@ -305,3 +305,4 @@
 .docs-release li::marker { color: var(--ink-muted); }
 @media print { .docs-release-index { display: none; } .docs-release { break-inside: auto; } }
 @media screen { .docs-release[data-off] { display: none; } }
+.docs-sidebar-count { margin-left: 4px; font-size: 12px; color: var(--ink-muted); font-weight: 400; }
