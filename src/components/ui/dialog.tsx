@@ -78,6 +78,41 @@ const DESKTOP_SIZE: Record<"sm" | "md" | "lg" | "xl", string> = {
   xl: "sm:max-w-[960px]",
 }
 
+// Base UI hides the rest of the page (aria-hidden) the moment a dialog mounts, but moves focus
+// into the dialog a frame later. In that gap the button that opened it still has focus and
+// sits inside what was just hidden, so the browser logs "Blocked aria-hidden on an element
+// because its descendant retained focus" (the page behind, or a parent dialog when one opens
+// from another). Rendered inside the popup, this lets go of the opener during the render that
+// mounts the dialog, i.e. before Base UI hides anything, and gives it focus back when the
+// dialog closes (only if nothing else took it meanwhile).
+function FocusHandoff() {
+  const marker = React.useRef<HTMLSpanElement>(null)
+  // Runs once, while the dialog mounts (a lazy initialiser, so not on later re-renders).
+  const [opener] = React.useState<HTMLElement | null>(() => {
+    if (typeof document === "undefined") return null
+    const el = document.activeElement
+    if (el instanceof HTMLElement && el !== document.body) {
+      el.blur()
+      return el
+    }
+    return null
+  })
+  React.useEffect(() => {
+    const mark = marker.current
+    return () => {
+      if (!opener) return
+      requestAnimationFrame(() => {
+        // Still mounted means development's mount/unmount probe, not a real close.
+        if (mark?.isConnected) return
+        if (opener.isConnected && (document.activeElement === document.body || document.activeElement === null)) {
+          opener.focus({ preventScroll: true })
+        }
+      })
+    }
+  }, [opener])
+  return <span ref={marker} hidden />
+}
+
 function DialogContent({
   className,
   children,
@@ -109,6 +144,7 @@ function DialogContent({
         )}
         {...props}
       >
+        <FocusHandoff />
         {mobile === "none" ? (
           children
         ) : (
