@@ -2,6 +2,20 @@
 
 > Read [MASTER_PLAN.md](MASTER_PLAN.md) first for the architecture and full phase history.
 
+## Agent Portal + Agent API (2026-11-11) — PLAN ONLY, nothing built
+
+Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website exists
+on the owner's machine only (`agent-portal/`, not in git).
+
+- [ ] Owner to answer Q-1…Q-14 in the plan (§13) — several change the design (instant accept vs
+  approval, overflow and Green Tax, commission rounding, proforma vs posted advance revenue).
+- [ ] Phase 0 (9.0.1): permissions and roles audit. Found so far: `TAPE_CHART` is never enforced
+  server-side; every Debtors route checks `view` only, including sending a statement; about a
+  dozen routes check the session but no module (list in the plan §10); `Profile.commissionRate`
+  is stored and shown but used by no calculation.
+- [ ] Phases 1-9 (9.1.0 … 9.9.0): see the plan §11. Phase 1 (`TENTATIVE` status) also closes the
+  long-open last-room race by putting an advisory lock inside `createReservation`.
+
 ## Osta console redesign (2026-11-07) — TODAY + DIRECTORY + WORKSPACE + PALETTE BUILT (`feat/osta-today`), rest open
 
 Design canvas (4 screens): https://claude.ai/artifact/66TuX8sojkQpNAk7greP9A (private to the owner).

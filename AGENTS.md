@@ -50,6 +50,14 @@ read `.agents/docs/`:
   decide which area it belongs to, and gate its API with `requireEnterpriseHub()` or
   `requirePropertySetup()` from `src/lib/scope.ts`.
 
+- [`.agents/docs/AGENT_PORTAL_PLAN.md`](.agents/docs/AGENT_PORTAL_PLAN.md) — PLAN ONLY (nothing
+  built): travel agents get their own portal on a new Agent API (`/api/agent/v1`): tentative
+  reservations with option dates, overflow bookings, sell limits, allotments and release,
+  Tape Chart booking markers, settlement modes and a commission ledger, plus a permissions
+  review. Decisions A-1…A-25, phases 0-9 versioned from 9.0.1, owner questions Q-1…Q-14. Read
+  before touching reservation statuses, availability arithmetic, commission, group billing or
+  `src/lib/modules.ts`. The agent website itself is a local mockup and is not in this repo.
+
 - [`.agents/docs/NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) — the notification
   system, BUILT (8.10.0 and 8.12.0): header bell in the dashboard, Hub and Osta console, personal +
   global notifications, per-person settings, Hub announcements, the clock-based alerts job,
