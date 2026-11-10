@@ -3,6 +3,9 @@
 > Status (2026-11-11): **PLAN ONLY. Nothing in the PMS is built.** A clickable mockup of the
 > agent website exists locally in `agent-portal/` (not in git, see §12). Written against
 > `origin/master` at **8.13.6**. PMS work in this plan is versioned from **9.0.1**.
+> **Owner answers of 2026-11-11 are folded in** (permissions, rounding, auto-confirmation,
+> overflow and Green Tax, deposits, Advance Folio); §13 lists what was answered and what is
+> still open.
 >
 > Read with: [WEBSITE_API_PLAN.md](WEBSITE_API_PLAN.md) and
 > [BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md) (the key, rate-limit, idempotency and
@@ -135,8 +138,9 @@ type **`OVF` "Overflow"** created on demand like `PM`, plus `Reservation.isOverf
 `overflowHotelName` and `overflowNote`. An overflow booking is charged normally, is marked on
 every list and the Tape Chart, has its own report, and is **always a request the hotel must
 accept** (never automatic). It can be moved into a real room type later if a room frees up.
-Green Tax and guest registration for a guest who physically sleeps elsewhere need a ruling
-(Q-4).
+**Owner ruling (2026-11-11): an overflow guest gets no Green Tax and no registration number
+from this property**, and is not counted in occupancy; the revenue still counts. Whether an
+overflow request still needs a person at the hotel to accept it is open (Q-15).
 
 **A-9. Agent availability obeys D-7 by default, plus two additions.** Numbers come from
 `perNightTypeAvailability()`: real inventory, clamped at 0, stop sale reported as closed.
@@ -171,14 +175,27 @@ margin, Q-6) and both sides are notified. Arithmetic reuses the shape of
 `outstandingBlockHolds`: an allotment is an outstanding hold that availability subtracts and
 that the owning agent's bookings draw from.
 
-**A-13. Tentative is confirmed by payment or by contract.**
-- *Contract*: the agent has a live credit account (`isCreditAccount`) and the booking total
-  fits inside the remaining credit limit → the agent confirms in one click.
-- *Payment*: the agent submits a payment reference (and optional proof file) → status stays
-  `TENTATIVE` with `confirmationSubmittedAt` set, the option clock **pauses**, the hotel
-  verifies and records the deposit → `RESERVED`. A rejected proof restarts the clock with at
-  least 48 hours left.
-- The hotel can confirm or extend any option by hand at any time.
+**A-13. Confirmation is automatic, by rule; staff approval is not part of the flow** (owner,
+2026-11-11). A request inside availability is never queued for a person. The system decides at
+once whether it is **Confirmed** or **Tentative**, from rules the portal's administrator sets
+(`AgentConfirmationRule`, per property, overridable per agent contract):
+
+- *By rate*: the booking's rate plan is marked "confirms automatically" (typically a contract
+  rate for an agent with a live credit account, inside the credit limit).
+- *By payment*: a payment covering the required deposit (a percentage or the first night, set
+  in the rule) has been received against the booking.
+- *Otherwise*: Tentative, with an option date (A-14).
+
+A tentative booking confirms itself the moment a rule becomes true: the agent switches to a
+confirming rate, or the payment is recorded. When a booking confirms, the **confirmation
+letter is sent automatically** to the agent (to the guest as well only if the agent asks, Q-20), and
+the voucher becomes available. Staff can still confirm, extend or release any option by hand.
+
+How a payment counts as "received" decides whether this is fully automatic. With an online
+payment link whose provider tells the system the money arrived, it is. With a bank transfer
+the agent only *reports*, a person must still see the money; in that case the booking stays
+Tentative with the option clock paused until the receipt is recorded, which is the one place
+a human remains in the loop (Q-17). Who "the administrator" is needs confirming (Q-16).
 
 **A-14. Option period rules.** `optionDate = arrival − optionDaysBeforeArrival` (default 30,
 per property, overridable per agent contract and per booking by staff). A booking made *inside*
@@ -228,8 +245,8 @@ the non-city-ledger case.
 **A-20. Commission base is the net room rate.** The room-charge line's `amount`, which is
 stored without `serviceChargeAmount` and `taxAmount`. Rate from, in order: the booking's
 contract override, `RatePlanAgentAccess.commissionRate`, `AgentContract.commissionRate`,
-then `Profile.commissionRate` (finally given a job). Rounded half-up to cents **per folio**,
-not per night. See §8 for the worked example and the one-cent difference from the brief.
+then `Profile.commissionRate` (finally given a job). **Rounded normally (half-up) to two
+decimals** (owner, 2026-11-11), once per folio, not per night. See §8 for the worked example.
 
 **A-21. Every booking carries its source.** `Reservation.source`: `DESK`, `WEBSITE`,
 `CHANNEL`, `AGENT_PORTAL`, `AGENT_API`, `GROUP_PICKUP`. Backfilled from the existing
@@ -243,12 +260,30 @@ seeded so it works with zero setup. Status keeps the bar's fill; the marker is a
 and a coloured edge, so status and source never fight for the same channel. Tentative bars
 are additionally hatched.
 
-**A-23. Advance payment before arrival is a proforma plus a deposit, not posted revenue.**
-The existing Advance Bill posts revenue on the day it runs, which is right for an in-house
-guest and wrong months before arrival. For `RESERVED`/`TENTATIVE` bookings and for groups:
-an **Advance Invoice** = a numbered proforma built by the same quote engine, with a deposit
-schedule, and payments recorded as advance deposits on the (master) folio. Night Audit then
-posts nights as usual against the deposit. Needs the owner's accountant to agree (Q-7).
+**A-23. Two different things, both wanted** (owner, 2026-11-11).
+
+*Advance deposit: money in, no revenue.* An advance payment can be collected at any time
+before or during the stay **without posting revenue**. It is recorded as a deposit on the
+reservation's folio (or the group's master folio), with a receipt, and can be requested with a
+numbered deposit request built by the quote engine. Night Audit posts the nights as usual and
+the deposit is consumed against them. Works for `TENTATIVE` and `RESERVED` bookings and for
+groups; it is also what the "by payment" confirmation rule (A-13) looks at.
+
+*Advance Folio: the whole stay posted on one date.* The owner's definition: a guest staying
+three nights checks in, and generating the Advance Folio posts **all three nights' charges,
+in full, dated the same day, including every allocation charge**. This is revenue posting,
+and it is what the existing **Advance Bill** already does for one in-house reservation
+(`POST /reservations/[id]/advance-bill`: rate, extra occupancy, allocations, Green Tax and
+unposted transfers, dated the business date; `advanceBilledThrough` stops Night Audit posting
+those nights again). What is missing, and what Phase 8 builds:
+- **Groups**: one action on the block that advance-posts every in-house pickup, each to the
+  folio its routing names (master or own), with a per-pickup result list.
+- The name. Staff look for "Advance Folio"; the action is labelled "Advance Bill". Rename to
+  **Advance Folio** everywhere (button, dialog, docs, release notes).
+- A printed document of its own (today the Interim Bill doubles as it).
+- A way to reverse an advance folio made by mistake on the same business date.
+- Whether it should also be allowed **before** check-in is open (Q-18); today it is in-house
+  only, which keeps revenue from being posted for a guest who never arrives.
 
 **A-24. Minimal configuration is a requirement, not a hope.** One switch per property turns
 agents on with working defaults. Per agent, the only required act is **Invite** on the
@@ -267,7 +302,7 @@ dashboard under a new module (§10).
 | Model / column | Purpose |
 |---|---|
 | `Reservation.source String @default("DESK")` | A-21 |
-| `Reservation.optionDate DateTime?`, `confirmationSubmittedAt?`, `confirmedAt?`, `confirmedVia String?` (`CONTRACT`/`PAYMENT`/`DESK`) | A-13, A-14 |
+| `Reservation.optionDate DateTime?`, `confirmationSubmittedAt?`, `confirmedAt?`, `confirmedVia String?` (`RATE`/`PAYMENT`/`DESK`) | A-13, A-14 |
 | `Reservation.settlementMode String?` | A-18 |
 | `Reservation.isOverflow Boolean`, `overflowHotelName?`, `overflowNote?` | A-8 |
 | `Reservation.packageName String?`, `agentReference String?` | Package name and the agent's own file number |
@@ -284,6 +319,8 @@ dashboard under a new module (§10).
 | `RatePlan.agentSalesOpenAt DateTime?` | A-11 |
 | `BookingMarker` (property, `sortOrder`, `label`, match fields, `icon`, `colorToken`, `isActive`) | A-22 |
 | `AgentPortalSettings` (per property: `enabled`, option defaults, `shortOptionHours`, `guestDetailsDueDays`, `agentAvailabilityDisplay`, `agentsMaySellIntoLimit`, `maxOverflowPerNight`, `requireApprovalFor` set, voucher text) | A-24 |
+| `AgentConfirmationRule` (property, `agentUpid?`, `ratePlanId?`, `trigger` `RATE`/`PAYMENT`, `depositPercent?`, `depositNights?`, `requiresCreditAccount`, `isActive`, `sortOrder`) | A-13 |
+| `RoleCapability` (`roleId`, `capability`) `@@unique` | §10, fine-grained permissions |
 | `SystemCode` category `AGENT_CANCEL_REASON` | Reason list, edited in the existing Dropdowns manager |
 | `WebsiteApiKey.scopes` gains `AGENT` | A-3 |
 
@@ -295,21 +332,21 @@ Money columns follow the repo's existing `Float` + `toCents` convention. Every m
 ### 5.1 Individual booking
 
 ```
-                       ┌──────────── hotel declines ────────────┐
- agent submits ──▶ PENDING request ── hotel accepts ──┐         ▼
-   (overflow, or property                             │      DECLINED (request only,
-    requires approval)                                │       no reservation exists)
+ agent submits ──▶ PENDING request ── hotel accepts ──┐      DECLINED (request only,
+   (overflow only, see Q-15)  └── hotel declines ─────┼────▶  no reservation exists)
                                                       ▼
  agent submits ──▶ accepted at once ──▶ TENTATIVE ──────────▶ RESERVED ("Confirmed")
-   (inside availability                  │  ▲   confirm by      │
-    or own allotment)                    │  │   contract, or    ├─▶ IN_HOUSE ─▶ CHECKED_OUT
-                                         │  │   payment verified│
-            agent cancels (reason) ──────┤  └─ hotel extends    ├─▶ NO_SHOW
-            option expires (job) ────────┤     the option       │
-            hotel cancels ───────────────┤                      └─▶ CANCELLED (hotel only;
-                                         ▼                           agent may only REQUEST)
-                                     CANCELLED
-                              reason code tells which
+   (inside availability    │             │  ▲   a rule becomes  │   letter sent
+    or own allotment)      │             │  │   true: rate or   ├─▶ IN_HOUSE ─▶ CHECKED_OUT
+                           │             │  │   payment (A-13)  │
+                           │             │  └─ hotel extends    ├─▶ NO_SHOW
+                           │             │     the option       │
+                           │   agent cancels (reason) ──┐       └─▶ CANCELLED (hotel only;
+                           │   option expires (job) ────┤           agent may only REQUEST)
+                           │   hotel cancels ───────────┤
+                           │                            ▼
+                           │                        CANCELLED (reason code tells which)
+                           └─ a rule is already true at booking: straight to RESERVED
 ```
 
 Rules that keep it honest:
@@ -430,14 +467,14 @@ in, staff names, internal remarks, cost or other agents' rates, the housekeeping
 
 | Screen | Change |
 |---|---|
-| **Agent requests** (new, dashboard) | Inbox: pending requests, payments to verify, change requests, rooming lists received. Accept / decline with reason / counter-offer different room type. Keyboard-first like Front Desk |
+| **Agent requests** (new, dashboard) | Not an approval queue (A-13). A worklist of what genuinely needs a person: reported payments to match, overflow requests (Q-15), change and cancellation requests on confirmed bookings, rooming lists received. Keyboard-first like Front Desk |
 | **Agents** (new, dashboard) | Per agent: contract, users (invite, suspend, reset), allotments with pickup and release dates, bookings, commission, statement. Opens from the agent profile too |
 | Reservations list, Front Desk, search | Tentative status and filter, option date column, source marker, Overflow and Details-missing badges |
 | Booking form | Staff can create a tentative booking with an option date, pick settlement mode, mark overflow, set package name |
-| Reservation page | Option panel (confirm, extend, release, verify payment), agent request history, Advance Invoice, voucher |
+| Reservation page | Option panel (confirm, extend, release, verify payment), agent request history, deposit request and receipt, Advance Folio (renamed from Advance Bill), voucher |
 | Tape Chart | Markers, hatched tentative bars, legend, filter by source / agent / status, Overflow row beside Unassigned |
 | Availability | Sell limit row and editor next to Stop sale; "On option" and "Allotted" lines under each room type; oversold nights flagged |
-| Group Blocks | Source and agent on the block; rooming-list import; **Send documents** in the Master folio section (master folio, every pickup folio, group statement, as one PDF or a zip, by email); Advance Invoice; commission summary |
+| Group Blocks | Source and agent on the block; rooming-list import; **Send documents** in the Master folio section (master folio, every pickup folio, group statement, as one PDF or a zip, by email); deposit request; **Advance Folio for the whole group**; commission summary |
 | Debtors | Commissions tab; statement includes commissions; proper create/update permission checks |
 | Night Audit | Tentative survivors and unreleased allotments under "Needs attention"; commission accrual at checkout |
 | Hub, property area | **Agents** page (switch, defaults, reasons, markers). API keys gain the `AGENT` scope |
@@ -449,18 +486,17 @@ in, staff names, internal remarks, cost or other agents' rates, the housekeeping
 The brief's example: a room sold at 75.00 **including** 10% service charge and 17% tax.
 
 ```
-base            = 75.00 / 1.10 / 1.17      = 58.2751…  → 58.28 (half-up) or 58.27 (as in the brief)
+base            = 75.00 / 1.10 / 1.17      = 58.2751…  → 58.28
 service charge  = base × 10%               = 5.83
 tax             = (base + service) × 17%   = 10.90
-commission 10%  = base × 10%               = 5.8275…   → 5.83 (half-up)
+commission 10%  = base × 10%               = 5.8275…   → 5.83
 ```
 
-The brief states 58.27 and 5.82. Half-up rounding of the exact figures gives 58.28 and 5.83;
-the brief's figures are what truncation gives. The tax engine's existing back-calculation
-decides the base (it must also make base + service + tax equal exactly 75.00), and the
-commission follows from whatever base is posted. **The owner should confirm which cent is
-expected** (Q-5); the plan is to compute commission from the posted line amounts, sum across
-the stay, and round once.
+Normal rounding to two decimals (owner, 2026-11-11; the 58.27 and 5.82 in the brief were a
+slip). The three parts above sum to 75.01, so the tax engine's existing back-calculation,
+which must make base + service + tax equal exactly 75.00, decides which line absorbs the
+cent. Commission is computed from the room-charge amounts actually posted, summed across the
+stay, and rounded once.
 
 Per mode, for a 3-night stay at that rate (base 174.83 for the stay, total 225.00):
 
@@ -567,8 +603,15 @@ Rules:
   forfeit is a desk decision under the fee rule.
 - Payment proof is a file upload: type and size limits, virus scan hook, stored like profile
   attachments, never served without the agent token.
-- Advance Invoice issued, then the stay changes → the proforma is re-issued with a new
-  number; the old one is marked superseded.
+- Deposit request issued, then the stay changes → re-issued with a new number; the old one
+  is marked superseded. A deposit already received stays on the folio.
+- Advance Folio posted, then the guest leaves early → the unused nights are rebated at
+  check-out (existing early-departure handling), and commission follows the net posted amount.
+- Advance Folio on a group where one pickup has no open folio or is not in house → that
+  pickup is skipped and reported; the others post.
+- A payment that would auto-confirm arrives after the option expired → the booking is not
+  silently revived; the money is held as a deposit on the cancelled booking and the desk is
+  alerted to reinstate (availability re-checked) or refund.
 - Statement for an agent working with several properties of one enterprise: per property
   (finance is per property since 2026-09-24), with an enterprise total.
 
@@ -611,6 +654,72 @@ The brief asks for the roles list to be brought up to date. Findings from the co
 | `Profile.commissionRate` exists with no effect | Stored and displayed only | Used as the fallback rate (A-20) |
 | Default roles predate several modules | `prisma/rbac-seed-data.ts` | Review every default role against the final table; add **Reservations Agent** and **Accounts** defaults if missing |
 
+### Capabilities: finer control than view / create / update / delete (owner, 2026-11-11)
+
+The owner's objection to today's roles screen: it looks bland and offers no advanced control.
+The four actions per module stay, because they are simple and every route already uses them.
+On top, each module gains named **capabilities**: single switches for things the four
+actions cannot express. A capability is checked with `requireCapability(ctx, "…")` /
+`hasCapability`, merges across a user's roles by OR exactly like module permissions, and
+defaults to what the role could effectively do before, so no one loses or gains anything on
+upgrade.
+
+Starting catalogue (the audit in Phase 0a completes it; the list is code, not data, so a
+capability cannot exist without a check behind it):
+
+| Group | Capability | Today's implicit rule |
+|---|---|---|
+| Reservations | Overbook a room type | Anyone who can book may tick the overbook prompt |
+| | Exceed the sell limit | new (A-10) |
+| | Override a stop sale | `AVAILABILITY update` |
+| | Change or override a rate on a booking | `RESERVATIONS update` |
+| | Book a past arrival date | `RESERVATIONS update` |
+| | Cancel / reinstate a booking | `RESERVATIONS delete` / `update` |
+| | Confirm, extend or release an option | new (A-13, A-14) |
+| | Mark or clear Overflow | new (A-8) |
+| Availability | Set and lift stop sale | `AVAILABILITY update` |
+| | Edit sell limits | new |
+| Front Desk | Check in with a balance due; undo a check-in | `RESERVATIONS update` |
+| | Check out with a balance; reverse a check-out | `RESERVATIONS update` |
+| | Print or send a registration card | none (signed in is enough) |
+| | Send an eRegistration link | `RESERVATIONS update` |
+| Billing | Generate, print or send a folio / invoice | none (signed in is enough) |
+| | Generate an Advance Folio | `CASHIERING update` |
+| | Void a charge; post a rebate or discount | `CASHIERING update` / `delete` |
+| | Refund a payment; reopen a closed folio | `CASHIERING` |
+| | Transfer charges between folios; edit routing | `CASHIERING` |
+| | Post to City Ledger | `CASHIERING` |
+| **Rates and figures** | **Suppress rates**: hide every financial figure (rates, totals, balances, revenue) on screens, prints and exports for this role | none; anyone who can see a booking sees its money |
+| | See other users' cashier shifts | `CASHIERING view` |
+| Night Audit | Run Night Audit; re-run a step; change the business date | `NIGHT_AUDIT create` / `update` |
+| Profiles | See passport and ID numbers; merge profiles; deactivate a profile | `PROFILES view` / `update` |
+| Debtors | Send statements; record ledger payments; change a credit limit | `DEBTORS view` |
+| Agents | Match a reported payment; pay or offset commission; edit contracts and allotments | new |
+| Reports | Export to file; see revenue reports | `REPORTS view` |
+
+**Suppress rates** reaches furthest: it is not one check but a rule every money-bearing
+response must honour. It is enforced on the **server** (figures are removed from the API
+response, not hidden with CSS), through one shared serializer used by the reservation, folio,
+quote, tape chart, group, report and export routes, and a test asserts that a suppressed role
+receives no amount field from any of them. A suppressed role cannot hold a capability that
+needs figures (posting, voiding, refunds); the screen says so.
+
+**The roles screen** (Hub → Users & Access), redesigned:
+- One role at a time, not one wide matrix. Modules down the left with a summary chip each
+  ("Full", "View only", "Custom", "None").
+- Selecting a module shows its four actions, each with a one-line meaning, then its
+  capabilities as labelled switches with a sentence on what each allows.
+- Search across modules and capabilities ("overbook", "refund").
+- "Compare with…" another role, differences highlighted; "Duplicate role".
+- A plain-language summary of the role at the top ("Can book and check in; cannot see rates;
+  cannot void"), generated from the switches.
+- A "who has this" list per capability, so an owner can answer "who can overbook?".
+- Presets for common posts (Reservations Agent, Night Auditor, Accounts, Housekeeping
+  Supervisor) as starting points.
+- Works on a phone as a list, per MOBILE_PLAN.
+
+This makes Phase 0 larger than a tidy-up; §11 splits it in two.
+
 New for this plan:
 
 - Module **`AGENTS`** (dashboard): `view` inbox and agent pages; `create` accept or decline
@@ -637,18 +746,19 @@ safe to stop after.
 
 | Phase | Version | Scope | Done when |
 |---|---|---|---|
-| **0. Permissions and roles** | **9.0.1** | §10 audit and fixes, action-meaning table, default-role review, route coverage test. No new feature | Every API route is gated or allow-listed with a reason; roles page shows what each tick does |
+| **0a. Permission enforcement** | **9.0.1** | §10 audit and fixes, action-meaning table, default-role review, route coverage test. No new feature | Every API route is gated or allow-listed with a reason |
+| **0b. Capabilities and the new roles screen** | **9.0.2** | `RoleCapability`, capability registry and `requireCapability`, the starting catalogue wired to its checks, **Suppress rates** enforced server-side, redesigned Users & Access screen, presets, Configuration guide | An owner can switch off overbooking or hide all figures for a role, and can see who holds any capability |
 | **1. Booking status flow** | **9.1.0** | `TENTATIVE` status, option date, confirm / extend / release at the desk, option-expiry job, `Reservation.source` + backfill, structured cancel reasons, last-room advisory lock, §5.4 checklist. Staff can use tentative bookings with no agent involved | A tentative booking holds a room, shows everywhere with its own status, expires by itself; parallel last-room test passes |
 | **2. Sell limit, overflow, forecast** | **9.2.0** | `AvailabilitySellLimit` + editor on Availability, desk overbook capped, `OVF` pseudo type and overflow fields, "On option" line on the grid, oversold flags, Overflow report | A night can be capped at +N; an overflow booking is recognisable on every list |
 | **3. Booking markers** | **9.3.0** | `BookingMarker` rules, Hub editor (icon + colour pickers), Tape Chart markers, hatching, legend and filters, same markers on Reservations and Front Desk, seeded defaults | A property can tell agent, website, channel and desk bookings apart at a glance, in light and dark, on a phone |
 | **4. Agents in the PMS** | **9.4.0** | `AGENTS` module, `AgentContract`, `AgentUser` (invite / suspend), `AgentAllotment` + release and quota job, sales windows, Hub Agents page, Agents dashboard pages, allotment lines on Availability | An agent can be set up in under two minutes; an unsold allotment releases itself |
 | **5. Agent API, read side** | **9.5.0** | `AGENT` scope, auth routes, sessions, `/me`, catalogue, availability with forecast and allotment, quote. Docs portal area `/docs/agent-api`, OpenAPI file. Portal mock switches to the real API for these calls | An agent signs in and sees live availability and their own rates; isolation tests pass |
-| **6. Agent API, bookings** | **9.6.0** | Requests (individual, multi-room, group), instant accept versus approval, confirm by contract or payment, guests, travel and transfers, package and requests, rooming list, cancel with reason, change requests, voucher PDF, webhooks, Agent requests inbox, notifications | A booking made by an agent appears in the PMS, blocks the room, and can be confirmed, detailed and vouchered end to end |
+| **6. Agent API, bookings** | **9.6.0** | Requests (individual, multi-room, group), automatic confirmation rules (rate, payment) and the automatic confirmation letter, guests, travel and transfers, package and requests, rooming list, cancel with reason, change requests, voucher PDF, webhooks, Agent requests inbox, notifications | A booking made by an agent appears in the PMS, blocks the room, and can be confirmed, detailed and vouchered end to end |
 | **7. Settlement** | **9.7.0** | Settlement modes, `AgentCommission` ledger and payouts, Debtors Commissions tab, statement with commissions, agent statement endpoint, commission reports, reversal handling | The three modes in §8 produce the figures in §8; a reversed check-out reverses the commission |
-| **8. Group billing** | **9.8.0** | Send documents from the Master folio (bulk folios, group statement), Advance Invoice for reserved bookings and groups with deposit schedule, group commission summary, rooming-list import at the desk | A group's documents go out in one action; a deposit can be requested and recorded before arrival |
+| **8. Group billing and advance** | **9.8.0** | Send documents from the Master folio (bulk folios, group statement); deposit request and advance deposit without revenue, for bookings and groups; **Advance Folio for groups**, rename from Advance Bill, own document, same-day reversal; group commission summary; rooming-list import at the desk | A group's documents go out in one action; a deposit is taken with no revenue posted; a whole group's stay can be posted in one step |
 | **9. Portal go-live** | **9.9.0** | Hardening from the pilot, load and abuse tests, monitoring tiles in the platform console, Operations guide "Working with agents", go-live checklist. Portal itself is built against the real API in its own local repo | One real agent completes a tentative → confirmed → checked-out → commission-settled cycle |
 
-Phases 0 to 3 are PMS improvements the customer feels at once and that do not depend on the
+Phases 0a to 3 are PMS improvements the customer feels at once and that do not depend on the
 portal. Phase 1 must precede everything agent-facing. Phases 2 and 3 can swap or run in
 parallel sessions (different files). Phase 7 can start once Phase 1 is merged.
 
@@ -657,7 +767,7 @@ confirm-versus-expire race; availability arithmetic with tentative, allotment, s
 stop sale combined; last-room race; agent isolation (agent A never reads agent B, agent token
 never opens a dashboard route); idempotent replay; price change; option expiry on read with
 the job stopped; allotment release and quota; commission per mode against §8's figures,
-split-stay, void and reversal; rooming-list partial acceptance; voucher versions; route
+split-stay, void and reversal; confirmation rules (rate true at booking, payment arriving later, payment after expiry); Advance Folio for a group with a mixed set of pickups; a suppressed role receives no amount from any route; capability merge across roles; rooming-list partial acceptance; voucher versions; route
 permission coverage.
 
 ## 12. The mockup website (local only)
@@ -683,26 +793,39 @@ line with the docs rule that no real customer appears in anything presentable.
 
 ## 13. Owner questions
 
+### Answered (2026-11-11)
+
+| # | Question | Owner's answer | Where it landed |
+|---|---|---|---|
+| Q-1 | What is disliked about permissions? | The screen looks bland and has no advanced control. Keep the simple per-module CRUD, add drill-down options: allow overbooking, stop sale, registration card and folio generation, suppress rates (hide financial figures), and more | §10 Capabilities, Phase 0b |
+| Q-2 | Accept at once, or wait for staff? | No staff approval. Confirmed automatically by rule (rate or payment), with the confirmation letter sent; otherwise Tentative. The administrator sets the rules | A-13 |
+| Q-4 | Overflow guests: Green Tax and registration number here? | No | A-8 |
+| Q-5 | Commission rounding | Normal rounding to two decimals; the 5.82 was a slip | A-20, §8 |
+| Q-7 | Deposit without revenue, or revenue posted in advance? | Both exist and are different. An advance payment is collected without posting revenue. An Advance Folio posts every night of the stay, with allocations, on one date | A-23 |
+
+### Still open
+
 | # | Question | Plan assumes |
 |---|---|---|
-| Q-1 | The permissions note stops at "I currently do not like that". What is disliked: the matrix layout, the module list, the default roles, the four-action model? | Fix enforcement and document meanings (Phase 0); layout untouched until answered |
-| Q-2 | Is an agent booking inside availability accepted at once, or does every request wait for staff? | At once inside availability or allotment; approval only for overflow, groups, and anything the property lists |
-| Q-3 | May agents sell into the sell limit, or only the desk? | Desk only; agents get the overflow request instead |
-| Q-4 | Overflow guests sleep in another hotel. Do they get this property's Green Tax and registration number, and do they count in occupancy? | No registration number, no Green Tax, not in occupancy; revenue counts |
-| Q-5 | Commission rounding: 5.82 (as written) or 5.83 (half-up)? Per night or per stay? | Half-up, once per folio |
+| Q-3 | May agents sell into the sell limit (controlled overbooking), or only the desk? | Desk only; agents get the overflow request instead |
 | Q-6 | When an agent misses the quota: release everything unsold, or shrink the allotment to pickup plus a margin? | Release everything unsold from the review date onward |
-| Q-7 | Before arrival, is a proforma plus recorded deposit acceptable, or must revenue be posted in advance as the in-house Advance Bill does? | Proforma plus deposit |
-| Q-8 | Is commission paid on the room part only, or on the whole package rate? | Room part only, with a per-contract switch |
+| Q-8 | Is commission paid on the room part only, or on the whole package rate (room plus included meals)? | Room part only, with a per-contract switch |
 | Q-9 | Is a tentative booking's price locked when it is made, or re-priced until confirmed? | Locked |
 | Q-10 | How much availability do agents see: exact numbers, capped, or status words only? | Capped ("5+") |
 | Q-11 | Who hosts the portal: Uppsolut as one shared site for all customers, or one site per customer under their brand? | One shared site, themed per property from data the API returns |
 | Q-12 | Can the customer share how they mark agent bookings today in mobile-calendar (two screenshots)? | Seeded defaults in Phase 3 are a guess until then |
 | Q-13 | Is the Agent Portal a paid add-on (switched by Osta like Excursions) or part of the base product? | Add-on key `AGENTS`, toggled in the platform console |
 | Q-14 | Should the hotel be able to cancel a confirmed agent booking with a fee, and who is charged: the agent's ledger or the guest? | The existing fee rule, charged to whoever the settlement mode names |
+| Q-15 | Overflow (hotel full, guest goes to a partner hotel): does this also go through with no staff step, or is it the one request a person must accept, since someone has to secure the partner room? | A person accepts it; everything else is automatic |
+| Q-16 | "Give control to the agent website admin": is that the hotel's administrator of the portal (sets the rules for all agents), or each agency's own admin user (decides what their bookers may do)? | The hotel's administrator sets confirmation rules; an agency admin only manages their own users |
+| Q-17 | For "confirmed by payment": will agents pay through an online payment link (confirmation is then fully automatic), or by bank transfer they report (someone at the hotel must match the money first)? And how much must be paid to confirm: full amount, a percentage, the first night? | Both supported; a percentage set per rule, default 100% |
+| Q-18 | Advance Folio already exists for one in-house reservation, as "Advance Bill" on the reservation page. Is the gap that it is missing for groups and hard to find under that name, or should it also be allowed before check-in? | Groups and the rename; in-house only |
+| Q-19 | Suppress rates: should a suppressed user still see that a balance *exists* (a "balance due" flag with no amount), so the desk can stop a guest leaving unpaid? | Yes: a flag, never a figure |
+| Q-20 | Automatic confirmation letter: to the agent only, or also to the guest when the agent has entered the guest's email? Agents often do not want the hotel writing to their client | Agent only, unless the agent ticks "also send to guest" |
 
 ## 14. Status
 
 | Phase | Status |
 |---|---|
 | Mockup (`agent-portal/`, local) | Built 2026-11-11 |
-| 0 – 9 | Not started |
+| 0a, 0b, 1 – 9 | Not started |

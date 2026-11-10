@@ -7,9 +7,12 @@
 Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website exists
 on the owner's machine only (`agent-portal/`, not in git).
 
-- [ ] Owner to answer Q-1…Q-14 in the plan (§13) — several change the design (instant accept vs
-  approval, overflow and Green Tax, commission rounding, proforma vs posted advance revenue).
-- [ ] Phase 0 (9.0.1): permissions and roles audit. Found so far: `TAPE_CHART` is never enforced
+- [ ] Owner answered Q-1, 2, 4, 5 and 7 on 2026-11-11 (folded into the plan). Still open: Q-3, Q-6,
+  Q-8 to Q-20 (plan §13) — notably who sets confirmation rules, how a payment counts as received,
+  and whether overflow needs a person to accept.
+- [ ] Phase 0b (9.0.2): capabilities (fine-grained switches on top of module CRUD, including
+  Suppress rates enforced server-side) and the redesigned Users & Access screen (plan §10).
+- [ ] Phase 0a (9.0.1): permissions and roles audit. Found so far: `TAPE_CHART` is never enforced
   server-side; every Debtors route checks `view` only, including sending a statement; about a
   dozen routes check the session but no module (list in the plan §10); `Profile.commissionRate`
   is stored and shown but used by no calculation.
