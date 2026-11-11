@@ -7,17 +7,26 @@
 Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website exists
 on the owner's machine only (`agent-portal/`, not in git).
 
-- [ ] Owner answered Q-1, 2, 4, 5 and 7 on 2026-11-11 (folded into the plan). Still open: Q-3, Q-6,
-  Q-8 to Q-20 (plan §13) — notably who sets confirmation rules, how a payment counts as received,
-  and whether overflow needs a person to accept.
-- [ ] Phase 0b (9.0.2): capabilities (fine-grained switches on top of module CRUD, including
-  Suppress rates enforced server-side) and the redesigned Users & Access screen (plan §10).
+- [ ] Owner answered two rounds on 2026-11-11 (folded into the plan). The second round reshaped
+  the design: an agent is a **Source** profile in Client Relations with linked portal logins, the
+  portal works through **Group Blocks** (slot request → approved block → bookings inside it),
+  confirmation is a manual desk step, no Agents module. Still open: Q-12 and Q-21 to Q-26 (plan
+  §13): single bookings outside a slot, tentative bookings at the cutoff, what elasticity means,
+  Source beside or instead of Travel Agent, whether a request holds rooms, Definite or Tentative
+  on approval.
+- [ ] The local mockup (`agent-portal/`) predates the second round and must be reworked to the
+  plan's §1a before it is shown to the customer.
 - [ ] Phase 0a (9.0.1): permissions and roles audit. Found so far: `TAPE_CHART` is never enforced
   server-side; every Debtors route checks `view` only, including sending a statement; about a
   dozen routes check the session but no module (list in the plan §10); `Profile.commissionRate`
   is stored and shown but used by no calculation.
+- [ ] Phase 0b (9.0.2): capabilities (fine-grained switches on top of module CRUD, including
+  Suppress rates enforced server-side, balance due stays visible) and the redesigned Users &
+  Access screen (plan §10).
 - [ ] Phases 1-9 (9.1.0 … 9.9.0): see the plan §11. Phase 1 (`TENTATIVE` status) also closes the
-  long-open last-room race by putting an advisory lock inside `createReservation`.
+  long-open last-room race by putting an advisory lock inside `createReservation`. Phase 3 adds
+  the `SOURCE` profile type and markers; Phase 4 puts slots, cutoff rules and elasticity on
+  Group Blocks.
 
 ## Osta console redesign (2026-11-07) — TODAY + DIRECTORY + WORKSPACE + PALETTE BUILT (`feat/osta-today`), rest open
 
