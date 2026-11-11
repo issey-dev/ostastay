@@ -7,15 +7,16 @@
 Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website exists
 on the owner's machine only (`agent-portal/`, not in git).
 
-- [ ] Owner answered two rounds on 2026-11-11 (folded into the plan). The second round reshaped
-  the design: an agent is a **Source** profile in Client Relations with linked portal logins, the
-  portal works through **Group Blocks** (slot request → approved block → bookings inside it),
-  confirmation is a manual desk step, no Agents module. Still open: Q-12 and Q-21 to Q-26 (plan
-  §13): single bookings outside a slot, tentative bookings at the cutoff, what elasticity means,
-  Source beside or instead of Travel Agent, whether a request holds rooms, Definite or Tentative
-  on approval.
-- [ ] The local mockup (`agent-portal/`) predates the second round and must be reworked to the
-  plan's §1a before it is shown to the customer.
+- [x] Owner answered three rounds on 2026-11-11, all folded into the plan. An agent is a
+  **Source** profile (a new type beside Travel Agent; a reservation can carry both) with linked
+  portal logins; the portal works through **Group Blocks** (slot request holds nothing → approved
+  as a Tentative block, Definite later → bookings inside it; elasticity = extra rooms and extra
+  nights before/after; at the cutoff inventory is released and the booking kept as a record);
+  the hotel confirms by hand; no Agents module. Open: Q-27 (tune marker defaults), Q-28 (what
+  moves a slot to Definite).
+- [ ] New PMS item from the owner: the profile pickers on the reservation create/edit form need
+  **search and create new** when no match exists (plan A-21a, Phase 3).
+- [x] The local mockup (`agent-portal/`) was reworked to the plan's §1a on 2026-11-11.
 - [ ] Phase 0a (9.0.1): permissions and roles audit. Found so far: `TAPE_CHART` is never enforced
   server-side; every Debtors route checks `view` only, including sending a statement; about a
   dozen routes check the session but no module (list in the plan §10); `Profile.commissionRate`

@@ -3,7 +3,7 @@
 > Status (2026-11-11): **PLAN ONLY. Nothing in the PMS is built.** A clickable mockup of the
 > agent website exists locally in `agent-portal/` (not in git, see §12). Written against
 > `origin/master` at **8.13.6**. PMS work in this plan is versioned from **9.0.1**.
-> **Two rounds of owner answers (2026-11-11) are folded in.** The second round reshaped the
+> **Three rounds of owner answers (2026-11-11) are folded in.** The second round reshaped the
 > design: an agent is a **Source** profile in Client Relations, the portal works **through
 > Group Blocks** (the agent requests a slot, the hotel approves it as a block, bookings are
 > pickups in that block), confirmation is a **manual desk step**, and there is **no separate
@@ -80,10 +80,10 @@ What follows from it:
 
 - **An agent is a `Source` profile in Client Relations.** The hotel creates it. There is no
   `SOURCE` profile type today (the types are `GUEST`, `COMPANY`, `TRAVEL_AGENT`, `STAFF`); it
-  is added as an entity profile that can do everything a Travel Agent profile can (negotiated
-  rates, credit account). The booking form's existing "Booking source / travel agent" field
-  (`Reservation.travelAgentId`) is where it plugs in, so every list that shows that field
-  already shows the Source.
+  is added as a **new type beside Travel Agent** (owner, 2026-11-11), an entity profile that
+  can do everything a Travel Agent profile can (negotiated rates, credit account). On a
+  reservation **both can be chosen**: the booking form gets a Source field next to the
+  existing Travel Agent field, so one booking can carry a Travel Agent and a Source.
 - **Portal logins hang off the Source profile.** The hotel administrator adds a person's
   email on the profile and the system produces a simple link for them to set a password.
   Every booking records the Source and the login that made it.
@@ -167,24 +167,27 @@ to agents is "Confirmed"; the desk keeps "Reserved". One status, two audiences.
 
 - *Request.* The agent's slot request creates a block in a new status **`REQUESTED`**. It
   holds **no inventory**: the availability functions count `TENTATIVE` and `DEFINITE` blocks
-  only, so a request changes no number anywhere (Q-25). It appears in Group Blocks under a
+  only, so a request changes no number anywhere (owner confirmed, 2026-11-11). It appears in Group Blocks under a
   "Requests" tab with what was asked for.
 - *Approve.* Staff open the request, may change dates, room types, quantities, cutoff and
   elasticity, and approve. The availability check that guards any block today runs at that
-  moment. The block becomes `DEFINITE` (the slot is committed to the agent until its cutoff;
-  the Posting Master and master folio exist from then) or `TENTATIVE` if the hotel prefers
-  (Q-26). The agent sees what was approved next to what they asked for.
+  moment. The block becomes **`TENTATIVE` first** (owner, 2026-11-11): the rooms are held and
+  the agent can enter bookings. The hotel moves it to `DEFINITE` at a later stage with
+  today's action, which is when the Posting Master and master folio are created. Phase 4
+  must make sure pickups are allowed on a `TENTATIVE` block. The agent sees what was approved next to what they asked for.
 - *Decline.* New terminal status **`DECLINED`** with a reason. An agent withdrawing their own
   pending request lands here too, with the reason "withdrawn".
 - *Bookings.* Every agent booking is a **pickup in one of that Source's blocks**, through the
   existing pickup service. Master folio, routing, bill-to-master, group eRegistration and
   group transport therefore work unchanged.
-- *A single booking outside any slot* is a slot request for one room (Q-21). One path, one
-  set of rules.
+- *There is no agent booking without a block.* A booking that goes past the slot's rooms or
+  dates is possible only through **that block's elasticity** (A-12; owner, 2026-11-11). With
+  elasticity off or used up, the agent requests another slot.
 - Staff can create a block for a Source directly, on today's Group Blocks screen with the new
   Source field. An agent's block and a desk-made block are the same thing.
 
-State machine after this plan: `REQUESTED → TENTATIVE | DEFINITE | DECLINED`, then as today
+State machine after this plan: `REQUESTED → TENTATIVE | DECLINED` (staff creating a block by
+hand may still start it `DEFINITE`), then as today
 (`TENTATIVE → DEFINITE | LOST | CANCELLED`, `DEFINITE → CANCELLED`).
 
 **A-8. Overflow is its own pseudo room type, not `PM`.** "Book under PM" in the brief means
@@ -235,17 +238,21 @@ model; these are additions to `GroupBlock`, usable for any group, not only an ag
   rooms** (owner, 2026-11-11): the hold shrinks to what is booked, the block carries on with
   those bookings, and both sides are notified. Several checkpoints give the "stage by stage"
   shape.
-- *Elasticity* (new): how far the agent may go past the approved slot without a new request.
-  `elasticRooms`: up to this many rooms above the hold per night, only when the house has
-  them free and never into the sell limit; the hold grows by the extra room so the arithmetic
-  stays the same. `shoulderNights`: a booking may start up to this many nights before the
-  slot or end this many after it, again only if free. Both default to 0. Which of the two the
-  owner means, and typical sizes, is Q-23.
+- *Elasticity* (new; owner confirmed the meaning, 2026-11-11): how far the agent may go past
+  the approved slot without a new request. It is switched on per block and has a range:
+  `elasticRooms` (up to this many rooms above the hold per night) and `elasticNightsBefore` /
+  `elasticNightsAfter` (a booking may start up to this many nights before the block's first
+  date or end this many after its last). Always subject to the house having the room free
+  that night, and never into the sell limit. An extra room grows the hold by one so the
+  arithmetic stays the same; an extra night is an ordinary night outside the block. All
+  default to 0, which means the slot's edges are hard.
 - Releases run in a job and are also applied on read, so a stopped job never leaves released
   rooms held.
-- What happens at the cutoff to bookings that are **still tentative** is Q-22. Assumed: a
-  tentative booking's option date defaults to the block's cutoff, so it is released with the
-  unsold rooms unless the hotel extended it.
+- **At the cutoff the inventory is released and the booking is kept as a record** (owner,
+  2026-11-11). A booking still tentative on that date loses its room: it becomes `CANCELLED`
+  with the system reason `OPTION_EXPIRED` (shown as "Released"), stays in every list, report
+  and the agent's history, and can be reinstated at the desk if a room is still free. Nothing
+  is deleted. Staff can extend a single booking's option before the cutoff to keep it.
 
 **A-13. Confirmation is the hotel's manual decision** (owner, 2026-11-11, second round;
 replaces the rule engine drafted after the first round). Every agent booking starts
@@ -318,12 +325,24 @@ order: `RatePlanAgentAccess.commissionRate` for that plan, then `Profile.commiss
 the Source (finally given a job). **Rounded normally (half-up) to two decimals**, once per
 folio, not per night. See §8 for the worked example.
 
-**A-21. Every booking carries where it came from, and who.** Two facts, named apart so they
-are not confused: the **Source** is the profile (`Reservation.travelAgentId`, the existing
-"Booking source / travel agent" field), and the **origin** is the door it came through
-(`Reservation.origin`: `DESK`, `WEBSITE`, `CHANNEL`, `AGENT_PORTAL`, `GROUP_PICKUP`,
-backfilled from the existing relations). An agent booking also records the portal login that
-made it (`agentUserId`). Lists, the Tape Chart, reports and filters read these.
+**A-21. Every booking carries where it came from, and who.** Three facts, named apart:
+- the **Source**, a profile: new `Reservation.sourceProfileId`, with its own field on the
+  booking form beside the existing Travel Agent field (`travelAgentId`). Both can be set on
+  one reservation (owner, 2026-11-11). A pickup inherits the block's Source.
+- the **origin**, the door it came through: `Reservation.origin` (`DESK`, `WEBSITE`,
+  `CHANNEL`, `AGENT_PORTAL`, `GROUP_PICKUP`), backfilled from the existing relations.
+- the **portal login** that entered it (`agentUserId`), for agent bookings.
+
+Lists, the Tape Chart, reports and filters read these. Negotiated rate plans are offered when
+either the Travel Agent or the Source on the booking is linked to the plan.
+
+**A-21a. Search, and create if it is not there** (owner, 2026-11-11: missing in the PMS
+today). The profile pickers on the reservation create and edit form (Source, Travel Agent,
+Company, and the guest picker where it lacks it) get a last row "Create “typed text”" when
+the search finds no match. It opens a short dialog with only the fields that type needs, saves
+the profile, and selects it, without leaving the booking. Built once in `SearchableSelect`
+(an optional `onCreate`) so every long picker can use it. Needs `PROFILES create`; without
+it the row is not shown.
 
 **A-22. Booking markers are rules, not hard-coded colours.** A property defines an ordered
 list of `BookingMarker` rules: *when* (source, a specific agent, tentative, overflow, group,
@@ -334,6 +353,22 @@ and a coloured edge, so status and source never fight for the same channel. Tent
 are additionally hatched. **A Source profile can carry its own icon and colour**, set on the
 profile; a booking from that Source shows it ahead of the general rules, so each agent is
 recognisable on the Tape Chart with no rule to write.
+
+Seeded defaults, to be tuned with the customer later (owner, 2026-11-11: "come up with
+something first"):
+
+| What | Icon | Colour | Extra |
+|---|---|---|---|
+| Booking from a Source | briefcase | the Source's own colour; a new Source is given the next unused of the twelve palette colours | Source name on hover and in the legend |
+| Travel Agent booking with no Source | briefcase | slate | |
+| Tentative | clock | amber | bar is hatched |
+| Confirmation requested | clock with a dot | amber | hatched, with a solid edge |
+| Overflow | building | violet | shown in the Overflow row |
+| Group pickup with no Source | people | teal | |
+| Brand website | globe | blue | |
+| Channel | link | indigo | |
+| Oversold night | warning | red | on the night, not the bar |
+| Desk booking | none | none | plain status colour, as today |
 
 **A-23. Two different things, both wanted** (owner, 2026-11-11).
 
@@ -391,10 +426,10 @@ the Hub already hold.
 | `AgentSession` (token hash, `agentUserId`, `keyId`, expiry, last seen, IP) | Revocable |
 | `GroupBlock.sourceProfileId String?`, `origin String @default("DESK")`, `requestedByAgentUserId?`, `requestNote?`, `decisionReason?`, `decidedBy?`, `decidedAt?` | A-7 |
 | `GroupBlock.status` gains `REQUESTED`, `DECLINED` | A-7 |
-| `GroupBlock.releaseDays Int?`, `elasticRooms Int @default(0)`, `shoulderNights Int @default(0)` | A-12 |
+| `GroupBlock.releaseDays Int?`, `elasticRooms Int @default(0)`, `elasticNightsBefore Int @default(0)`, `elasticNightsAfter Int @default(0)` | A-12 |
 | `GroupBlockRoom.requestedQuantity Int?` | What the agent asked for beside what was approved |
 | `GroupBlockCheckpoint` (block, `date`, `minPercent`, `processedAt?`, `releasedRooms?`) | A-12 quota checkpoints |
-| `Reservation.origin String @default("DESK")`, `agentUserId String?` | A-21 |
+| `Reservation.sourceProfileId String?` (beside the existing `travelAgentId`), `origin String @default("DESK")`, `agentUserId String?` | A-21 |
 | `Reservation.optionDate DateTime?`, `confirmationRequestedAt?`, `confirmationNote?`, `confirmedAt?`, `confirmedBy?` | A-13, A-14 |
 | `Reservation.settlementMode String?` | A-18 |
 | `Reservation.isOverflow Boolean`, `overflowHotelName?`, `overflowNote?` | A-8 |
@@ -423,7 +458,7 @@ Money columns follow the repo's existing `Float` + `toCents` convention. Every m
 ### 5.1 The slot (a Group Block)
 
 ```
- agent requests a slot ─▶ REQUESTED ── hotel approves ─▶ DEFINITE (or TENTATIVE) ─▶ bookings …
+ agent requests a slot ─▶ REQUESTED ── hotel approves ─▶ TENTATIVE ─▶ DEFINITE (later) ─▶ …
    (holds nothing)            │         (may change rooms,      │
                               │          dates, cutoff)         ├─ checkpoint missed / cutoff:
                               └─ hotel declines, or                unsold rooms released,
@@ -565,7 +600,7 @@ in, staff names, internal remarks, cost or other agents' rates, the housekeeping
 |---|---|
 | **Client Relations: Source profile** | New profile type. Sections: commission and settlement, **Portal logins** (add, link, suspend, reset), **Slots** (its blocks with period, rooms, booked, status, cutoff), bookings, marker icon and colour. A Travel Agent profile can be converted to a Source |
 | Reservations list, Front Desk, search | Tentative status and filter, option date column, source marker, Overflow and Details-missing badges |
-| Booking form | Staff can create a tentative booking with an option date, pick settlement mode, mark overflow, set package name |
+| Booking form | **Source field** beside Travel Agent (both can be set); **search and create new** in the profile pickers when no match exists; staff can create a tentative booking with an option date, pick settlement mode, mark overflow, set package name |
 | Reservation page | Option panel (confirm, extend, release, verify payment), agent request history, deposit request and receipt, Advance Folio (renamed from Advance Bill), voucher |
 | Tape Chart | Markers, hatched tentative bars, legend, filter by source / agent / status, Overflow row beside Unassigned |
 | Availability | Sell limit row and editor next to Stop sale; "On option" and "Allotted" lines under each room type; oversold nights flagged |
@@ -853,8 +888,8 @@ safe to stop after.
 | **0b. Capabilities and the new roles screen** | **9.0.2** | `RoleCapability`, capability registry and `requireCapability`, the starting catalogue wired to its checks, **Suppress rates** enforced server-side, redesigned Users & Access screen, presets, Configuration guide | An owner can switch off overbooking or hide all figures for a role, and can see who holds any capability |
 | **1. Booking status flow** | **9.1.0** | `TENTATIVE` status, option date, confirm / extend / release at the desk, option-expiry job, `Reservation.source` + backfill, structured cancel reasons, last-room advisory lock, §5.4 checklist. Staff can use tentative bookings with no agent involved | A tentative booking holds a room, shows everywhere with its own status, expires by itself; parallel last-room test passes |
 | **2. Sell limit, overflow, forecast** | **9.2.0** | `AvailabilitySellLimit` + editor on Availability, desk overbook capped, `OVF` pseudo type and overflow fields, "On option" line on the grid, oversold flags, Overflow report | A night can be capped at +N; an overflow booking is recognisable on every list |
-| **3. Source profiles and markers** | **9.3.0** | `SOURCE` profile type with its commission, settlement and marker fields; convert Travel Agent to Source; `Reservation.origin` + backfill; `BookingMarker` rules and Hub editor; Tape Chart markers, hatching, legend and filters; same markers on Reservations and Front Desk; seeded defaults | A booking shows its Source everywhere, and each Source is recognisable on the Tape Chart in light and dark, on a phone |
-| **4. Blocks for Sources** | **9.4.0** | Source on the block, `REQUESTED` / `DECLINED` and the Requests tab, rolling release, quota checkpoints, elasticity, release job, tentative pickups with "Confirm selected", sales windows, Slots section on the Source profile, slot lines on Availability. Fully usable from the desk before any portal exists | Staff can give a Source a slot, see it fill, and watch unsold rooms release themselves |
+| **3. Source profiles and markers** | **9.3.0** | `SOURCE` profile type with its commission, settlement and marker fields; Source field on the reservation beside Travel Agent; search-and-create in the profile pickers (A-21a); convert Travel Agent to Source; `Reservation.origin` + backfill; `BookingMarker` rules and Hub editor; Tape Chart markers, hatching, legend and filters; same markers on Reservations and Front Desk; seeded defaults | A booking shows its Source everywhere, and each Source is recognisable on the Tape Chart in light and dark, on a phone |
+| **4. Blocks for Sources** | **9.4.0** | Source on the block, `REQUESTED` / `DECLINED` and the Requests tab, rolling release, quota checkpoints, elasticity (extra rooms, extra nights before and after), release job that keeps released bookings as records, tentative pickups with "Confirm selected", sales windows, Slots section on the Source profile, slot lines on Availability. Fully usable from the desk before any portal exists | Staff can give a Source a slot, see it fill, and watch unsold rooms release themselves |
 | **5. Agent API, read side** | **9.5.0** | `AGENT` scope, portal logins on the Source profile (add, link, suspend, reset), auth routes, sessions, `/me`, catalogue, availability (own slots exact, house capped, option forecast), quote. Docs portal area `/docs/agent-api`, OpenAPI file. Portal mock switches to the real API for these calls | An agent signs in and sees live availability and their own slots; isolation tests pass |
 | **6. Agent API, slots and bookings** | **9.6.0** | Slot requests, bookings in a slot (tentative, lead guest), rooming list, request confirmation, guest details, travel and transfers, package and requests, cancel with reason, change requests, booking confirmation PDF emailed to the agent, overflow requests, webhooks, notifications | The whole of §1a works end to end: request, approve, book, confirm, detail, confirmation |
 | **7. Settlement** | **9.7.0** | Settlement modes, `AgentCommission` ledger and payouts, Debtors Commissions tab, statement with commissions, agent statement endpoint, commission reports, reversal handling | The three modes in §8 produce the figures in §8; a reversed check-out reverses the commission |
@@ -884,16 +919,18 @@ named and shaped after §6 so replacing them with real `fetch` calls is the migr
 Changes made in the mockup (a new booking, a confirmation, a cancellation) persist in the
 browser only.
 
-Screens: sign in, dashboard (options expiring, details due, allotment pickup), availability
-with option forecast and allotment, new booking request (individual or group, tentative or
-confirmed, overflow request when full, quote with commission), bookings list with the status
-flow, booking detail (option panel, guests, flights and transfers, package and requests,
-voucher, cancel with reason, change request), group detail with rooming list, allotments and
-release dates, statement and commissions.
+Screens (reworked to §1a on 2026-11-11): sign in, dashboard (slots held, room nights free,
+tentative bookings, details due, the five steps), rates and availability (the house capped at
+"5+", option forecast, the agent's own slots exact), **request a slot** (dates, rooms per
+type, what the hotel will see, overflow when full), **my slots**, **slot detail** (tentative
+or definite, cutoff, checkpoint, elasticity, fill by room type, bookings, add one booking or
+several from a list of names), bookings list, booking detail (tentative → confirmation
+requested → confirmed, guests with contact and address, flights and transfers, package and
+requests, cancel with reason, change request), booking confirmation (generated by the agent,
+emailed to the agent), statement and commissions. "Play the hotel" buttons stand in for the
+PMS so the whole flow can be shown: approve a slot, make it definite, confirm a booking.
 
-**The mockup predates the owner's second round**: it still shows allotments and a
-"confirm by contract or payment" dialog. It needs reworking to §1a (request a slot, book
-inside it, request confirmation) before it is shown to the customer.
+Run it with `node agent-portal/serve.js` and open http://localhost:4173.
 
 The fictional property is Coral Bay Resort and the fictional agencies use example.com, in
 line with the docs rule that no real customer appears in anything presentable.
@@ -923,20 +960,24 @@ line with the docs rule that no real customer appears in anything presentable.
 | Q-18 | Advance Folio before check-in? | In-house only | A-23 |
 | Q-19 | Suppress rates and the balance | The balance stays visible | §10 |
 | Q-20 | Who gets the confirmation? | The agent generates it and it is sent to the agent | A-17 |
+| Q-21 | A single booking outside a slot? | Only through that block's elasticity, if it is enabled | A-7, A-12 |
+| Q-22 | Tentative bookings at the cutoff? | Inventory is released; the booking is kept as a record | A-12 |
+| Q-23 | What is elasticity? | Extra rooms, and extra nights before and after the block dates, up to a range | A-12 |
+| Q-24 | Source beside or instead of Travel Agent? | A new type. A reservation can carry both. Also: the pickers need search **and create new** | §1a, A-21, A-21a |
+| Q-25 | Does a pending request hold rooms? | No | A-7 |
+| Q-26 | Definite at once, or Tentative first? | Tentative first | A-7 |
+| Q-12 | Marker defaults | "Come up with something first, we will fine tune later" | A-22 |
 | — | How are agents modelled? | A **Source** profile type in Client Relations, with linked portal logins; no separate module; as few PMS changes as possible | §1a, A-24, A-25 |
 | — | How does the portal connect to groups? | Through Group Blocks: request a slot, hotel approves it as a block with cutoff rules and elasticity, bookings go inside it | §1a, A-7, A-12 |
 
 ### Still open
 
+Nothing blocks Phase 0a. To settle along the way:
+
 | # | Question | Plan assumes |
 |---|---|---|
-| Q-12 | Can the customer share how they mark agent bookings today in mobile-calendar (two screenshots)? | Seeded marker defaults in Phase 3 are a guess until then |
-| Q-21 | A single booking with no slot covering its dates: is that a slot request for one room, or may an agent book single rooms straight from general availability? | A one-room slot request, so there is one path |
-| Q-22 | At the cutoff, what happens to bookings in the slot that are **still tentative**: released together with the unsold rooms, or kept until the hotel decides? | Released, unless the hotel extended that booking's option |
-| Q-23 | "Elasticity": extra rooms above the approved number, extra nights either side of the slot, moving the cutoff a few days, or several of these? And a typical size? | Extra rooms and shoulder nights, both set per block, default 0 |
-| Q-24 | Is **Source** a new profile type beside Travel Agent, or does it replace Travel Agent? | A new type beside it, with a one-click conversion of existing Travel Agent profiles |
-| Q-25 | Does a slot request hold rooms while it waits for approval? | No. Rooms are held only once approved |
-| Q-26 | When the hotel approves a slot, is the block Definite at once, or Tentative first and Definite at a later stage (for example when the agent signs or pays a deposit)? | Definite by default; staff may choose Tentative |
+| Q-27 | Marker defaults (A-22) are a first proposal; tune icons and colours with the customer once Phase 3 is on a test site | The table in A-22 |
+| Q-28 | Who moves a slot from Tentative to Definite, and on what trigger (a signed contract, a deposit, a share of the rooms confirmed)? | Staff, by hand, with today's action |
 
 ## 14. Status
 
