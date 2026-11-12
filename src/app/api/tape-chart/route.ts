@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
       }
     });
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       rooms,
       assignments
     });

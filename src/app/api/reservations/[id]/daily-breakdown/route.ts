@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { projectedTransfers } from "@/lib/transport/projection";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
@@ -172,7 +173,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const taxesTotal = round2(quote.totals.taxTotal + quote.totals.greenTaxTotal + transportTaxTotal);
     const grandTotal = round2(roomTotal + allocationTotal + otherTotal + taxesTotal);
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       days,
       nights: quote.nights,
       pricesIncludeTaxes,

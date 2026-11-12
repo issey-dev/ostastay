@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, ForbiddenError, MODULES } from "@/lib/scope";
 import { WIDGET_IDS } from "@/lib/dashboard/widgets";
 import { logActivity } from "@/lib/activity-log";
+import { capabilityOverridesFromBody } from "@/lib/role-capabilities";
 
 export async function PATCH(
   request: Request,
@@ -68,6 +69,13 @@ export async function PATCH(
             data: [...new Set(blocked)].map((widgetId) => ({ roleId: id, widgetId })),
           });
         }
+      }
+      // Capability overrides (Phase 0b): replace-all, same reasoning as the widget list.
+      // Only keys from the catalogue are stored (capabilityOverridesFromBody).
+      if (body.capabilityOverrides && typeof body.capabilityOverrides === "object") {
+        await tx.roleCapability.deleteMany({ where: { roleId: id } });
+        const rows = capabilityOverridesFromBody(body.capabilityOverrides);
+        if (rows.length > 0) await tx.roleCapability.createMany({ data: rows.map((r) => ({ ...r, roleId: id })) });
       }
       return tx.role.findUnique({ where: { id }, include: { permissions: true } });
     });

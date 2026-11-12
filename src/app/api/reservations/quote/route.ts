@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { draftGreenTaxBasis } from "@/lib/green-tax-basis";
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
       manualAllocationIds: Array.isArray(body.manualAllocationIds) ? body.manualAllocationIds : [],
     });
 
-    return NextResponse.json(quote);
+    return figuresJson(ctx, quote);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

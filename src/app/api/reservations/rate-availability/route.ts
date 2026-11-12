@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { applyRateAdjustment } from "@/lib/derived-rate";
@@ -175,7 +176,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       nights,
       roomTypes: roomTypes.map((rt) => ({
         id: rt.id,

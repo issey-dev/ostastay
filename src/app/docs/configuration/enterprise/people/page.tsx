@@ -48,10 +48,18 @@ export default function People() {
 
       <H3>Creating a role</H3>
       <p>
-        Choose <strong>Add role</strong>, give it a <strong>Role name</strong> (unique in your enterprise), and tick what it may do
-        in each module:
+        Choose <strong>Add role</strong> and give it a <strong>Role name</strong> (unique in your enterprise). To save time, pick a{" "}
+        <strong>preset</strong> (Reservations Agent, Night Auditor, Accounts, Housekeeping Supervisor) and adjust from there, or use{" "}
+        <strong>Duplicate</strong> on any role, built-in ones included.
       </p>
-      <Shot name="ent-role-dialog" alt="The Add role dialog: a role name field and a permission grid of modules against View, Create, Update, Delete and Full access." />
+      <p>
+        The editor shows one role at a time. Modules are listed on the left, each with a chip: <strong>Full</strong>,{" "}
+        <strong>View only</strong>, <strong>Custom</strong> or <strong>None</strong>. Pick a module to see its four actions,
+        each with a line saying what it allows in that module, and then its <strong>options</strong>. A summary at the top says
+        in plain words what the role can and cannot do. <strong>Search</strong> finds a module or an option by name (try
+        &ldquo;overbook&rdquo;), and <strong>Compare with…</strong> marks every switch that differs from another role.
+      </p>
+      <Shot name="ent-role-dialog" alt="The role editor: modules listed on the left with summary chips, and the selected module's actions and options on the right." />
       <ul>
         <li>
           <strong>Property modules</strong> are day-to-day work: Front Desk, Reservations, Cashiering, Night Audit, Revenue, Daily
@@ -68,6 +76,30 @@ export default function People() {
           sees. It hides cards; it does not restrict data.
         </li>
       </ul>
+      <H3>Options</H3>
+      <p>
+        Options are single switches for things the four actions cannot say. Each starts at what the role could already do, so
+        nothing changes until you change it. Under every option, <strong>Who has this?</strong> lists the roles and people that
+        hold it, so you can answer &ldquo;who can overbook?&rdquo; in one click.
+      </p>
+      <Table
+        head={["Module", "Options"]}
+        rows={[
+          ["Reservations", "Overbook a room type; exceed the sell limit; override a stop sale; confirm, extend or release an option; mark or clear Overflow."],
+          ["Availability", "Set and lift stop sale; edit sell limits."],
+          ["Front Desk", "Undo a check-in; reverse a check-out; send an eRegistration link."],
+          ["Cashiering", "Generate an Advance Folio; void a bill."],
+          ["Revenue", "Suppress rates."],
+          ["Night Audit", "Run Night Audit."],
+          ["Group Blocks, Client Relations, Debtors", "Approve or decline a slot request; manage portal logins; pay or offset commission."],
+          ["Daily Reports", "Export to file."],
+        ]}
+      />
+      <Callout>
+        <strong>Suppress rates</strong> removes every rate, charge line, total and revenue figure from that role&rsquo;s screens,
+        prints and exports. It is enforced by the server, not just hidden. The <strong>balance due</strong> stays visible so the
+        desk can still collect. A person holding several roles sees rates if any of their roles does.
+      </Callout>
       <p>
         Choose <strong>Create</strong> (or <strong>Save</strong> when you edit a role). Deleting a role asks you to confirm first,
         and a role that people still hold cannot be deleted. To print who can do what, choose{" "}

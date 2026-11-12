@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { buildDashboardOverview } from "@/lib/dashboard/overview";
 
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
       trendDays: Number.isFinite(trendDaysParam) && trendDaysParam > 0 ? trendDaysParam : undefined,
     });
 
-    return NextResponse.json(overview);
+    return figuresJson(ctx, overview);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

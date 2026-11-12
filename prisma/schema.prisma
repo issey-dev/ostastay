@@ -163,8 +163,24 @@ model Role {
   users            UserRole[]
   // Dashboard widgets this role may not see — see RoleDashboardWidget.
   dashboardWidgets RoleDashboardWidget[]
+  // Named switches on top of the four actions — see src/lib/capabilities.ts.
+  capabilities     RoleCapability[]
 
   @@unique([enterpriseId, name])
+}
+
+// A capability override on one role (Agent Portal plan §10, Phase 0b). No row = the
+// capability's default, derived from the role's module permissions (src/lib/capabilities.ts),
+// so upgrading changes nobody's access. `granted` false is an explicit "no" on a default-yes.
+model RoleCapability {
+  id         String  @id @default(uuid())
+  roleId     String
+  role       Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  capability String
+  granted    Boolean @default(true)
+
+  @@unique([roleId, capability])
+  @@index([roleId])
 }
 
 // Module: FRONT_DESK, RESERVATIONS, GROUP_BLOCKS, TAPE_CHART, PROFILES, HOUSEKEEPING,

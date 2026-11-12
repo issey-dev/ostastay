@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { toUtcMidnight } from "@/lib/business-date";
 import { pushPropertyNow } from "@/lib/channels/push";
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "AVAILABILITY", "update");
+    requireCapability(ctx, "availability.stopSale");
 
     const parsed = await parseBody(request);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -109,6 +110,7 @@ export async function DELETE(request: Request) {
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "AVAILABILITY", "update");
+    requireCapability(ctx, "availability.stopSale");
 
     const parsed = await parseBody(request);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });

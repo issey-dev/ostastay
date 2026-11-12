@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { addDays, parseISO, startOfDay, endOfDay } from "date-fns";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
       reservationCheckOutDate: a.reservation.checkOutDate.toISOString()
     }));
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       success: true,
       data: {
         startDate,

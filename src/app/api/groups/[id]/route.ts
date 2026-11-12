@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { figuresJson } from "@/lib/figures"
 import { ensurePostingMaster, checkInPostingMaster, syncPostingMasterDates, cancelPostingMaster } from "@/lib/groups/posting-master"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
@@ -44,7 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 })
     await assertPropertyAccess(ctx, group.propertyId)
 
-    return NextResponse.json(group)
+    return figuresJson(ctx, group)
   } catch (error) {
     const { status, body } = toErrorResponse(error)
     return NextResponse.json(body, { status })

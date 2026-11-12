@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { postReservationTransportNow } from "@/lib/transport/billing";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
@@ -31,6 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CASHIERING", "update");
+    requireCapability(ctx, "billing.advanceFolio");
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

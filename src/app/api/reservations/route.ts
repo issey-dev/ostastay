@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { createReservation } from "@/lib/reservations/create-reservation";
@@ -134,7 +135,7 @@ export async function GET(request: Request) {
       skip,
       take,
     });
-    return NextResponse.json(reservations);
+    return figuresJson(ctx, reservations);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

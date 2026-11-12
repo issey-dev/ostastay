@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPropertySettings } from "@/lib/property-settings"
 import { prisma } from "@/lib/db"
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, hasCapability } from "@/lib/scope"
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability"
 import { findStopSaleConflicts } from "@/lib/restrictions"
 import { allocateSequenceNumber } from "@/lib/document-sequence"
@@ -19,6 +19,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const { id } = await params
     const body = await request.json()
+    if (body.acknowledgeOverbook === true && !hasCapability(ctx, "reservations.overbook")) {
+      return NextResponse.json({ error: "Your role does not allow overbooking." }, { status: 403 })
+    }
     const {
       firstName,
       lastName,

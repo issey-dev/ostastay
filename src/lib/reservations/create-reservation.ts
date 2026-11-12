@@ -3,7 +3,7 @@ import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
-import { assertPropertyAccess, hasPermission, type AuthContext } from "@/lib/scope";
+import { assertPropertyAccess, type AuthContext, hasCapability } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
@@ -329,7 +329,8 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     availability: availabilityConflicts,
     overrideStopSale: body.overrideStopSale,
     acknowledgeOverbook: body.acknowledgeOverbook,
-    canOverrideStopSale: hasPermission(ctx, "AVAILABILITY", "update"),
+    canOverrideStopSale: hasCapability(ctx, "reservations.overrideStopSale"),
+    canOverbook: hasCapability(ctx, "reservations.overbook"),
   });
   if (gate) return failGate(gate);
   if (stopSaleConflicts.length > 0) {

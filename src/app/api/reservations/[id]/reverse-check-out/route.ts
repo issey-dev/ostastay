@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "RESERVATIONS", "update");
+    requireCapability(ctx, "frontDesk.reverseCheckOut");
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { figuresJson } from "@/lib/figures";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse, hasCapability } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
@@ -81,7 +82,7 @@ export async function GET(
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    return NextResponse.json(reservation);
+    return figuresJson(ctx, reservation);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -291,7 +292,8 @@ export async function PUT(
       availability: availabilityConflicts,
       overrideStopSale: flags.overrideStopSale,
       acknowledgeOverbook: flags.acknowledgeOverbook,
-      canOverrideStopSale: hasPermission(ctx, "AVAILABILITY", "update"),
+      canOverrideStopSale: hasCapability(ctx, "reservations.overrideStopSale"),
+      canOverbook: hasCapability(ctx, "reservations.overbook"),
     });
     if (gate) {
       return NextResponse.json(

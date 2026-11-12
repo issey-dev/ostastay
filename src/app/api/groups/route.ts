@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { figuresJson } from "@/lib/figures"
 import { ensurePostingMaster } from "@/lib/groups/posting-master"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       : []
     const pmStatus = new Map(pms.map((r) => [r.id, r.status]))
 
-    return NextResponse.json(
+    return figuresJson(ctx, 
       groups.map((g) => ({ ...g, postingMasterStatus: g.postingMasterReservationId ? pmStatus.get(g.postingMasterReservationId) ?? null : null }))
     )
   } catch (error) {

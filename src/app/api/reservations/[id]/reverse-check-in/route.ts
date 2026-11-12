@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Reverse a check-in — put an in-house guest back to RESERVED (a front-desk correction
@@ -13,6 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "RESERVATIONS", "update");
+    requireCapability(ctx, "frontDesk.reverseCheckIn");
 
     const { id } = await params;
     const reservation = await prisma.reservation.findUnique({

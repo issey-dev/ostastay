@@ -17,6 +17,20 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.0.2",
+    date: "2026-11-12",
+    highlights: "Roles get finer control: options such as \"may overbook\" or \"suppress rates\" on top of view, create, update and delete, and a new role editor that shows one role at a time.",
+    new: [
+      "Role options: single switches for what the four actions cannot say, such as overbook a room type, override a stop sale, undo a check-in, reverse a check-out, generate an Advance Folio, void a bill, run Night Audit and export reports. Every option starts at what the role could already do, so nothing changes until you change it.",
+      "Suppress rates: a role can be set so that rates, charge lines, totals and revenue are removed from its screens, prints and exports. The balance due stays visible so the desk can still collect.",
+      "Who has this? Under every option, one click lists the roles and people that hold it.",
+      "Presets for new roles (Reservations Agent, Night Auditor, Accounts, Housekeeping Supervisor), and Duplicate on any role, built-in ones included.",
+    ],
+    improved: [
+      "The role editor shows modules on the left with a Full, View only, Custom or None chip, and the selected module's actions with a line on what each one allows. A summary at the top says what the role can and cannot do, search finds any module or option, and Compare with marks what differs from another role.",
+    ],
+  },
+  {
     version: "9.0.1",
     date: "2026-11-12",
     highlights: "A permissions check-up: every screen and action now checks what the person's role allows, not only that they are signed in.",
