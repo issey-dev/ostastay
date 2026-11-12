@@ -10,10 +10,10 @@
 > Agents module**. §1a is the workflow and the spine of the plan. §13 lists what was answered
 > and what is still open.
 >
-> Read with: [WEBSITE_API_PLAN.md](WEBSITE_API_PLAN.md) and
-> [BOOKING_API_ADDONS_PLAN.md](BOOKING_API_ADDONS_PLAN.md) (the key, rate-limit, idempotency and
-> webhook plumbing this reuses), [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md) (where settings go),
-> [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md), [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md),
+> Read with: [WEBSITE_API_PLAN.md](DEV_LOG.md) and
+> [BOOKING_API_ADDONS_PLAN.md](DEV_LOG.md) (the key, rate-limit, idempotency and
+> webhook plumbing this reuses), [HUB_SETUP_PLAN.md](DEV_LOG.md) (where settings go),
+> [TRANSPORTATION_PLAN.md](DEV_LOG.md), [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md),
 > and DECISIONS.md "Negotiated Rate Plans", "Travel Agent commission" (2026-07-20) and
 > "Channel manager: inventory & overbooking authority" (D-7, 2026-07-27).
 

@@ -1,12 +1,107 @@
-# Decisions & Business Rules Log
+# Decisions and business rules
 
-> A running record of business rules, design decisions, and corrections the app owner
-> has given verbally during agent sessions — the kind of thing that lives only in chat
-> history otherwise. When you make a judgment call that isn't obvious from reading the
-> code, and it came from a direct instruction rather than your own design taste, log it
-> here with a date so the next session (yours or a teammate's) doesn't have to
-> rediscover or accidentally reverse it. Newest topics at the bottom is fine; keep each
-> entry dated.
+> Business rules and design decisions the app owner has given, dated. **Check here before
+> assuming a business rule.** When the owner gives you a rule that is not obvious from the
+> code, add it with the date so the next session does not rediscover or reverse it.
+>
+> **Keep it fresh** (cleaned 2026/11/12). A rule that is replaced is removed or rewritten, not
+> left beside its successor. Bug-fix stories and release logistics do not belong here; finished
+> plans are in [DEV_LOG.md](DEV_LOG.md) and open work in [TODO.md](TODO.md). Entries are in the
+> order they were given, oldest first; where a later entry changes an earlier one, the later one
+> wins.
+
+## Contents
+
+- Room Types (2026-07-18)
+- Rooms (2026-07-18)
+- Sequence Manager (2026-07-18)
+- Tax & Charge Codes (2026-07-18)
+- Custom Tax profiles: multi-line, and actually wired to posting (2026-07-18)
+- Green Tax posting & the `infants` bucket (2026-07-18)
+- Charge Code hierarchy, generates & the Cashiering panel (2026-07-27)
+- Folio Printing (2026-07-18)
+- Outlets (2026-07-18)
+- Theming & Design System
+- Session/scope engineering conventions (for agents working on this repo)
+- Confirmation Letter (2026-07-19)
+- Invoice redesign, Payment Receipt, Currency Exchange Receipt (2026-07-19)
+- Debtors (Accounts Receivable) (2026-07-19)
+- RBAC self-healing permission backfill (2026-07-19)
+- Debtors: checkout-triggered invoice pipeline redesign (2026-07-19)
+- Occupancy pricing, Derived Rate Plans, and decoupled Meal Plans (2026-07-19)
+- Allocations (2026-07-19)
+- Allocations: Sell-Separate is an independent toggle, not a mode (2026-07-19)
+- Base Rate Plan replaces RoomType.basePrice (2026-07-19)
+- Charge codes, payment methods, room-charge posting code (2026-07-19)
+- Profiles redesign (2026-07-20)
+- Negotiated Rate Plans restricted to specific agent profiles (2026-07-20)
+- Travel Agent commission, calculated and posted at checkout (2026-07-20)
+- Price Calendar range bumped to 10 years + negative-amount hardening (2026-07-20)
+- Rate Plan: Complimentary / House Use flags (2026-07-20)
+- Price Calendar page: multi-room-type Bulk Update (2026-07-20)
+- Price Calendar page: Configuration panel redesign (2026-07-20)
+- Allocation Calculation mode: Meal Plan vs Rate Plan level (2026-07-20)
+- Reservation booking dialog: Look-to-Book redesign (2026-07-21)
+- Booking dialog → dedicated pages, allocation calculation breakdown, full tax breakdown (2026-07-21)
+- Reservations — date validation & occupancy override (2026-07-21)
+- Reservations — split-stay contiguity, scheduled room move, pax-capped accompanying guests, guest picker (2026-07-21)
+- Osta platform-admin console (2026-07-21)
+- Alpha v4 owner decisions (2026-07-21)
+- Business date + folio rework (2026-07-22)
+- Deposit / Cancellation / No-Show fee rules + EOD guard (2026-07-22)
+- End-of-Day redesign — resumable step wizard (2026-07-22)
+- Excursions Booking (2026-07-22)
+- Billing module — owner rules (2026-07-24)
+- Reservation lifecycle states + fee-rule selection (2026-07-24)
+- Billing increments #2 delivered (2026-07-24)
+- Checkout settlement rules — owner clarification (2026-07-24)
+- Check-in procedure (wizard) + Registration Card stationary (2026-07-24)
+- Point of Sale → "Fast Post" rework (2026-07-25)
+- Property Availability page + Stop Sale (2026-07-26)
+- Stationery redesign — branding moves to Property, per-document tabs (2026-07-27)
+- Channel manager: inventory & overbooking authority — owner ruling (2026-07-27)
+- 2026-07-31 — SaaS licensing model (owner)
+- 2026-07-31 — Enterprise-level module gating REMOVED (owner)
+- 2026-08-02 — Spa/Excursions add-ons are ENTERPRISE-level (owner)
+- 2026-08-02 — PostgreSQL replaces SQLite (owner)
+- 2026-08-03 — Every foreign key is now indexed
+- 2026-08-03 — Closed reservations: presentation + allowed actions (owner)
+- 2026-08-03 — Reservation delete is internal-only (owner)
+- 2026-08-03 — Folio: pre-arrival window, documents, and settlement (owner)
+- Uppsolut brand integration — palette, marks, naming (2026-08-08)
+- 2026-08-08 — Two email senders: tenant vs platform (owner)
+- 2026-08-10 — Uppsolut Mail Service: platform SMTP as a billed fallback (owner)
+- 2026-09-06 — Operations Dashboard: brand palette, per-user layout, DASHBOARD module (owner)
+- 2026-09-06 — Website API: a brand website per property (owner)
+- 2026-09-07 — Revenue: "Rate Details" is now "Rate Seasons" (owner)
+- 2026-09-23 — UI polish round: reports, dates, dropdowns, dashboard, scrollbars (owner)
+- Green Tax Report = MIRA information sheet (2026-09-23)
+- 2026-09-23 — Tax-inclusive rounding: the base takes the residual cent
+- 2026-09-23 — Setup moves to the Hub, separated by Enterprise and Property (owner)
+- 2026-09-23 — Night Audit controls page; moving the business date by hand (owner)
+- 2026-09-25 — Nationalities from an international master list; Job Functions fixed (owner)
+- 2026-09-24 — Held nights, scheduled audit window, charge codes are the property's (owner)
+- 2026-09-24 — Documentation portal split into areas; Configuration guide (owner)
+- 2026-09-24 — Property logo is uploaded, 3:2 (owner)
+- 2026-09-25 — Mobile polish: defaults taken for the plan's open questions (owner approved the plan)
+- 2026-09-25 — Green Tax per guest; every guest gets a Registration No (owner)
+- 2026-09-25 — Reservations list defaults to business on the books (owner)
+- 2026-09-25 — Desktop polish: owner approved every recommendation in DESKTOP_PLAN.md (owner)
+- GST Report (2026-09-25)
+- 2026-09-25 — UI text standard: sentence case (owner: "have a standard — up to your recommendation")
+- 2026-09-26 — Folio check numbers and roll-up (owner)
+- 2026-10-04 — Transportation module (owner brief)
+- Revenue Calendar, Rate seasons steps, and stop-sale override (2026-10-10)
+- Cashiering (2026-10-12, 8.8.3)
+- 2026-10-14 — Each enterprise connects its own Beds24 account (owner, 8.8.4)
+- 2026-11-07 — UX polish round 1 (owner, 8.8.6)
+- 2026-11-07 — Keyboard-first front desk (owner, 8.9.0)
+- Osta console: a customer's people and activity are not Osta's to browse (2026-11-07)
+- Osta console: an enterprise's own channel-manager connection is running / not running only (2026-11-07)
+- Osta Monitoring: DB Health redesigned, load history persisted (2026-11-08)
+- Osta console: Billing replaces Licensing, approvals and support access simplified (2026-11-08, owner)
+- 2026-11-08 — Osta console on phones
+- 2026-11-09 — Phone consistency pass (owner)
 
 ---
 
@@ -89,11 +184,6 @@
 
 - **Charge Codes are a distinct concept from Tax**, split into two separate Controls
   cards under Finance (previously one combined `FinancialsManager`).
-- **Charge Code categories** (for reporting, not tax behavior):
-  `ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | PAYMENT | SYSTEM`.
-  **Superseded 2026-07-27** by the Group → Subgroup → Code hierarchy — see "Charge Code
-  hierarchy, generates & the Cashiering panel" below. The flat category string survives
-  only as a deprecated mirror column.
 - Renamed "Maldives Tax Engine" → **"Maldives Tax"**, "Custom Tax Profiles" →
   **"Custom Tax"**.
 - **Maldives tax calculation order** (verbatim example given): base amount $100, SVC
@@ -178,7 +268,7 @@
 
 ## Charge Code hierarchy, generates & the Cashiering panel (2026-07-27)
 
-Implements [/CHARGE_CODE_PLAN.md](../../CHARGE_CODE_PLAN.md). Supersedes the flat
+Implements [/CHARGE_CODE_PLAN.md](DEV_LOG.md). Supersedes the flat
 "Charge Code categories" list above.
 
 - **Three levels, Opera-modelled**: `ChargeGroup` → `ChargeSubgroup` → `ChargeCode`.
@@ -370,23 +460,13 @@ stayed in Finance beside Payment Methods.
 
 ## Theming & Design System
 
-- Full audit, token system, and migration plan: see [`DESIGN_PLAN.md`](DESIGN_PLAN.md)
-  (not duplicated here — it's a large, self-contained document). Status note: its header
-  says "planning only — no code in this document has been applied to the repo," but
-  `git log` shows a commit `4420587 Implement DESIGN_PLAN.md: monochromatic design
-  system + responsive layouts` — **the header is stale**, treat the plan as
-  partially-to-mostly implemented and verify against current code rather than trusting
-  the "planning only" label at face value.
-- **Per-property banner accent, not per-enterprise**: superseded from the plan's
-  original wording — `Property.bannerColor` (raw hex, nullable) renders as a thin 4px
-  line at the top of the page via `PropertyBannerBar`, scoped to the *property* (an
-  enterprise can have multiple properties, each with its own color), not a shared
-  enterprise-wide CSS token. `--primary` (buttons, links, focus rings) stays a fixed
-  neutral for every property/enterprise — the banner line is the *only* sanctioned
-  accent surface. See `DESIGN_PLAN.md` §3.3 for the full "sanctioned surfaces" list.
-- **~25 files with uncommitted design-system changes** are sitting in the working tree
-  as of the most recent commits — flagged in [TODO.md](TODO.md) rather than here since
-  it's an actionable item, not a settled decision.
+- The design system, its tokens and the reasoning are in [`DESIGN_PLAN.md`](DESIGN_PLAN.md),
+  which is the single source of truth and is largely implemented. Verify against the code
+  before assuming a gap it lists is still open.
+- **Per-property banner accent, not per-enterprise**: `Property.bannerColor` renders as a thin
+  line at the top of the page (`PropertyBannerBar`). `--primary` (buttons, links, focus rings)
+  stays a fixed neutral for every property; the banner is the only sanctioned accent surface
+  (`DESIGN_PLAN.md` §3.3).
 
 ## Session/scope engineering conventions (for agents working on this repo)
 
@@ -490,65 +570,20 @@ stayed in Finance beside Payment Methods.
 
 ## Debtors (Accounts Receivable) (2026-07-19)
 
-App owner requested a new "Debtors" module: credit accounts for Travel Agents and
-corporate clients, transferring/managing charges paid by agents, Night Audit posting to
-the right billing target, and a Folio "bill to account" option gated on a City Ledger
-settlement method (default when a TA/corporate is attached). Clarifying questions and
-answers, confirmed before building:
+The first Debtors design. Its ledger model (one pooled AR folio per account, a "Bill to
+Account" action, a `bill-charges` endpoint) was **replaced the same day** by the
+checkout-triggered invoice pipeline in the next Debtors section. What still holds:
 
-- **Credit accounts extend existing `Profile` rows** (COMPANY/TRAVEL_AGENT), not a
-  separate account model — `Profile` already had dormant `arNumber`/`creditLimit`/
-  `iataNumber`/`commissionRate` fields nothing read before this. New
-  `Profile.isCreditAccount` formally activates them.
-- **"Transfer agent charges"** means routing a folio charge from the guest's own folio
-  onto the account's AR ledger (the classic bill-to-account/City Ledger transfer) — not
-  agent-commission tracking.
-- **V1 is the full AR suite**: accounts, charge routing, running balance, recording
-  payments received, a FIFO aging report (Current/1-30/31-60/61-90/90+), and a
-  printable/emailable Account Statement.
-- **Credit limit is warn-only, never blocking** — mirrors the existing Outlet
-  appointment-capacity `capWarning` pattern, surfaced in the Night Audit results page
-  and the bill-to-account response, never persisted.
-- **Module access**: `DEBTORS` was added only to `Cashier` (beyond the always-full
-  Admin/Manager) — Front Desk and Reservations were explicitly *not* granted it at
-  launch. **Live-verified this exposed a real, general RBAC bug**: a brand-new module
-  added to `MODULES` was not retroactively granted to any enterprise's already-seeded
-  `RolePermission` rows (`ensureRoles()`'s `upsert` only populates permissions on
-  first create), and System roles are read-only in the Controls UI, leaving no
-  self-service fix. **Fixed the same day** (see "RBAC self-healing permission
-  backfill" below) rather than left as a known gap — every existing role now
-  self-heals the first time it's used after a new module ships.
-- **A debtor's AR ledger is a `Folio`**, not a new model — `isDebtorAccount: true`,
-  `payeeProfileId` set to the credit-account Profile (reusing the existing
-  `payeeProfile` relation, which was already used by the ordinary "Change Payee" flow),
-  `reservationId: null` like a walk-in folio, one per `(Profile, Property)` created
-  lazily on first use — mirrors how `GroupBlock.masterFolios` and walk-in folios are
-  already provisioned on demand. No DB-level uniqueness enforces the one-per-pair rule
-  (a filtered/partial unique index isn't clean in SQLite/Prisma, and `payeeProfileId`
-  is legitimately reused by non-debtor folios); the lazy-creation helper
-  (`src/lib/debtor-accounts.ts`'s `findOrCreateDebtorFolio`) does a find-then-create
-  and documents this as an accepted, low-risk gap.
-- **`POST /api/debtors/accounts/[profileId]/bill-charges` is a new, separate endpoint**
-  from `/api/folios/line-items/move` — that route's walk-in-rejection and
-  same-reservation-only checks are real safety invariants for the ordinary "Move to
-  Folio" action; weakening them to admit an AR folio (`reservationId: null`, accepting
-  charges from any reservation at the property) would also loosen what that existing
-  action permits. `bill-charges` has its own guards instead: rejects re-billing a
-  charge already on a debtor folio, and rejects billing from a group master folio.
-- **Settlement routing is automatic where it can be, manual elsewhere**: a new
-  reservation's initial folio defaults `settlementMethod` to `CITY_LEDGER` only if its
-  `travelAgentId` resolves to an `isCreditAccount` profile (not re-evaluated on later
-  edits, so a staff override sticks); Night Audit then posts the nightly ROOM/Green Tax
-  charges straight onto that account's AR folio instead of the guest folio whenever
-  that's set. Because those charges never land on the guest folio, **checkout's
-  existing zero-balance check required no code changes**. Any other charge (POS,
-  incidentals, corrections) is routed manually via a new "Bill to Account" action in
-  the Folio Panel, enabled only when `settlementMethod === CITY_LEDGER`.
-- **`PrintDocumentShell` gained an `extraActions` slot** (rendered before the Print
-  button) so the new Account Statement page could offer both Print and Email actions
-  without duplicating the shell — the same dual-action need the Confirmation Letter
-  page solved with a bespoke header; this generalizes it for future documents that need
-  more than one delivery action.
+- **Credit accounts extend existing `Profile` rows** (COMPANY / TRAVEL_AGENT), activated by
+  `Profile.isCreditAccount`; there is no separate account model.
+- **Credit limit is warn-only, never blocking.**
+- **Aging** is Current / 1-30 / 31-60 / 61-90 / 90+, and the Account Statement can be printed
+  or emailed.
+- **Module access**: `DEBTORS` is its own module, granted to Cashier beyond Admin and Manager;
+  Front Desk and Reservations were deliberately not granted it.
+- A new reservation's first folio defaults to `CITY_LEDGER` only when its travel agent is a
+  credit account; a later staff override sticks.
+- `PrintDocumentShell` has an `extraActions` slot for documents that need more than Print.
 
 ## RBAC self-healing permission backfill (2026-07-19)
 
@@ -592,53 +627,6 @@ roles can't be edited via the Controls UI at all."
   as the `Manager` role and confirmed the row appeared correctly on the very first
   request, matching `SYSTEM_ROLE_DEFS.Manager.DEBTORS` exactly, with no server
   restart or manual step involved.
-
-## Stationaries page (2026-07-19)
-
-App owner: "in Controls > Reports we have option to define invoice some details, i
-want to move that to a separate page > Stationaries... a way to properly manage
-certain details of the stationaries a simple way" — followed shortly after by "side
-bar does not show Stationary option can you add there?" once they saw the first
-version (a Controls tab).
-
-- **Audited which `EnterpriseSettings` fields each of the 5 printable/emailable
-  documents actually reads** (Tax/Proforma Invoice, Confirmation Letter, Payment
-  Receipt, Currency Exchange Receipt, Debtor Statement) before designing anything —
-  confirmed brand identity (name/logo/color/font/address/contact) is shared by all
-  5, `invoiceHeaderText` is Invoice-only, footer/terms/payment-account fields are
-  shared by Invoice + both Receipt types + Statement, and
-  `confirmationLetterMessage` is Confirmation-Letter-only. This matrix drove the
-  three-tab grouping in the new `StationariesManager` (Branding / Financial
-  Documents / Confirmation Letter) instead of guessing a layout.
-- **No schema or API changes** — every field already existed and was already read
-  correctly by all 5 documents; this was purely a settings-UI relocation and
-  reorganization, confirmed via the audit above before writing any code.
-- **Chose grouped tabs with a switchable live preview** (3 mockups: Invoice,
-  Confirmation Letter, generic Receipt/Statement) over one long undifferentiated
-  form — app owner's explicit choice between the two when asked, on the reasoning
-  that a field like "Header Text" being invoice-only is invisible in a flat form but
-  obvious once it's the only field in its own tab.
-- **Sidebar placement**: shipped first as a new Controls tab (matching how
-  Sequences/Tax/Users & Roles all live inside Controls, since this looked like pure
-  settings/configuration, not a new operational module). The app owner then asked
-  for it in the main left sidebar directly, same as Debtors got — promoted to a
-  standalone page (`src/app/e/[slug]/dashboard/stationaries/page.tsx`) with its own
-  `app-sidebar.tsx` entry, and removed the now-redundant Controls tab so there's one
-  canonical path, not two. Deliberately reused the existing `CONTROLS` permission
-  rather than minting a new RBAC module for it — it's still fundamentally a settings
-  page, and reusing an already-granted permission meant every existing Admin/Manager
-  saw the new sidebar item immediately with no backfill needed (unlike `DEBTORS`,
-  which genuinely needed its own module since it's a real operational domain with
-  its own CRUD permissions).
-- **Live-verified end-to-end**: all three tabs load and save correctly, all three
-  preview modes render, and a saved `confirmationLetterMessage` change was confirmed
-  to persist through a full page reload by reading it back from the database
-  directly (then reset to empty afterward, since it was test data).
-- **Unrelated discovery during verification, explicitly not touched**: the Controls
-  page intermittently failed to compile due to JSX syntax errors in
-  `room-manager.tsx` and then `tax-manager.tsx` — different files erroring on
-  successive checks, consistent with another session actively editing them at the
-  same time. Neither file was touched by this work.
 
 ## Debtors: checkout-triggered invoice pipeline redesign (2026-07-19)
 
@@ -992,7 +980,7 @@ App-owner instructions this session, with two design questions the owner answere
 
 ## Profiles redesign (2026-07-20)
 
-Full architecture in [PROFILES_REDESIGN_PLAN.md](PROFILES_REDESIGN_PLAN.md). Per direct
+Full architecture in [PROFILES_REDESIGN_PLAN.md](DEV_LOG.md). Per direct
 app-owner request: replace Loyalty with a configurable VIP tier, split single Communication/
 Address/ID fields into real multi-row child tables, add CRM fields, and consolidate all
 profile types (Guest/Staff/Company/Corporate) into one table.
@@ -1155,52 +1143,6 @@ eligible (use a commission charge code created under non revenue)."
   pre-existing "dangling payeeProfileId" gap already flagged under Debtors above, not a
   new one.
 
-## Price Calendar bulk-update: silent no-op on an inverted date range (2026-07-20)
-
-Reported by the app owner as "cannot update any price now" — first suspected of being a
-regression from the earlier From/To date-picker split (splitting the combined range
-picker into two independent single-date pickers made an inverted range trivially
-reachable: pick a "To" before the "From" already set, which the old combined
-range-select picker structurally couldn't produce). Investigation found **two separate
-real bugs**, not one:
-
-- **`POST /api/price-calendar/bulk`** (the Rate Details "Bulk Seasonal Pricing Tool",
-  `src/components/revenue/bulk-pricing-tool.tsx`) had no guard against `start > end` at
-  all. Its date-generation `while` loop simply never executed, `datesToUpdate` stayed
-  empty, and an **empty Prisma transaction trivially "succeeds"** — the route returned
-  `{success: true, message: "Successfully updated 0 price records."}` with a 201. The
-  frontend just alerted `data.message` verbatim, so a distracted read looked exactly
-  like "no error, but nothing happened." This is almost certainly what the app owner
-  hit. Fixed: explicit `start > end` check (400, clear message) plus the same 2-year
-  range ceiling the sibling endpoint already had (no cap previously existed here either
-  — a valid-but-huge range risked an oversized transaction).
-- **`POST /api/price-calendar`** (the Price Calendar page's own single-room-type Bulk
-  Update sidebar, `src/app/e/[slug]/dashboard/revenue/calendar/page.tsx`) already
-  rejected an inverted range with a real 400, but the frontend's error handler
-  swallowed the reason behind a generic "Failed to update prices." alert (fixed
-  earlier the same session) and had no client-side pre-check, so the round-trip was
-  needed just to find out what was wrong.
-- **Client-side guards added to both forms** (`from > to`, missing From/To) so the
-  wrong case is caught before a network round-trip, with a message that actually
-  names the problem.
-- **New: Price Calendar auto-navigates to the applied range's month on a successful
-  bulk update.** Splitting the picker in two makes it easy to set a From/To in a month
-  the grid isn't currently showing — previously a successful write left the visible
-  grid unchanged (still "No Rate" for whatever month was on screen), which reads
-  exactly like "no error, but doesn't update" even when the price was written
-  correctly. Not a bug in the write path, but a real, reproducible UX trap worth
-  closing.
-- **5 new tests** in `tests/business-rules/price-calendar-bulk.test.ts` (inverted-range
-  rejection + zero-rows-written assertion for both endpoints, oversized-range rejection
-  for the bulk endpoint, and a valid-range row-count sanity check for both). 222/222
-  suite passing, `tsc --noEmit` clean. **Live-verified end-to-end** against the real
-  Veyo database: reproduced the exact original failure via direct API calls against
-  both endpoints (confirmed the bulk endpoint really did return 201/0-rows pre-fix, and
-  a clear 400 post-fix); then drove the real Price Calendar UI through the full
-  cross-month scenario — set From 05 Aug / To 10 Aug while the grid was showing July,
-  submitted, and confirmed the grid auto-jumped to August and displayed the correct
-  $88.00 across Aug 5–10.
-
 ## Price Calendar range bumped to 10 years + negative-amount hardening (2026-07-20)
 
 Follow-up to the above, per direct app-owner request: "why is it limited to two years?
@@ -1238,30 +1180,6 @@ request): neither flag currently stops Night Audit from posting a real nightly c
 a "Complimentary" or "House Use" rate plan bills exactly like any other unless staff
 also manually zero the room's `overrideRate`. Revisit when/if the owner wants automatic
 $0 posting tied to these flags.
-
-## Redundancy audit: Revenue / Rate Plan / Reservation (2026-07-20)
-
-Per the owner's open question in the same request ("anything else that you feel i have
-made redundant..."), a full audit turned up:
-- **`Profile.commissionRate` is a dead, never-read field** (superseded by
-  `RatePlanAgentAccess.commissionRate`) — was still shown as an editable "Commission
-  Rate (%)" field on Company/Travel Agent profiles, and read-only on the profile detail
-  page. **Fixed 2026-07-20** during the full Revenue/Profiles review pass: removed both
-  UI displays (a user filling it in would reasonably assume it affects payouts; it did
-  nothing). The schema column and API accept/store it unchanged (harmless, and dropping
-  it is a separate migration decision) — only the misleading UI is gone.
-- **No mutual-exclusivity guard** between `isComplimentary`/`isHouseUse`/`isLocked`/
-  derived — a plan can be ticked as both, or House Use + derived, with no warning.
-  Matches point above (not wired yet); flagging so it's not forgotten when it is.
-- **`Reservation.mealPlan` and a Derived Rate Plan's own name/composition (e.g.
-  "BAR-BB") are two independent, unsynced pickers** — booking on a "BB"-suffixed rate
-  plan doesn't pre-select or suggest the matching Meal Plan. By design per the existing
-  Meal Plan/Derived Rate Plan decoupling, but worth a UI hint someday.
-- **No seed/onboarding path sets up a Commission charge code** — every new enterprise
-  has commission posting silently disabled until an admin finds Controls > Finance and
-  configures one. Minor onboarding gap, not urgent.
-- Checked and found **no drift** between the two Price Calendar endpoints, and **no
-  charge-code miscategorization** worth moving to `NON_REVENUE`.
 
 ## Price Calendar page: multi-room-type Bulk Update (2026-07-20)
 
@@ -1353,54 +1271,6 @@ owner and confirmed before implementation:
   (`source: "MEAL_PLAN"`) attached; `TRF-AIR` did not — matching the mode's contract
   exactly. Test reservation, the `TRF-AIR`→`BAR` link, and the mode override were all
   cleaned up afterward; Veyo is left at the `RATE_PLAN` default.
-
-## Full Revenue/Profiles review pass — bugs found and fixed (2026-07-20)
-
-Per direct app-owner request, once Revenue and Profiles felt feature-complete: "act as a
-senior code reviewer to check for bugs and missing links... fix those issues." Went
-file-by-file through every Revenue and Profiles change made this session (schema,
-migrations, API routes, components, pages). Findings:
-
-- **Missing `/e/{slug}` prefix on client-side navigation — a real, recurring bug
-  class.** Two confirmed instances, both fixed:
-  - Revenue > Rate Plans' "Calendar" link (`revenue/page.tsx`) built
-    `/dashboard/revenue/calendar?ratePlanId=...` with no enterprise-slug prefix. The
-    bare `/dashboard/...` path only resolves through a legacy backward-compat redirect
-    (`src/app/dashboard/[[...rest]]/page.tsx`) that preserves the sub-path but **drops
-    the query string** — so the Price Calendar always silently defaulted to whichever
-    rate plan sorts first (`NRF`, priority 0), no matter which plan's Calendar link was
-    actually clicked. Root-caused live in the browser (clicking BAR/COMMTEST always
-    landed on "Non-Refundable"). Fixed by pulling `slug` via `useParams` and prefixing
-    the link; verified BAR and COMMTEST each now show their own plan/pricing.
-  - The Profiles dashboard (`profiles/page.tsx`) had the identical bug in **six**
-    places — every row-click, Edit button, and the "New {type}" button all pushed bare
-    `/dashboard/profiles/...` paths. Path-only navigations (profile view/edit) still
-    worked via the same redirect since there's no query string to lose, but the "New
-    Company" / "New Travel Agent" / "New Staff" buttons pass `?type=...` — which got
-    dropped, so **every "New X" button silently opened a New Guest form instead**
-    (`new/page.tsx` defaults `type` to `"GUEST"` when the param is absent). Fixed the
-    same way; verified `?type=TRAVEL_AGENT` now survives end to end.
-  - Grepped the whole `src/` tree afterward for the same anti-pattern
-    (`push(\`/dashboard/`) — no other instances found.
-- **`Profile.commissionRate` dead-field UI removed** (see the Redundancy audit entry
-  above, which had flagged but not acted on this) — it actively misled Company/Travel
-  Agent profile users into thinking it affected payouts.
-- Everything else audited clean: all Profiles child-resource routes (communications,
-  addresses, documents, notes, attachments, preferences, negotiated-rates,
-  stay-history) — consistent tenant scoping, validation, and "at most one primary"
-  handling; Rate Plan locked/negotiated/complimentary/house-use logic; Allocation
-  Calculation mode's client/server exclusivity; Price Calendar's date-range/negative-
-  price guards; the full commission attribution and posting pipeline; charge-code
-  `NON_REVENUE` category consistency across all three places it's declared; the
-  Preferences/Room Preferences LOV merge (confirmed zero remaining `ROOM_PREF`
-  references anywhere).
-- Two minor, non-live-bug items intentionally left as-is (unreachable through any
-  current UI path, and per this project's "don't validate scenarios that can't
-  happen" convention): `RatePlanAgentAccess` bulk-replace could theoretically 500 on a
-  duplicate `ratePlanId` in the request body (the checkbox-driven UI can't produce
-  one); `SystemCodeMultiSelect`'s fetch-once ref would get stuck if the same instance
-  were reused with a changing `category` prop (both current call sites are static).
-- Full suite 230/230 passing, `tsc --noEmit` clean after all fixes.
 
 ## Reservation booking dialog: Look-to-Book redesign (2026-07-21)
 
@@ -1753,7 +1623,7 @@ code was written (recorded here since they're not obvious from reading the code)
 
 ## Alpha v4 owner decisions (2026-07-21)
 
-The five open decisions listed at the bottom of [ALPHA_V4_PLAN.md](ALPHA_V4_PLAN.md)
+The five open decisions listed at the bottom of [ALPHA_V4_PLAN.md](DEV_LOG.md)
 were put to the app owner directly and answered as follows. These govern Phases 1-3
 of that plan — do not re-ask or reverse without a fresh instruction.
 
@@ -1975,13 +1845,10 @@ Green Tax by registration no, GST), Housekeeping (2 — Special Requests, Attend
   "GST" column is really "profile tax". Fine for the standard Maldives setup.
 - **HousekeepingTask.startedAt added** (migration 20260722220000), set on the first
   IN_PROGRESS transition, powering the Attendant report's time-on-task.
-- Green Tax report carries the per-room adult/child levy on the primary
-  registration (× nights); accompanying registrations show 0 to avoid double count.
-  **Superseded 2026-09-23** — see "Green Tax Report = MIRA information sheet".
 
 ## Excursions Booking (2026-07-22)
 
-Full design in [EXCURSIONS_PLAN.md](EXCURSIONS_PLAN.md) (all six phases now done); the
+Full design in [EXCURSIONS_PLAN.md](DEV_LOG.md) (all six phases now done); the
 owner decisions behind it are recorded there too. Logged here only because they're the
 kind of business rule someone would otherwise have to rediscover by reading routes:
 
@@ -2271,7 +2138,7 @@ Decisions taken (owner-confirmed via questions):
 
 ## Channel manager: inventory & overbooking authority — owner ruling (2026-07-27)
 
-Answers plan decision **D-7** in [HUB_CHANNEL_MANAGER_PLAN.md](HUB_CHANNEL_MANAGER_PLAN.md).
+Answers plan decision **D-7** in [HUB_CHANNEL_MANAGER_PLAN.md](DEV_LOG.md).
 
 **The rule:** what we push to the channel manager is the **actual available inventory**.
 Overbooking allowance is **never** included in that number.
@@ -2363,14 +2230,6 @@ code to its own tax codes as long as the ORIGIN of every tax line is trackable �
 is, structurally: every generated line carries FolioLineItem.generatedFromLineItemId
 pointing at the main code's line, and lineReportBucket() attributes it to the parent's
 bucket in every report.
-
-**Outlet-wise subgroups** (⚠️ superseded 2026-09-24 — new outlets no longer get a subgroup or codes; see that entry): each F&B/Spa/Excursion/Transport/Retail outlet owns its own
-nnRV subgroup (ChargeSubgroup.outletId), auto-provisioned from its group's band on
-outlet creation with template codes (nn01, nn02…) wired to the global tax generates.
-The band's first number (20RV/30RV/40RV…) is seeded as an unowned default; the first
-outlet of each kind ADOPTS it instead of burning a number. 29RV is reserved for Meal
-Plans and never allocated to an outlet. Numbering increments enterprise-wide (the chart
-is enterprise-scoped; outlets are property-scoped).
 
 Payments were explicitly excluded from the Opera doc's 90CA/90CL scheme ("ignore
 payments") but still carry codes (95PY: 9500–9510) — the ALL-POSTINGS-LINKED rule from
@@ -2518,32 +2377,6 @@ all were latent, and would have shipped to the first production deployment.
    "must be safe to run repeatedly" — but the test asserted a call count that only held
    because SQLite serialises all writes. It now asserts peak concurrency, which is the
    real invariant. A session-scoped advisory lock would be strictly stronger; see TODO.
-
-## Beds24 topology — ONE master account, per-enterprise connections (2026-08-02)
-
-App-owner decision on how Beds24 is bought and wired, verbatim intent: there will be
-**one Beds24 master account** owned by the app owner — customers agreed to this, so
-nobody pays Beds24 for multiple accounts. Properties are **created in Beds24 by the app
-owner** under that master account; each is then linked into OstaStay by its **Beds24
-property id**, and everything about the link — property linking, room-type mapping, rate
-mapping, the connection itself — is managed **in the Hub of the property's own
-enterprise**, not centrally.
-
-How this maps onto the existing schema (no code change needed — this is a wiring
-pattern, not a feature):
-
-- `ChannelConnection` is enterprise-scoped and MUST stay that way — inbound bookings are
-  attributed by `connection.enterpriseId`, so one connection row can never serve
-  properties across customer enterprises. "One connection" in the owner's phrasing means
-  **one Beds24 ACCOUNT**, not one row.
-- The pattern is: one invite code **per customer enterprise**, generated in the master
-  account and scoped to just that customer's properties (invite codes are free and
-  unlimited; Beds24 bills per account/property, not per code) → one `ChannelConnection`
-  in that enterprise's Hub → `ChannelPropertyLink` by `externalPropertyId` +
-  `ChannelRoomTypeMap` in that same Hub. Each connection has its own webhook URL.
-- ⚠️ **The API credit pool is per Beds24 ACCOUNT**, so under this topology every tenant
-  shares one rate-limit budget. `rateLimitPauseThreshold` exists per connection exactly
-  for this — set it once several tenants are live, or one busy property starves the rest.
 
 ## 2026-08-03 — Every foreign key is now indexed
 
@@ -2759,49 +2592,24 @@ broken in dark mode).
 
 ## 2026-08-08 — Two email senders: tenant vs platform (owner)
 
-Owner instruction, verbatim: *"clients can have their own SMTP as well which will be used
-for sending things to the guest such as registration/confirmation etc"* and *"from Uppsolut
-Stay we send initial Enterprise credentials / Links and any Channel Manager related mails"*.
-
-So mail splits by **who the message is from**, not by what it contains:
+Mail splits by **who the message is from**, not by what it contains:
 
 | | Tenant SMTP | Platform SMTP |
 | --- | --- | --- |
 | Sends | Confirmation letters, eRegistration links, debtor statements | Enterprise handover credentials, channel-manager alerts |
 | From | The hotel's own domain | Uppsolut's (`noreply@mail.uppsolut.com`) |
-| Configured | By the tenant, Controls → Reports → SMTP / SFTP | By the operator, `PLATFORM_SMTP_*` env vars |
+| Configured | By the tenant, in the Hub (enterprise area, Email) | By the operator, `PLATFORM_SMTP_*` env vars |
 
-**No fallback in either direction, deliberately.** A tenant with no SMTP configured does
-NOT fall back to the platform sender — a booking confirmation arriving from Uppsolut rather
-than from the property is the wrong sender for the guest, and silently substituting it
-would be worse than the current clear "SMTP is not configured" failure. There is a test
-pinning this.
-
-> **SUPERSEDED the same day** — see "2026-08-10 — Uppsolut Mail Service" below. The owner
-> ruled that the fallback SHOULD exist, as a billed opt-in add-on. The "no fallback"
-> reasoning above was the agent's own design taste, not an owner instruction; what survives
-> of it is the precedence rule (a tenant's own SMTP always wins) and the requirement that
-> the substitution is never silent.
-
-Platform SMTP is env-only and has no admin UI to change it. Two reasons: a brand-new
-enterprise has no settings row to read config from at the moment we need to email its first
-admin, and an endpoint able to rewrite the platform's sending identity would be a standing
-route to sending mail as Uppsolut. The platform console shows it read-only, with a test
-button.
-
-**Channel alerts go to Uppsolut ops (`PLATFORM_ALERT_EMAIL`), not to the hotel.** This
-follows the master-account topology (see "Beds24 topology — ONE master account" above): the
-Beds24 account is ours, so a lapsed credential can only be recovered by us with a fresh
-invite code. Telling the tenant would be reporting a fault they cannot act on. Alerts fire
-only on the CONNECTED → failed transition, never on "still failing", so a fault that takes
-days to fix does not mail hourly for those days.
-
-**Blocked on the owner, not on code:** the SES account is still in the **sandbox** — it
-authenticates fine and then rejects any recipient that is not individually verified, which
-is every onboarding email by definition. Production access has to be requested in the SES
-console before platform mail does anything in production.
-
----
+- **A tenant's own SMTP always wins.** A tenant without one may use the platform sender only
+  as the billed, opt-in Uppsolut Mail Service (next section), and the substitution is never
+  silent.
+- Platform SMTP is env-only with no admin UI to change it: a new enterprise has no settings row
+  when its first admin must be emailed, and an endpoint able to rewrite the platform's sending
+  identity would be a standing route to sending mail as Uppsolut. The platform console shows it
+  read-only, with a test button.
+- Channel alerts go to Uppsolut ops (`PLATFORM_ALERT_EMAIL`) and fire only on the CONNECTED →
+  failed transition, never on "still failing". Since enterprises can connect their own Beds24
+  account (2026-10-14) the alert should reach them too: open in TODO.md.
 
 ## 2026-08-10 — Uppsolut Mail Service: platform SMTP as a billed fallback (owner)
 
@@ -2896,7 +2704,7 @@ one.
 
 Each property may run its own website — a "front" with the property's information and a
 simple booking page — fed by a public, key-authenticated API. Full decision record in
-[WEBSITE_API_PLAN.md](WEBSITE_API_PLAN.md) (W-1…W-11); the rulings that shape behaviour:
+[WEBSITE_API_PLAN.md](DEV_LOG.md) (W-1…W-11); the rulings that shape behaviour:
 
 - **Keys are made in the Hub, at enterprise level, and may cover one or more of the
   enterprise's properties.** INTEGRATIONS-gated; no new module. A property not on the key
@@ -3060,7 +2868,7 @@ inclusive 215.00 on SC 10% + GST 17% came out 167.06 + 16.71 + 31.24 = 215.01.
 Owner, on the Controls and Stationaries pages: move them to the Hub "as there is we will be
 doing the actual setup of the properties", and make it clear "for which property the
 settings are shown", keeping "anything that is common — belongs to enterprise — separated
-from property level things". Build plan: [HUB_SETUP_PLAN.md](HUB_SETUP_PLAN.md).
+from property level things". Build plan: [HUB_SETUP_PLAN.md](DEV_LOG.md).
 
 - **Enterprise (shared):** users, roles & permissions, integrations, support access,
   Email/SFTP. **Everything else is per property**, explicitly including tax definitions,
@@ -3431,18 +3239,9 @@ it — **not yet confirmed by the owner**:
 - Folio "Post charge": the charge code is picked by typing the code or its description
   (searchable), full width.
 
-## 2026-09-26 — Hotfix releases after 8.4.0 (owner)
-
-- Patch releases **8.4.1, 8.4.2, 8.4.3**, one per follow-up, **no release notes** for these
-  hotfixes (owner). 8.4.1 production readiness (code parts only), 8.4.2 copy Spa / Excursion
-  catalogues and Allocations between properties (Hub Phase 5b), 8.4.3 automated click-through
-  tests + the lint error. Owner asked for code changes only — server/ops steps stay manual.
-- Marketing site move (`/info` → uppsolut.com): **skipped for now** (owner) — hosting of
-  uppsolut.com is still unknown.
-
 ## 2026-10-04 — Transportation module (owner brief)
 
-Full plan and decision list: [TRANSPORTATION_PLAN.md](TRANSPORTATION_PLAN.md) (T-1…T-14).
+Full plan and decision list: [TRANSPORTATION_PLAN.md](DEV_LOG.md) (T-1…T-14).
 Owner's brief, in short: per-property transfers linked to reservations (or a traveller with
 no stay), airport leg + onward leg, PICKUP/DROP_OFF, **shared departures (manifests)** as the
 core object; Hub configuration (types, locations, routes with default departure slots,
@@ -3602,18 +3401,6 @@ taken into account. Role-based landing page: **not wanted for now** (parked).
   In-House, Room moves, Departures), Esc clears.
 - Not done (see TODO): the same list keys on Reservations, Housekeeping and Tape Chart; verb-first
   typing ("in williams"); per-user (server-side) storage of the Quick keys setting.
-
-## 2026-11-07 — Release order and numbering for the three open PRs (owner)
-
-Owner re-numbered the open PRs and set the merge order: **8.8.6 = UX polish (PR #85) → 8.9.0 = keyboard-first
-front desk (PR #87) → 8.9.1 = dashboard motion (PR #86), last.** There is no 8.8.5. The branches are stacked
-in that order (#87's base is `release/8.8.5` — the branch keeps its first name, the version inside is 8.8.6 —
-and #86 is stacked on `release/8.9.0`), and each carries its own release-notes entry and Operations-guide changes:
-- 8.8.6: Front Desk / Reservations / Tape Chart guide updated, new "Dashboard and Housekeeping" page.
-- 8.9.0: new "Keyboard shortcuts" page; the Front Desk and Dashboard guides link to it.
-- 8.9.1: "Figures, charts and movement" section; Tape Chart pulse noted; MOTION_PLAN.md says 8.9.1.
-Do NOT rename a branch that is the head of an open PR on GitHub — it closes the PR (it happened to #85 and was
-reopened). Merge in order; after each merge retarget the next PR to `master`.
 
 ## Osta console: a customer's people and activity are not Osta's to browse (2026-11-07)
 

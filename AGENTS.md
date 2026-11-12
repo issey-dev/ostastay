@@ -1,133 +1,79 @@
-<!-- BEGIN:project-docs -->
-# Project docs — read this first
+# OstaStay (Uppsolut Stay) — start here
 
-This is a team project (multiple contributors, human and agent). Before starting work,
-read `.agents/docs/`:
-- [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) — the multi-tenancy/RBAC
-  architecture retrofit: context, architecture decisions, phase-by-phase status
-  (Phase 0-4 done, Phase 5-6 not started).
-- [`.agents/docs/TODO.md`](.agents/docs/TODO.md) — the actionable remaining-work list:
-  what's left, what was deliberately deferred, what was found broken along the way but
-  is out of scope to fix without asking first. **Update this file** when you close or
-  discover an item — it's how the next session (yours or a teammate's) knows what's
-  still open without reading chat history.
-- [`.agents/docs/DECISIONS.md`](.agents/docs/DECISIONS.md) — business rules and design
-  decisions the app owner has given verbally, dated. Check here before assuming a
-  business rule, especially around Room Types, Tax/Charge Codes, Sequence Manager, and
-  theming.
-- [`.agents/docs/FORM_VALIDATION_STANDARD.md`](.agents/docs/FORM_VALIDATION_STANDARD.md)
-  — APP STANDARD 001: every form must use Zod + React Hook Form + shadcn/ui with
-  inline, real-time validation.
-- [`.agents/docs/ALLOCATIONS_PLAN.md`](.agents/docs/ALLOCATIONS_PLAN.md) — Master Plan
-  v2: the Allocations revenue-model extension (per-person priced components linked to
-  rate plans/meal plans/reservations, posted at Night Audit). Read before touching
-  Revenue, Meal Plans, or Night Audit posting.
+A multi-tenant hotel PMS: Next.js, React, Prisma, PostgreSQL. This is a team project with
+several contributors, human and agent. Read this file first; it tells you what to read next.
 
-- [`.agents/docs/USER_MANAGEMENT_PLAN.md`](.agents/docs/USER_MANAGEMENT_PLAN.md) — the
-  planned move of user management to the Hub: multi-role via a join table, a real Session
-  table (there is none today — sessions are stateless JWTs), idle timeout, and a job-function
-  tag replacing today's role-NAME matching. Read before touching users, roles, `scope.ts`
-  or anything that assumes `User.roleId`.
+## 1. This is NOT the Next.js you know
 
-- [`.agents/docs/WEBSITE_API_PLAN.md`](.agents/docs/WEBSITE_API_PLAN.md) — the public
-  Website API (a property's own brand website reading availability/prices and creating
-  bookings through a Hub-minted key): decisions W-1…W-11, file map, open items. The
-  external docs are the public portal at `/docs/api` (`src/app/docs`, one page per module),
-  the OpenAPI spec `public/docs/booking-api.openapi.yaml` and the PDF built from the portal
-  (`npm run docs:pdf`) — keep them in step with `src/app/api/website/v1/**`, and run
-  `npm run docs:check` (published docs must carry no secret, real customer or internal detail).
+This version has breaking changes: APIs, conventions and file structure may all differ from
+your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any
+code. Heed deprecation notices.
 
-- [`.agents/docs/BOOKING_API_ADDONS_PLAN.md`](.agents/docs/BOOKING_API_ADDONS_PLAN.md) —
-  extending that API so brand websites can sell Excursions and Spa on the same key
-  (scopes per key, instant booking, holds, guest self-cancel, webhooks, a public
-  `/docs` portal). Phase status and decisions B-1…B-11. Read before touching
-  `src/lib/excursion-booking.ts`, `spa-booking.ts`, `spa-lifecycle.ts` or `db-lock.ts`.
+## 2. Where the docs are
 
-- [`.agents/docs/HUB_SETUP_PLAN.md`](.agents/docs/HUB_SETUP_PLAN.md) — all setup lives in
-  the Hub, split into an ENTERPRISE area (`/hub/enterprise/…`: people, sessions, Email/SFTP,
-  API keys, support access) and a PROPERTY area (`/hub/p/{propertyId}/…`: everything else,
-  one property at a time, property always in the URL). Read before adding any setting:
-  decide which area it belongs to, and gate its API with `requireEnterpriseHub()` or
-  `requirePropertySetup()` from `src/lib/scope.ts`.
+Everything is in `.agents/docs/`. The only markdown at the repository root is this file,
+`CLAUDE.md` (which points here), `README.md` (quick start) and `DEPLOY.md` (server operations).
 
-- [`.agents/docs/AGENT_PORTAL_PLAN.md`](.agents/docs/AGENT_PORTAL_PLAN.md) — PLAN ONLY (nothing
-  built): travel agents get their own portal on a new Agent API (`/api/agent/v1`): tentative
-  reservations with option dates, overflow bookings, sell limits, allotments and release,
-  Tape Chart booking markers, settlement modes and a commission ledger, plus a permissions
-  review. Decisions A-1…A-25, phases 0-9 versioned from 9.0.1, owner questions Q-1…Q-14. Read
-  before touching reservation statuses, availability arithmetic, commission, group billing or
-  `src/lib/modules.ts`. The agent website itself is a local mockup and is not in this repo.
+| File | What it is | Read it |
+|---|---|---|
+| [`TODO.md`](.agents/docs/TODO.md) | Open work only, by area | Before starting, and update it when you close or find an item |
+| [`DECISIONS.md`](.agents/docs/DECISIONS.md) | Business rules the owner has given, dated | Before assuming any business rule |
+| [`DEV_LOG.md`](.agents/docs/DEV_LOG.md) | Every finished plan and audit, one dated section each, with the rules that still bind | Before touching an area it covers (table below) |
+| [`DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) | The design system: tokens, theming, components | Before any visual change |
+| [`FORM_VALIDATION_STANDARD.md`](.agents/docs/FORM_VALIDATION_STANDARD.md) | APP STANDARD 001: forms | Before building or changing a form |
+| [`MOTION_PLAN.md`](.agents/docs/MOTION_PLAN.md) | How animation works and what must stay still | Before adding any animation |
 
-- [`.agents/docs/NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) — the notification
-  system, BUILT (8.10.0 and 8.12.0): header bell in the dashboard, Hub and Osta console, personal +
-  global notifications, per-person settings, Hub announcements, the clock-based alerts job,
-  PWA install and Web Push to phones. The plan holds the catalogue, data model, decisions and what
-  is still open. Read before touching a header, adding any notification/toast-like feature, the
-  web manifest or service worker, or `src/lib/notifications/**`. A new kind of notification is a
-  row in `src/lib/notifications/types.ts` plus a producer; keep its text free of guest names and
-  amounts, and add it to the Notifications guide (`/docs/operations/notifications`).
+### Plans in progress (one file each)
 
-- **The public docs portal** (`src/app/docs`, table of contents in `src/app/docs/nav.ts`) has
-  three areas: `/docs/api` (Booking API, for developers), `/docs/configuration` (setting up
-  an enterprise and its properties in the Hub, for the client's admin and property team) and
-  `/docs/operations` (day-to-day staff guides). **When you change a Hub setup screen, update
-  its page under `src/app/docs/configuration`**, and re-shoot its screenshot: `npm run
-  docs:demo` (the fictional Coral Bay Hotels enterprise) then `npm run docs:shots -- <name>`
-  (shot list in `scripts/docs-shots.config.ts`; main content only, never app chrome).
-  Rebuild the PDFs with `npm run docs:pdf` and run `npm run docs:check`.
-  **Operations guides** (`src/app/docs/operations`): when you change a day-to-day screen, update
-  its guide in the same PR: `desk` (Front Desk, Reservations list and badges, Tape Chart moves, split
-  stays), `groups-and-clients` (Group blocks and the Posting Master, Client Relations, deactivating a
-  profile, eRegistration), `daily-reports`, `transportation`, `stop-sale`. A new guide is added in
-  `src/app/docs/nav.ts` and the operations overview page, then `npm run docs:pdf -- operations`.
-  It also has `/docs/release-notes`: **when you bump `package.json` for a release, add that
-  version's entry at the top of `src/app/docs/release-notes/releases.ts`** (New / Improved /
-  Fixed, plain language for hotel staff, no file paths, PR numbers or customer names), then
-  `npm run docs:pdf -- release-notes`.
+| Plan | Status | Read it before touching |
+|---|---|---|
+| [`AGENT_PORTAL_PLAN.md`](.agents/docs/AGENT_PORTAL_PLAN.md) | Plan only. PMS work is versioned from 9.0.1 | Reservation status, Group Blocks, availability, commission, the Tape Chart, roles and permissions, `/api/agent/**` |
+| [`NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) | N0 to N3 built (8.10.0); N4 open | The header bell, any notification or toast-like feature, the web manifest, the service worker |
+| [`MARKETING_SITE_MIGRATION_PLAN.md`](.agents/docs/MARKETING_SITE_MIGRATION_PLAN.md) | Not started, on hold | `src/app/info` |
 
-- [`.agents/docs/TRANSPORTATION_PLAN.md`](.agents/docs/TRANSPORTATION_PLAN.md) — the
-  per-property Transportation module (transfers, shared departures/manifests, the daily board,
-  Night Audit billing, the Booking API `TRANSPORT` scope): decisions T-1…T-14, file map, open
-  items. Read before touching `src/lib/transport/**`, the Night Audit transport pass or the
-  older `ReservationTransport` card.
+### Finished work: which dev log section to read
 
-- [`.agents/docs/DESKTOP_PLAN.md`](.agents/docs/DESKTOP_PLAN.md) — desktop polish: root causes
-  (blocking success modals, no next step after actions, tabs/filters not in the URL, no page-shell
-  standard), per-screen audit, shared components to build, phases and owner questions. Read before
-  changing page headers, feedback/toasts, list tables, dialogs or the reservation/folio screens.
+| If you touch | Read this section of `DEV_LOG.md` |
+|---|---|
+| Users, roles, sessions, `src/lib/scope.ts`, anything multi-tenant | Multi-tenancy and RBAC retrofit; User management, roles and sessions |
+| Any setting or setup screen | Hub setup: Enterprise and Property |
+| Revenue, meal plans, Night Audit posting | Allocations |
+| Charge codes, anything that posts to a folio | Charge code hierarchy and posting service |
+| `src/app/api/website/v1/**`, API keys | Website API; Booking API: Excursions and Spa |
+| `src/lib/excursion-booking.ts`, `spa-booking.ts`, `spa-lifecycle.ts`, `db-lock.ts` | Excursions booking add-on; Spa booking add-on; Booking API |
+| `src/lib/transport/**`, the Night Audit transport pass, `ReservationTransport` | Transportation module |
+| `src/lib/channels/**`, availability pushed outside the PMS | Hub level and Channel Manager (rule D-7) |
+| Reports | Daily Reports rework |
+| Client Relations (profiles) | Profiles redesign |
+| Page headers, toasts, list tables, dialogs | Desktop polish |
+| Anything a phone shows | Mobile polish |
 
-- [`.agents/docs/MOBILE_PLAN.md`](.agents/docs/MOBILE_PLAN.md) — phones: desktop is the source of
-  truth, mobile changes live behind `max-sm:`/`max-md:`/`md:hidden` or `pointer-coarse:`. Dialogs are
-  bottom sheets on phones (`DialogContent mobile="sheet"|"fullscreen"|"none"`); use the shared
-  `@/components/ui/mobile` (`MobileActions`, `MobileActionBar`, `DesktopOnlyNotice`), `MobileCard`/
-  `MobileCardList` (phone version of a table), `NumberStepper`, `ContactLink`,
-  `@/lib/input-presets` and `PageHeader`. Check a change with `npm run mobile:audit` (captures at
-  phone/tablet/desktop widths + a pixel diff against a baseline — desktop must not change).
+Code comments across `src/` cite the old plan file names (`HUB_SETUP_PLAN.md`,
+`WEBSITE_API_PLAN.md W-5`, and so on). Those files are now sections of the same name in
+`DEV_LOG.md`.
 
-- [`.agents/docs/MOTION_PLAN.md`](.agents/docs/MOTION_PLAN.md) — how animation works in the app
-  (the `motion` package via `src/components/dashboard/motion-kit.tsx`): principles that keep it
-  restrained, what is animated, what must stay still, and the next steps. Read before adding any
-  animation.
+## 3. How the docs are kept
 
-[`.agents/docs/DESIGN_PLAN.md`](.agents/docs/DESIGN_PLAN.md) is the full design-token/
-theming plan (large, kept separate) — `.agents/docs/DECISIONS.md` has a short pointer to
-it plus a status correction (its own header is stale — treat it as partially-to-mostly
-implemented, not "planning only").
-<!-- END:project-docs -->
+- **A plan gets its own file** in `.agents/docs/` while it is being planned or built, and a row
+  in the table above.
+- **When its work is released, the plan becomes a section of `DEV_LOG.md`** and the file is
+  deleted, in the same PR as the release. The section is short: what it was, what shipped, the
+  rules that still bind, where the code is. Heading: `## Name — yyyy/mm/dd hh:mm`, newest first,
+  plus a row in the dev log's contents table. Move anything still open into `TODO.md`.
+- **`TODO.md` holds open items only.** Delete an item when it is done. Add what you find broken
+  but out of scope, with the date.
+- **`DECISIONS.md` holds rules, not stories.** Add a rule the owner gives you, with the date.
+  When a rule is replaced, remove or rewrite the old one.
+- Do not add markdown files at the repository root.
 
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+## 4. Standing rules for code
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+**Forms.** Every form uses Zod + React Hook Form + shadcn/ui, with inline, real-time validation
+(`FORM_VALIDATION_STANDARD.md`).
 
-<!-- BEGIN:ui-components-standard -->
-# App Standard Components
+**Dropdowns.** For a long list (guests, rooms, profiles) use `SearchableSelect`, never a plain
+`Select`:
 
-When building forms or pages that require dropdowns or selects, use the standard custom component `SearchableSelect` located in `src/components/ui/searchable-select.tsx` if there are many options that would benefit from search/filtering. 
-Do not implement standard `Select` for long lists (e.g., Guests, Rooms). 
-
-Usage Example:
 ```tsx
 import { SearchableSelect } from "@/components/ui/searchable-select"
 
@@ -138,10 +84,61 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
   options={items.map(item => ({ label: item.name, value: item.id }))}
 />
 ```
-<!-- END:ui-components-standard -->
 
-<!-- BEGIN:date-picker-standard -->
-# Date Pickers
-- Always use `@/components/ui/date-picker` for single dates. It natively supports year/month dropdowns.
-- Always use `@/components/ui/date-range-picker` for date ranges (e.g., check-in and check-out periods).
-<!-- END:date-picker-standard -->
+**Dates.** `@/components/ui/date-picker` for a single date (it has year and month dropdowns);
+`@/components/ui/date-range-picker` for a range such as check-in to check-out.
+
+**Icons.** From `@/components/icons` (Iconsax, outline), not from an icon package directly.
+
+**Settings.** All setup lives in the Hub, in one of two areas: ENTERPRISE
+(`/hub/enterprise/…`) or PROPERTY (`/hub/p/{propertyId}/…`, the property always in the URL).
+Decide which area a new setting belongs to and gate its API with `requireEnterpriseHub()` or
+`requirePropertySetup()` from `src/lib/scope.ts`.
+
+**Posting.** Every folio charge goes through `postCharge`; nothing builds a `FolioLineItem` by
+hand.
+
+**Desktop.** `PageHeader` on every page, feedback as a toast, tabs and filters in the URL,
+`ListTable` for lists, one primary action with the rest behind "More".
+
+**Phones.** Desktop is the source of truth. Phone changes live behind `max-sm:` / `max-md:` /
+`md:hidden` or `pointer-coarse:`. No sideways scroll: a table becomes cards (`MobileCard`,
+`MobileCardList`). Dialogs are bottom sheets (`DialogContent mobile="sheet"|"fullscreen"|"none"`).
+Use `@/components/ui/mobile`, `NumberStepper`, `ContactLink`, `@/lib/input-presets`. Check with
+`npm run mobile:audit` (desktop must not change).
+
+**Animation.** Only through `src/components/dashboard/motion-kit.tsx` (`MOTION_PLAN.md`).
+
+**Text.** Sentence case in the interface.
+
+## 5. The public docs portal
+
+`src/app/docs`, table of contents in `src/app/docs/nav.ts`. It has four areas, and it must
+never carry a secret, a real customer or an internal detail (`npm run docs:check`).
+
+| Area | For | Keep it in step when you change |
+|---|---|---|
+| `/docs/api` | Developers using the Booking API | `src/app/api/website/v1/**`; also the OpenAPI file `public/docs/booking-api.openapi.yaml` |
+| `/docs/configuration` | The client's admin, setting up in the Hub | Any Hub setup screen: update its page and re-shoot its screenshot |
+| `/docs/operations` | Staff, day to day | Any day-to-day screen: update its guide in the same PR |
+| `/docs/release-notes` | Everyone | Every release (below) |
+
+- Screenshots: `npm run docs:demo` (the fictional Coral Bay Hotels enterprise), then
+  `npm run docs:shots -- <name>` (list in `scripts/docs-shots.config.ts`; main content only,
+  never app chrome).
+- PDFs: `npm run docs:pdf` (or `npm run docs:pdf -- operations`, `-- release-notes`).
+- Operations guides: `desk` (Front Desk, Reservations list and badges, Tape Chart moves, split
+  stays), `groups-and-clients` (Group blocks and the Posting Master, Client Relations,
+  deactivating a profile, eRegistration), `daily-reports`, `transportation`, `stop-sale`. A new
+  guide is added in `nav.ts` and on the operations overview page.
+
+## 6. Releases
+
+- `master` deploys automatically. PRs are squash-merged and always target `master`, never
+  another branch.
+- Before choosing a version number, look at the open PRs and `origin/release/*` and take a
+  number above all of them. Versions only go up.
+- **When you bump `package.json` for a release, add that version's entry at the top of
+  `src/app/docs/release-notes/releases.ts`** (New / Improved / Fixed, in plain language for hotel
+  staff: no file paths, PR numbers or customer names), then `npm run docs:pdf -- release-notes`.
+- If the release finishes a plan, fold the plan into `DEV_LOG.md` in the same PR (section 3).
