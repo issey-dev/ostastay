@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession()
+    requireAnyPermission(ctx, [["POS", "view"], ["EXCURSIONS", "view"], ["SPA", "view"], ["CASHIERING", "view"]])
     const { searchParams } = new URL(request.url)
     const propertyId = searchParams.get("propertyId")
     // Case-insensitivity comes from `mode: "insensitive"` on the filters below, NOT from

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { projectedTransfers } from "@/lib/transport/projection";
 import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
@@ -57,6 +57,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["CASHIERING", "view"], ["FRONT_DESK", "view"], ["DEBTORS", "view"]]);
     const { id } = await params;
 
     const url = new URL(request.url);

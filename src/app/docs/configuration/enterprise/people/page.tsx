@@ -28,7 +28,7 @@ export default function People() {
 
       <H2>Roles</H2>
       <p>
-        The <strong>Roles &amp; permissions</strong> card lists every role and how many people hold it. Seven built-in roles are
+        The <strong>Roles &amp; permissions</strong> card lists every role and how many people hold it. Eight built-in roles are
         ready to use and cannot be changed:
       </p>
       <Table
@@ -38,6 +38,7 @@ export default function People() {
           ["Front Desk", "Front office, reservations, group blocks, tape chart, availability, profiles, housekeeping, maintenance, cashiering, Fast Post, night audit, excursions and spa: create and update, but not delete."],
           ["Reservations", "Reservations, tape chart and availability; group blocks and profiles without delete; front desk view."],
           ["Cashier", "Cashiering; Fast Post, debtors and profiles without delete; front desk view."],
+          ["Accounts", "Debtors; cashiering, reports and revenue to read; profiles without delete."],
           ["Housekeeping", "Housekeeping; maintenance view."],
           ["Maintenance", "Maintenance; housekeeping view."],
         ]}

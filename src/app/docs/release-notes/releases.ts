@@ -17,6 +17,20 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.0.1",
+    date: "2026-11-12",
+    highlights: "A permissions check-up: every screen and action now checks what the person's role allows, not only that they are signed in.",
+    new: [
+      "A new built-in role, Accounts, for back-office staff: debtors, with read access to cashiering, reports and revenue.",
+    ],
+    improved: [
+      "The Tape Chart now needs the Tape Chart permission to open. Quotes, rate availability, the nightly breakdown and the free-room lookup need Reservations or Front Desk access.",
+      "Invoices, receipts and exchange receipts can be printed by staff with Cashiering, Front Desk or Debtors access; sending them by email needs the update permission in one of those.",
+      "Sending a debtor statement by email now needs the Debtors update permission; viewing one still needs view.",
+      "Fast Post guest search needs Fast Post, Excursions, Spa or Cashiering access.",
+    ],
+  },
+  {
     version: "8.13.6",
     date: "2026-11-10",
     fixed: [

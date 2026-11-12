@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { projectedTransfers } from "@/lib/transport/projection";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
 import { resolveChargeTax } from "@/lib/tax-calc";
@@ -20,6 +20,7 @@ const localDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-$
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["RESERVATIONS", "view"], ["FRONT_DESK", "view"]]);
     const { id } = await params;
 
     const reservation = await prisma.reservation.findUnique({

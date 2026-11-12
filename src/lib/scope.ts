@@ -531,6 +531,15 @@ export function requirePermission(ctx: AuthContext, module: Module, action: Acti
   }
 }
 
+// For a shared lookup used by several screens (rooms available to the desk and the booking
+// form, guest search for POS / Excursions / Spa): passes when ANY of the listed grants is
+// held. Agent Portal plan §10, Phase 0a — these routes used to check the session only.
+export function requireAnyPermission(ctx: AuthContext, grants: ReadonlyArray<readonly [Module, Action]>) {
+  if (grants.some(([m, a]) => hasPermission(ctx, m, a))) return;
+  const wanted = grants.map(([m, a]) => `${a} on ${m}`).join(" or ");
+  throw new ForbiddenError(`Missing permission: ${wanted}`);
+}
+
 // ---------------------------------------------------------------------------
 // Hub (enterprise level) — see .agents/docs/HUB_CHANNEL_MANAGER_PLAN.md
 // ---------------------------------------------------------------------------

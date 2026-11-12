@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "TAPE_CHART", "view");
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
     const startDateStr = searchParams.get("startDate");

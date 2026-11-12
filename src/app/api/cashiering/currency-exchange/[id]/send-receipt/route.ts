@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
 import { MAIL_KINDS } from "@/lib/mail-sender";
@@ -17,6 +17,7 @@ export async function POST(
 ) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "CASHIERING", "update");
     const { id } = await params;
     const { email, slug } = await request.json();
 
@@ -77,6 +78,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "CASHIERING", "view");
     const { id } = await params;
     const url = new URL(request.url);
     const slug = url.searchParams.get("slug");

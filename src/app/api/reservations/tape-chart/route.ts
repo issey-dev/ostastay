@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { addDays, parseISO, startOfDay, endOfDay } from "date-fns";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "TAPE_CHART", "view");
     const { searchParams } = new URL(request.url);
     const startDateParam = searchParams.get('startDate');
     const daysParam = searchParams.get('days') || '14';

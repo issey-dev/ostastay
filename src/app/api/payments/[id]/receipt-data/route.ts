@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 
 const PAYMENT_INCLUDE = {
@@ -35,6 +35,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["CASHIERING", "view"], ["FRONT_DESK", "view"], ["DEBTORS", "view"]]);
     const { id } = await params;
 
     let payment = await prisma.payment.findUnique({

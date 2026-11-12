@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isValid, parseISO } from "date-fns";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { INVENTORY_HOLDING_STATUSES, UNSELLABLE_ROOM_STATUSES } from "@/lib/availability";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["RESERVATIONS", "view"], ["FRONT_DESK", "view"], ["TAPE_CHART", "view"]]);
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
     const roomTypeId = searchParams.get("roomTypeId");

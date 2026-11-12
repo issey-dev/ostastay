@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
 import { MAIL_KINDS } from "@/lib/mail-sender";
@@ -55,6 +55,7 @@ function documentNumberFor(folio: { taxInvoiceNumber: string | null; proformaInv
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["CASHIERING", "update"], ["FRONT_DESK", "update"], ["DEBTORS", "update"]]);
     const { id } = await params;
 
     const body = await request.json().catch(() => ({}));
@@ -115,6 +116,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["CASHIERING", "view"], ["FRONT_DESK", "view"], ["DEBTORS", "view"]]);
     const { id } = await params;
 
     const url = new URL(request.url);

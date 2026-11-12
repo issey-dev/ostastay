@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { buildInvoiceSummary } from "@/lib/debtor-accounts";
 import { computeFolioAgingBuckets } from "@/lib/debtor-aging";
 
@@ -23,6 +23,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "DEBTORS", "view");
     const { profileId } = await params;
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");

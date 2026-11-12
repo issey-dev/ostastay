@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { sendStationeryEmail } from "@/lib/send-stationery-email";
 import { MAIL_KINDS } from "@/lib/mail-sender";
@@ -21,6 +21,7 @@ export async function POST(
 ) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["CASHIERING", "update"], ["FRONT_DESK", "update"], ["DEBTORS", "update"]]);
     const { id } = await params;
     const { email, slug } = await request.json();
 
@@ -81,6 +82,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["CASHIERING", "view"], ["FRONT_DESK", "view"], ["DEBTORS", "view"]]);
     const { id } = await params;
     const url = new URL(request.url);
     const slug = url.searchParams.get("slug");

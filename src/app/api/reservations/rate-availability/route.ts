@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { applyRateAdjustment } from "@/lib/derived-rate";
 import { INVENTORY_HOLDING_STATUSES, UNSELLABLE_ROOM_STATUSES } from "@/lib/availability";
 
@@ -27,6 +27,7 @@ const dayStartMs = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["RESERVATIONS", "view"], ["FRONT_DESK", "view"]]);
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
     const startDateStr = searchParams.get("startDate");
