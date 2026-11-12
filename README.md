@@ -1,9 +1,9 @@
 **Uppsolut PMS — Guest House PMS.** A multi-tenant property management system (Next.js 16 /
-React 19, Prisma + PostgreSQL). For project status, the architecture retrofit plan, and
-open work, see [`.agents/docs/MASTER_PLAN.md`](.agents/docs/MASTER_PLAN.md) and
-[`.agents/docs/TODO.md`](.agents/docs/TODO.md) — that's the up-to-date source of truth
-for what's done and what's left, kept in-repo so any contributor (human or agent) can
-pick up the project's progress without needing prior chat history.
+React 19, Prisma + PostgreSQL). Contributors and agents start with [`AGENTS.md`](AGENTS.md). Open work is in
+[`.agents/docs/TODO.md`](.agents/docs/TODO.md), business rules in
+[`.agents/docs/DECISIONS.md`](.agents/docs/DECISIONS.md), and everything already built in
+[`.agents/docs/DEV_LOG.md`](.agents/docs/DEV_LOG.md), kept in the repository so anyone can pick
+up the project without chat history.
 
 For a property's own brand website (the public Website API and how to build against
 it), see the documentation portal the app serves at `/docs` (source in

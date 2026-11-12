@@ -316,7 +316,7 @@ Component-internal spacing rhythm (documents current implicit convention):
 
 **`--radius: 0px`. No curves anywhere in the app.** This is a standing request from the
 app owner (2026-07-18) and it supersedes the `0.75rem` scale this section originally
-specified — see [`DESIGN_LOG.md`](DESIGN_LOG.md).
+specified — see the Design log section of [`DEV_LOG.md`](DEV_LOG.md).
 
 The derived scale in `globals.css` is still the right *mechanism*: `--radius-sm` through
 `--radius-4xl` are all `calc()`-ed off `--radius`, so this single line squares every
