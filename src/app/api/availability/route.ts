@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { expireOptionsSoon } from "@/lib/reservations/options";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import {
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, propertyId);
+    await expireOptionsSoon(propertyId);
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },

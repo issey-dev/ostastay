@@ -17,6 +17,22 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.1.0",
+    date: "2026-11-13",
+    highlights: "Tentative bookings: hold a room on option until a date, confirm it once payment or the contract is checked, and let it release itself if nobody does.",
+    new: [
+      "Book as tentative on a new booking. The room is held on option until a date: the group's cutoff, otherwise 30 days before arrival, or a short option of two days for a late booking. You can also pick the date yourself.",
+      "The option panel on a tentative booking: Confirm booking (with a note such as the payment reference), Extend option, and Release.",
+      "An option that runs out is released automatically: the booking is cancelled with the reason \"Released (option expired)\" and kept as a record. It can be reinstated as tentative while the room is still free.",
+      "The Reservations list counts tentative bookings as on the books, with an Option until badge, and the status filter has Tentative and Confirmed.",
+    ],
+    improved: [
+      "Two people booking the last room at the same moment can no longer both succeed; the second is asked to confirm an overbooking instead.",
+      "Night Audit never marks a tentative booking as a no-show. If one reaches its arrival day unconfirmed, the audit lists it as needing attention.",
+      "Tentative bookings count as sold everywhere availability is shown, including what is sent to channels and the booking website.",
+    ],
+  },
+  {
     version: "9.0.2",
     date: "2026-11-12",
     highlights: "Roles get finer control: options such as \"may overbook\" or \"suppress rates\" on top of view, create, update and delete, and a new role editor that shows one role at a time.",

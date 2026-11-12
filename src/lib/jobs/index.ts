@@ -18,6 +18,7 @@ import { isIdleExpired, revokeSession } from "@/lib/session-store";
 import type { Job } from "@/lib/jobs/runner";
 import { processDueWebhooks } from "@/lib/website-api/webhooks";
 import { expireStaleSpaHolds } from "@/lib/spa-booking";
+import { expireDueOptions } from "@/lib/reservations/options";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
 // /api/jobs/run iterates this list.
@@ -396,6 +397,21 @@ const notificationAlertsJob: Job = {
   },
 };
 
+/**
+ * Release tentative bookings whose option has run out (Agent Portal plan A-14). The same
+ * release is applied lazily on read (expireOptionsSoon), so this job stopping never leaves
+ * expired options holding rooms. Each booking is claimed with a conditional update, so it
+ * is safe to run on several replicas and alongside a desk confirmation.
+ */
+export const optionExpiryJob: Job = {
+  name: "option-expiry",
+  description: "Release tentative bookings whose option date has passed",
+  run: async (enterpriseId) => {
+    const released = await expireDueOptions({ enterpriseId });
+    return { itemsProcessed: released, summary: `${released} tentative booking${released === 1 ? "" : "s"} released` };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
@@ -407,6 +423,7 @@ export const JOBS: readonly Job[] = [
   bookingApiHoldSweepJob,
   nightAuditScheduleJob,
   notificationAlertsJob,
+  optionExpiryJob,
 ];
 
 export function findJob(name: string): Job | undefined {

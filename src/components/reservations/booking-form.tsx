@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input"
 import { NumberStepper } from "@/components/ui/number-stepper"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
+import { Switch } from "@/components/ui/switch"
 import { format, addDays, parseISO } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -242,6 +243,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           manualAllocationIds: res.allocations?.filter(a => a.source === "MANUAL").map(a => a.allocationId) || [],
           specialRequestCodes: res.specialRequests?.map(sr => sr.code) || [],
           acknowledgeOverCapacity: false,
+          bookAsTentative: false,
+          optionDate: "",
           assignments: res.assignments && res.assignments.length > 0 ? res.assignments.map(a => ({
             roomTypeId: a.roomTypeId,
             roomId: a.roomId || "none",
@@ -519,6 +522,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
         depositFeeRuleId: values.depositFeeRuleId === "none" ? null : values.depositFeeRuleId,
         cancellationFeeRuleId: values.cancellationFeeRuleId === "none" ? null : values.cancellationFeeRuleId,
         noShowFeeRuleId: values.noShowFeeRuleId === "none" ? null : values.noShowFeeRuleId,
+        ...(!isEditMode && values.bookAsTentative ? { status: "TENTATIVE", optionDate: values.optionDate || null } : {}),
         assignments: values.assignments.map(a => ({
           roomTypeId: a.roomTypeId,
           roomId: a.roomId && a.roomId !== "none" ? a.roomId : null,
@@ -1200,6 +1204,33 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {!isEditMode && (
+                <div className="grid content-start gap-2 rounded-md border border-border p-3">
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    <span>
+                      <span className="font-medium">Book as tentative</span>
+                      <span className="block text-muted-foreground">
+                        Holds the room on option until confirmed. Released automatically if nobody confirms it.
+                      </span>
+                    </span>
+                    <Switch checked={!!form.bookAsTentative} onCheckedChange={(v) => setField("bookAsTentative", !!v)} aria-label="Book as tentative" />
+                  </label>
+                  {form.bookAsTentative && (
+                    <div className="grid gap-1">
+                      <Label>Option until</Label>
+                      <DatePicker
+                        value={form.optionDate || null}
+                        onChange={(v) => setField("optionDate", v)}
+                        placeholder="Property default"
+                        minDate={new Date()}
+                        maxDate={form.checkInDate ? form.checkInDate.slice(0, 10) : undefined}
+                      />
+                      <p className="text-xs text-muted-foreground">Leave empty for the default: the group&rsquo;s cutoff, else the property&rsquo;s option days before arrival.</p>
+                    </div>
+                  )}
                 </div>
               )}
 

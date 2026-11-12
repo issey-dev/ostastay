@@ -6,7 +6,7 @@ import { ActionBar } from "@/components/ui/action-bar"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CalendarDays, Plus, Pencil, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship, Wand2 } from "@/components/icons"
+import { CalendarDays, Plus, Pencil, Key, LogOut, ReceiptText, Building2, Bell, FileText, Wallet, Search, Loader2, MoreHorizontal, Package, Users, ArrowLeftRight, Utensils, Settings2, LayoutGrid, ListChecks, RotateCcw, Ship, Wand2, Clock } from "@/components/icons"
 import type { DateRange } from "react-day-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -58,6 +58,9 @@ type Reservation = {
   /** The channel's own booking id (Beds24/OTA ref) for channel-sourced reservations. */
   externalRef: string | null
   status: string
+  /** End of the option for a TENTATIVE booking (Agent Portal plan A-14). */
+  optionDate?: string | null
+  confirmationRequestedAt?: string | null
   checkInDate: string
   checkOutDate: string
   checkedOutAt?: string | null
@@ -136,8 +139,20 @@ const getDepositTotal = (res: Reservation) => {
 type FlagTone = "muted" | "success" | "warning" | "info" | "destructive"
 type Flag = { key: string; title: string; text?: string; icon?: typeof Package; tone: FlagTone }
 
+const optionText = (res: Reservation) =>
+  res.optionDate ? `Option until ${format(new Date(res.optionDate), "dd MMM")}` : "On option"
+
 const getReservationFlags = (res: Reservation): Flag[] => {
   const flags: Flag[] = []
+  if (res.status === "TENTATIVE") {
+    flags.push({
+      key: "option",
+      text: res.optionDate ? format(new Date(res.optionDate), "dd MMM") : "",
+      icon: Clock,
+      title: `Tentative: ${optionText(res)}${res.confirmationRequestedAt ? " (confirmation requested)" : ""}`,
+      tone: "warning",
+    })
+  }
   if (res.mealPlan && res.mealPlan !== "NONE") {
     flags.push({ key: "meal", text: res.mealPlan, icon: Utensils, title: `Meal plan: ${res.mealPlan}`, tone: "info" })
   }
@@ -186,6 +201,7 @@ const FLAG_TONE: Record<FlagTone, string> = {
 const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
   const out: (Flag & { label: string })[] = []
   const n = (count: number, one: string, many = `${one}s`) => (count > 1 ? `${count} ${many}` : one)
+  if (res.status === "TENTATIVE") out.push({ key: "option", label: optionText(res), title: res.confirmationRequestedAt ? "Confirmation requested" : "Tentative booking", tone: "warning" })
   if (res.mealPlan && res.mealPlan !== "NONE") out.push({ key: "meal", label: res.mealPlan, title: `Meal plan: ${res.mealPlan}`, tone: "info" })
   const pkgs = res.allocations?.length ?? 0
   if (pkgs > 0) out.push({ key: "pkg", label: n(pkgs, "Package"), title: (res.allocations ?? []).map(a => a.allocation.code).join(", "), tone: "muted" })
@@ -269,7 +285,7 @@ export default function ReservationsDashboard() {
   )
 }
 
-const STATUS_FILTERS = ["", "IN_HOUSE", "CHECKED_OUT", "NO_SHOW", "CANCELLED"] as const
+const STATUS_FILTERS = ["", "TENTATIVE", "RESERVED", "IN_HOUSE", "CHECKED_OUT", "NO_SHOW", "CANCELLED"] as const
 const DATE_MODES = ["stay", "arrival", "departure"] as const
 type DateMode = (typeof DATE_MODES)[number]
 
@@ -380,7 +396,8 @@ function ReservationsList() {
     // picked. A search with no status looks through every status (the API's rule), so a
     // cancelled or checked-out booking is still found by name, number, room or phone.
     if (filterStatus) params.set("status", filterStatus)
-    else if (!searchTerm) params.set("status", "RESERVED")
+    // Tentative bookings are business on the books too (Agent Portal plan, Phase 1).
+    else if (!searchTerm) params.set("status", "RESERVED,TENTATIVE")
     if (filterDates?.from) params.set("from", format(filterDates.from, "yyyy-MM-dd"))
     if (filterDates?.to) params.set("to", format(filterDates.to, "yyyy-MM-dd"))
     if (filterDates?.from || filterDates?.to) params.set("dateMode", dateMode)
@@ -785,6 +802,8 @@ function ReservationsList() {
             // "" is not "everything": with no search it means RESERVED only (business on
             // the books); with a search, everything but checked-out and no-shows.
             { label: "On the books", value: "" },
+            { label: "Tentative", value: "TENTATIVE" },
+            { label: "Confirmed", value: "RESERVED" },
             { label: "In-House", value: "IN_HOUSE" },
             { label: "Checked out", value: "CHECKED_OUT" },
             { label: "No-Show", value: "NO_SHOW" },

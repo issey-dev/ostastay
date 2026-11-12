@@ -984,4 +984,7 @@ Nothing blocks Phase 0a. To settle along the way:
 | Phase | Status |
 |---|---|
 | Mockup (`agent-portal/`, local) | Built 2026-11-11 |
-| 0a, 0b, 1 – 9 | Not started |
+| 0a. Permission enforcement | Built, 9.0.1 (2026-11-12). Route coverage test in `tests/business-rules/route-permission-coverage.test.ts` |
+| 0b. Capabilities, Suppress rates, roles screen | Built, 9.0.2 (2026-11-12). `src/lib/capabilities.ts`, `src/lib/figures.ts`, `role-access-editor.tsx` |
+| 1. Booking status flow | Built, 9.1.0 (2026-11-13). `src/lib/reservations/options.ts`, `option-expiry` job, advisory lock in `createReservation`. Not yet: tentative shown separately in the dashboard forecast and reports, confirmation letter wording ("Option") |
+| 2 – 9 | Not started |

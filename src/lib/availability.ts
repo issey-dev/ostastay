@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db";
 // CHECKED_OUT never block a room or count toward a room type's sold count — a
 // no-show's room goes back on sale for the remaining nights, matching standard
 // front-office practice.
-export const INVENTORY_HOLDING_STATUSES = ["RESERVED", "IN_HOUSE"];
+// TENTATIVE holds too (Agent Portal plan A-5), until its option date — expired options
+// are released by the option-expiry job and lazily on read (src/lib/reservations/options.ts).
+export const INVENTORY_HOLDING_STATUSES = ["TENTATIVE", "RESERVED", "IN_HOUSE"];
 
 // Rooms in either of these statuses are not sellable inventory. OUT_OF_ORDER is a
 // maintenance state (previously it was still being offered for sale — see

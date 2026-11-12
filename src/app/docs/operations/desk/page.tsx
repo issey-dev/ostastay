@@ -68,6 +68,7 @@ export default function DeskGuide() {
       <Table
         head={["Badge", "Means"]}
         rows={[
+          ["Option until (date)", "A tentative booking: the room is held until that date, then released if nobody confirms it."],
           ["Transportation", "Transfer details are on the booking."],
           ["Trace", "There are open traces or messages."],
           ["Deposit", "A deposit has been collected (before arrival)."],
@@ -77,6 +78,35 @@ export default function DeskGuide() {
           ["Override rate", "The rate is not the rate plan's own: a flat rate was typed, or a room change kept the old rate."],
         ]}
       />
+
+      <H2>Tentative bookings</H2>
+      <p>
+        A <strong>tentative</strong> booking holds its room <strong>on option</strong>: until a date by which the booker must pay or
+        sign. Turn on <strong>Book as tentative</strong> on a new booking. Leave <strong>Option until</strong> empty and the date is
+        set for you: the group&rsquo;s cutoff date, otherwise a set number of days before arrival (30 unless the property changed
+        it); a booking made later than that gets a short option of a couple of days.
+      </p>
+      <p>
+        The list shows tentative bookings under <strong>On the books</strong> with an <strong>Option until</strong> badge, and the
+        status filter has <strong>Tentative</strong> and <strong>Confirmed</strong>. A tentative booking cannot be checked in and
+        gets no eRegistration link.
+      </p>
+      <p>On the booking, the option panel has:</p>
+      <Table
+        head={["Action", "What it does"]}
+        rows={[
+          ["Confirm booking", "Once you have checked the payment or contract. The booking becomes Reserved. Add a note such as the payment reference."],
+          ["Extend option", "Moves the option date, up to the arrival date."],
+          ["Release", "Cancels it now and puts the room back on sale. It stays in the lists as a record."],
+          ["Reinstate as tentative", "On a booking whose option ran out: brings it back with a fresh option date, if the room is still free."],
+        ]}
+      />
+      <p>
+        When an option runs out with nobody confirming it, the booking is <strong>released</strong> automatically: cancelled with the
+        reason &ldquo;Released (option expired)&rdquo;, never deleted. If Night Audit finds a tentative booking that reached its
+        arrival day, it lists it as needing attention instead of marking it a no-show. Confirming, extending and releasing need the
+        role option <strong>Confirm, extend or release an option</strong>.
+      </p>
 
       <H2>Reading the Tape Chart</H2>
       <p>

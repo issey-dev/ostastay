@@ -339,11 +339,12 @@ export default function EndOfDayPage() {
         )}
       </div>
 
-      {postSummary && (postSummary.zeroRateWarning || postSummary.overstayWarning || postSummary.noShowFeesOwedWarning) && (
+      {postSummary && (postSummary.zeroRateWarning || postSummary.overstayWarning || postSummary.noShowFeesOwedWarning || postSummary.tentativeWarning) && (
         <div className="rounded-lg border border-warning/30 bg-warning-muted p-3 text-sm text-warning space-y-1">
           {postSummary.zeroRateWarning && <p>{postSummary.zeroRateWarning}</p>}
           {postSummary.overstayWarning && <p>{postSummary.overstayWarning}</p>}
           {postSummary.noShowFeesOwedWarning && <p>{postSummary.noShowFeesOwedWarning}</p>}
+          {postSummary.tentativeWarning && <p>{postSummary.tentativeWarning} ({(postSummary.tentativeNeedsAttention ?? []).join(", ")})</p>}
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { expireOptionsSoon } from "@/lib/reservations/options";
 import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "propertyId, startDate and endDate are required" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, propertyId);
+    await expireOptionsSoon(propertyId);
 
     const start = new Date(startDateStr);
     const end = new Date(endDateStr);

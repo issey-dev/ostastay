@@ -1405,6 +1405,20 @@ model Reservation {
   // Office "Room Moves Due Today" worklist (front-office/summary route).
   hasScheduledRoomMove  Boolean   @default(false)
 
+  // Agent Portal plan Phase 1 (A-5, A-13, A-14, A-21). TENTATIVE holds inventory until
+  // optionDate, then the option-expiry job (and the lazy sweep on read) releases it:
+  // CANCELLED with cancellationReasonCode OPTION_EXPIRED. See src/lib/reservations/options.ts.
+  optionDate              DateTime?
+  confirmationRequestedAt DateTime?
+  confirmationNote        String?
+  confirmedAt             DateTime?
+  confirmedBy             String?
+  // Structured reason beside the free-text cancellationReason (OPTION_EXPIRED,
+  // AGENT_CANCELLED, HOTEL_CANCELLED, or a code from the property's list).
+  cancellationReasonCode  String?
+  // The door it came through: DESK | WEBSITE | CHANNEL | AGENT_PORTAL | GROUP_PICKUP.
+  origin                  String    @default("DESK")
+
   assignments                  RoomAssignment[]
   folios                       Folio[]
   traces                       ReservationTrace[]
@@ -1440,6 +1454,7 @@ model Reservation {
   @@index([travelAgentId])
   // The list is always one property ordered by arrival.
   @@index([propertyId, checkInDate])
+  @@index([status, optionDate])
   // Trigram (pg_trgm) GIN index: the reservations search box is a case-insensitive
   // "contains" (ILIKE '%x%'), which a plain b-tree cannot serve.
   @@index([confirmationNo(ops: raw("gin_trgm_ops"))], type: Gin, map: "Reservation_confirmationNo_trgm_idx")
@@ -2158,6 +2173,11 @@ model PropertySettings {
   // never arrived becomes a No-Show: FIRST_AUDIT = at the audit of its arrival night (the
   // original behaviour); SECOND_AUDIT = held one night so a late arrival can still check
   // in, then marked at the next audit; MANUAL = never automatically — the desk marks it.
+  // Tentative bookings (Agent Portal plan A-14): an option runs to arrival - this many days
+  // (or the block's cutoff); a booking made after that gets shortOptionHours.
+  optionDaysBeforeArrival Int @default(30)
+  shortOptionHours        Int @default(48)
+
   noShowTiming  String  @default("FIRST_AUDIT")
   // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.
   noShowPostFee Boolean @default(true)

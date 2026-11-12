@@ -31,6 +31,8 @@ export enum ProfileClassification {
 }
 
 export enum ReservationStatus {
+  // Held on option until Reservation.optionDate (Agent Portal plan A-5).
+  TENTATIVE = "TENTATIVE",
   RESERVED = "RESERVED",
   IN_HOUSE = "IN_HOUSE",
   CHECKED_OUT = "CHECKED_OUT",

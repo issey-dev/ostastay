@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!reservation) return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    if (["CANCELLED", "NO_SHOW", "CHECKED_OUT"].includes(reservation.status)) {
+    if (["CANCELLED", "NO_SHOW", "CHECKED_OUT", "TENTATIVE"].includes(reservation.status)) {
       return NextResponse.json(
         { error: `Cannot generate an eRegistration link — this reservation is ${reservation.status.replace(/_/g, " ").toLowerCase()}.` },
         { status: 400 }

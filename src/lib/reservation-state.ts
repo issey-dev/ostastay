@@ -12,6 +12,7 @@ import { toUtcMidnight } from "@/lib/business-date"
 //
 // One place derives it so every surface (reservation list, detail, board) agrees.
 export type ReservationDerivedState =
+  | "TENTATIVE"
   | "RESERVED"
   | "DUE_IN"
   | "IN_HOUSE"
@@ -44,6 +45,9 @@ export function deriveReservationState(
 }
 
 const LABELS: Record<string, string> = {
+  // On option until Reservation.optionDate (Agent Portal plan §5.3). Never Due In: a
+  // tentative booking cannot be checked in until the hotel confirms it.
+  TENTATIVE: "Tentative",
   RESERVED: "Reserved",
   DUE_IN: "Due In",
   IN_HOUSE: "In-House",

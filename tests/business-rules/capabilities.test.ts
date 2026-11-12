@@ -107,7 +107,6 @@ describe("capability defaults", () => {
 // its keys from this set in the same commit). Empty once Phase 7 is in.
 const NOT_YET_WIRED = new Set<string>([
   "reservations.exceedSellLimit",
-  "reservations.manageOption",
   "reservations.markOverflow",
   "availability.sellLimits",
   "groups.decideSlotRequest",

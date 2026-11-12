@@ -38,6 +38,7 @@ import { useProperty } from "@/components/providers/property-provider"
 import { MobileActions, type MobileAction } from "@/components/ui/mobile"
 import { ActionBar } from "@/components/ui/action-bar"
 import { PageHeader } from "@/components/ui/page-header"
+import { OptionPanel } from "@/components/reservations/option-panel"
 import { ReservationSummaryRail, type RailAction } from "@/components/reservations/reservation-summary-rail"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { GuestContactMenu } from "@/components/reservations/guest-contact-menu"
@@ -591,6 +592,18 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       {/* Phone: one primary action + "More" instead of up to 7 wrapping buttons. */}
       <MobileActions className="md:hidden" primary={phonePrimary} more={phoneMore} />
       </div>
+
+      <OptionPanel
+        reservationId={id}
+        confirmationNo={reservation.confirmationNo}
+        status={reservation.status}
+        optionDate={reservation.optionDate}
+        checkInDate={reservation.checkInDate}
+        confirmationRequestedAt={reservation.confirmationRequestedAt}
+        confirmationNote={reservation.confirmationNote}
+        cancellationReasonCode={reservation.cancellationReasonCode}
+        onChanged={fetchReservation}
+      />
 
       {/* Phone: the stay at a glance — dates, room, pax and the balance (tap → folio),
           which otherwise sits ~1,300px down in the Billing card. */}
