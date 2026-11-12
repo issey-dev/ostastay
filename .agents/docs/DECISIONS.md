@@ -1,3508 +1,1285 @@
 # Decisions and business rules
 
-> Business rules and design decisions the app owner has given, dated. **Check here before
-> assuming a business rule.** When the owner gives you a rule that is not obvious from the
-> code, add it with the date so the next session does not rediscover or reverse it.
+> Business rules and design decisions the app owner has given, with the date each was given.
+> **Check here before assuming a business rule.** When the owner gives you a rule that is not
+> obvious from the code, add it with the date so the next session does not rediscover or
+> reverse it.
 >
-> **Keep it fresh** (cleaned 2026/11/12). A rule that is replaced is removed or rewritten, not
-> left beside its successor. Bug-fix stories and release logistics do not belong here; finished
-> plans are in [DEV_LOG.md](DEV_LOG.md) and open work in [TODO.md](TODO.md). Entries are in the
-> order they were given, oldest first; where a later entry changes an earlier one, the later one
-> wins.
+> **Rules only** (rewritten 2026/11/12). Each section states what holds today. A rule that is
+> replaced is rewritten in place, not left beside its successor. How something was built, tested
+> or verified is not kept here: finished plans are in [DEV_LOG.md](DEV_LOG.md), open work in
+> [TODO.md](TODO.md), and the full earlier text of this file is in git history at `a95c934`.
+> Sections are in the order the rules were given, oldest first.
 
 ## Contents
 
 - Room Types (2026-07-18)
 - Rooms (2026-07-18)
 - Sequence Manager (2026-07-18)
-- Tax & Charge Codes (2026-07-18)
-- Custom Tax profiles: multi-line, and actually wired to posting (2026-07-18)
-- Green Tax posting & the `infants` bucket (2026-07-18)
-- Charge Code hierarchy, generates & the Cashiering panel (2026-07-27)
-- Folio Printing (2026-07-18)
+- Tax (2026-07-18)
+- Green Tax (2026-07-18)
+- Charge code hierarchy, generates and the Cashiering panel (2026-07-27)
+- Folio printing (2026-07-18)
 - Outlets (2026-07-18)
-- Theming & Design System
-- Session/scope engineering conventions (for agents working on this repo)
-- Confirmation Letter (2026-07-19)
-- Invoice redesign, Payment Receipt, Currency Exchange Receipt (2026-07-19)
+- Theming and design system
+- Engineering conventions for this repository
+- Confirmation letter (2026-07-19)
+- Invoices, receipts and currency exchange (2026-07-19)
 - Debtors (Accounts Receivable) (2026-07-19)
-- RBAC self-healing permission backfill (2026-07-19)
-- Debtors: checkout-triggered invoice pipeline redesign (2026-07-19)
-- Occupancy pricing, Derived Rate Plans, and decoupled Meal Plans (2026-07-19)
+- Roles: a new module reaches existing roles by itself (2026-07-19)
+- Occupancy pricing, derived rate plans and meal plans (2026-07-19)
 - Allocations (2026-07-19)
-- Allocations: Sell-Separate is an independent toggle, not a mode (2026-07-19)
-- Base Rate Plan replaces RoomType.basePrice (2026-07-19)
-- Charge codes, payment methods, room-charge posting code (2026-07-19)
-- Profiles redesign (2026-07-20)
-- Negotiated Rate Plans restricted to specific agent profiles (2026-07-20)
-- Travel Agent commission, calculated and posted at checkout (2026-07-20)
-- Price Calendar range bumped to 10 years + negative-amount hardening (2026-07-20)
-- Rate Plan: Complimentary / House Use flags (2026-07-20)
-- Price Calendar page: multi-room-type Bulk Update (2026-07-20)
-- Price Calendar page: Configuration panel redesign (2026-07-20)
-- Allocation Calculation mode: Meal Plan vs Rate Plan level (2026-07-20)
-- Reservation booking dialog: Look-to-Book redesign (2026-07-21)
-- Booking dialog → dedicated pages, allocation calculation breakdown, full tax breakdown (2026-07-21)
-- Reservations — date validation & occupancy override (2026-07-21)
-- Reservations — split-stay contiguity, scheduled room move, pax-capped accompanying guests, guest picker (2026-07-21)
-- Osta platform-admin console (2026-07-21)
-- Alpha v4 owner decisions (2026-07-21)
-- Business date + folio rework (2026-07-22)
-- Deposit / Cancellation / No-Show fee rules + EOD guard (2026-07-22)
-- End-of-Day redesign — resumable step wizard (2026-07-22)
-- Excursions Booking (2026-07-22)
-- Billing module — owner rules (2026-07-24)
-- Reservation lifecycle states + fee-rule selection (2026-07-24)
-- Billing increments #2 delivered (2026-07-24)
-- Checkout settlement rules — owner clarification (2026-07-24)
-- Check-in procedure (wizard) + Registration Card stationary (2026-07-24)
-- Point of Sale → "Fast Post" rework (2026-07-25)
-- Property Availability page + Stop Sale (2026-07-26)
-- Stationery redesign — branding moves to Property, per-document tabs (2026-07-27)
-- Channel manager: inventory & overbooking authority — owner ruling (2026-07-27)
-- 2026-07-31 — SaaS licensing model (owner)
-- 2026-07-31 — Enterprise-level module gating REMOVED (owner)
-- 2026-08-02 — Spa/Excursions add-ons are ENTERPRISE-level (owner)
-- 2026-08-02 — PostgreSQL replaces SQLite (owner)
-- 2026-08-03 — Every foreign key is now indexed
-- 2026-08-03 — Closed reservations: presentation + allowed actions (owner)
-- 2026-08-03 — Reservation delete is internal-only (owner)
-- 2026-08-03 — Folio: pre-arrival window, documents, and settlement (owner)
-- Uppsolut brand integration — palette, marks, naming (2026-08-08)
-- 2026-08-08 — Two email senders: tenant vs platform (owner)
-- 2026-08-10 — Uppsolut Mail Service: platform SMTP as a billed fallback (owner)
-- 2026-09-06 — Operations Dashboard: brand palette, per-user layout, DASHBOARD module (owner)
-- 2026-09-06 — Website API: a brand website per property (owner)
-- 2026-09-07 — Revenue: "Rate Details" is now "Rate Seasons" (owner)
-- 2026-09-23 — UI polish round: reports, dates, dropdowns, dashboard, scrollbars (owner)
-- Green Tax Report = MIRA information sheet (2026-09-23)
-- 2026-09-23 — Tax-inclusive rounding: the base takes the residual cent
-- 2026-09-23 — Setup moves to the Hub, separated by Enterprise and Property (owner)
-- 2026-09-23 — Night Audit controls page; moving the business date by hand (owner)
-- 2026-09-25 — Nationalities from an international master list; Job Functions fixed (owner)
-- 2026-09-24 — Held nights, scheduled audit window, charge codes are the property's (owner)
-- 2026-09-24 — Documentation portal split into areas; Configuration guide (owner)
-- 2026-09-24 — Property logo is uploaded, 3:2 (owner)
-- 2026-09-25 — Mobile polish: defaults taken for the plan's open questions (owner approved the plan)
-- 2026-09-25 — Green Tax per guest; every guest gets a Registration No (owner)
-- 2026-09-25 — Reservations list defaults to business on the books (owner)
-- 2026-09-25 — Desktop polish: owner approved every recommendation in DESKTOP_PLAN.md (owner)
-- GST Report (2026-09-25)
-- 2026-09-25 — UI text standard: sentence case (owner: "have a standard — up to your recommendation")
-- 2026-09-26 — Folio check numbers and roll-up (owner)
-- 2026-10-04 — Transportation module (owner brief)
-- Revenue Calendar, Rate seasons steps, and stop-sale override (2026-10-10)
-- Cashiering (2026-10-12, 8.8.3)
-- 2026-10-14 — Each enterprise connects its own Beds24 account (owner, 8.8.4)
-- 2026-11-07 — UX polish round 1 (owner, 8.8.6)
-- 2026-11-07 — Keyboard-first front desk (owner, 8.9.0)
-- Osta console: a customer's people and activity are not Osta's to browse (2026-11-07)
-- Osta console: an enterprise's own channel-manager connection is running / not running only (2026-11-07)
-- Osta Monitoring: DB Health redesigned, load history persisted (2026-11-08)
-- Osta console: Billing replaces Licensing, approvals and support access simplified (2026-11-08, owner)
-- 2026-11-08 — Osta console on phones
-- 2026-11-09 — Phone consistency pass (owner)
+- Base rate plan (2026-07-19)
+- Payment methods and the room-charge posting code (2026-07-19)
+- Profiles (2026-07-20)
+- Negotiated rate plans (2026-07-20)
+- Travel agent commission (2026-07-20)
+- Price calendar (2026-07-20)
+- Rate plan: Complimentary and House Use (2026-07-20)
+- Allocation calculation mode (2026-07-20)
+- Reservation booking: Look to Book (2026-07-21)
+- Booking form pages and the quote (2026-07-21)
+- Reservation dates and occupancy (2026-07-21)
+- Split stays, room moves, accompanying guests, guest picker (2026-07-21)
+- Osta platform console (2026-07-21)
+- Front Desk, housekeeping and maintenance rulings (2026-07-21)
+- Business date and folios (2026-07-22)
+- Deposit, cancellation and no-show fees (2026-07-22)
+- End of Day (Night Audit) (2026-07-22)
+- Reports engine (2026-07-22)
+- Excursions (2026-07-22)
+- Billing rules (2026-07-24)
+- Check-out settlement (2026-07-24)
+- Reservation states and fee rules (2026-07-24)
+- Check-in wizard and registration card (2026-07-24)
+- Fast Post (2026-07-25)
+- Availability and stop sale (2026-07-26)
+- Stationery (2026-07-27)
+- Channel manager: inventory and overbooking authority, rule D-7 (2026-07-27)
+- End of Day sign-out follows the location (2026-07-28)
+- Transaction-code numbering (2026-07-30)
+- Spa and Excursions post through one outlet each (2026-07-30)
+- Licensing (2026-07-31)
+- Add-ons are sold to the enterprise (2026-08-02)
+- PostgreSQL (2026-08-02)
+- Foreign keys are indexed (2026-08-03)
+- Closed reservations (2026-08-03)
+- Reservation delete is internal only (2026-08-03)
+- Folio: before arrival, documents and settlement (2026-08-03)
+- Uppsolut brand (2026-08-08)
+- Email: two senders (2026-08-08, 2026-08-10)
+- Operations dashboard (2026-09-06)
+- Brand website and Booking API (2026-09-06)
+- Revenue: Rate Seasons (2026-09-07)
+- Dates, dropdowns and scrollbars (2026-09-23)
+- Green Tax report and registration numbers (2026-09-23)
+- Tax-inclusive rounding (2026-09-23)
+- Setup lives in the Hub, split by Enterprise and Property (2026-09-23)
+- Night Audit settings and the business date (2026-09-23)
+- Charge codes belong to the property; held nights; audit window (2026-09-24)
+- Nationalities and job functions (2026-09-25)
+- Documentation portal (2026-09-24)
+- Property logo (2026-09-24)
+- Phones: the defaults taken (2026-09-25, additions 2026-10-11)
+- Split stays price per segment (2026-10-11)
+- Profiles: delete only when unused, otherwise deactivate (2026-10-11)
+- Group block Posting Master (2026-10-11)
+- Front Desk and list views (2026-10-11)
+- Green Tax per guest; every guest gets a registration number (2026-09-25)
+- Reservations list: business on the books (2026-09-25)
+- Desktop standards (2026-09-25)
+- Interface text: sentence case (2026-09-25)
+- GST report (2026-09-25)
+- Folio check numbers (2026-09-26)
+- Transportation (2026-10-04)
+- Revenue calendar and stop-sale override (2026-10-10)
+- Cashiering (2026-10-12)
+- Each enterprise can connect its own Beds24 account (2026-10-14)
+- Front Desk and Tape Chart polish (2026-11-07)
+- Keyboard shortcuts (2026-11-07)
+- Osta console: what Osta may see (2026-11-07, 2026-11-08)
+- Phones: nothing scrolls sideways (2026-11-08, 2026-11-09)
 
 ---
 
 ## Room Types (2026-07-18)
 
-- **Pseudo room type** (`RoomType.isPseudo`): marks a room type as a "dummy"/non-physical
-  room. Pseudo room types' rooms have **no Building, no Floor, no room features** — the
-  Rooms UI hides those fields entirely when the selected room type is pseudo (see
-  `src/components/inventory/room-manager.tsx`).
-- **Housekeeping toggle** (`RoomType.housekeepingEnabled`): if off, rooms of this type
-  should not present housekeeping/maintenance features — **now enforced** (2026-07-18):
-  such rooms are excluded from the `GET /api/housekeeping` board, and creating a
-  housekeeping task, a bulk maintenance ticket from the board, or a direct maintenance
-  ticket against one 400s. Deliberately scoped to *new* housekeeping/maintenance
-  activity only (mirrors `isActive`'s never-touch-history pattern) — room `status`
-  PATCH (e.g. marking a room `OUT_OF_SERVICE`) is untouched, since that's an
-  operational concern independent of whether housekeeping visits are offered.
-- **Base price rule** (`RoomType.basePrice`): "the rate that will be charged per night
-  if there is no actual rate selected during the reservation process — that amount will
-  be charged with/out despite no adults or children on that room per night." I.e. it's a
-  flat per-night fallback, independent of occupancy, used only when no rate
-  plan/calendar price applies. **Audited 2026-07-18**: `night-audit/run/route.ts`'s
-  fallback is confirmed as the *only* place this needs to apply — there is no
-  reservation-creation-time rate preview/quote anywhere in the app that would also need
-  it.
-- **Inactive room type** (`RoomType.isActive`): ticking "Inactive" blocks any *new*
-  reservation from being assigned to that room type, and **cascades every one of its
-  Room rows to `OUT_OF_SERVICE`** — but never deletes anything (history is preserved).
-  Re-activating does **not** auto-restore room status (a deliberate asymmetry — someone
-  has to manually bring rooms back into service, since "was this room actually fixed/
-  cleaned/ready" isn't knowable automatically). **Amended 2026-09-24 (7.5.0, pending owner
-  confirmation):** re-activating now brings back only the rooms the deactivation itself
-  took out of service (`Room.statusBeforeTypeDeactivation`), and to **Dirty**, never Clean —
-  so housekeeping still has to clean/inspect them; a room that was Out of Order goes back
-  to Out of Order, and one taken out of service for another reason stays out. Every code path that assigns a
-  room/room-type checks this: reservation create, reservation edit (only when the
-  room/room-type is actually *changing*, so editing a booking that already sits in a
-  since-deactivated type isn't blocked), room-move, reassign, group pickup, new room
-  creation. Covered by `tests/room-types/inactive.test.ts` (4 tests).
-- **Room features model**: originally considered separate `bedType`/`view`/`amenities`
-  fields — **rejected by the app owner** in favor of one generalized multi-select
-  feature system (`RoomTypeFeature` at the room-type level, `RoomFeature` at the
-  individual-room level for inheritance + additions), grouped into three categories:
-  `BED_TYPE`, `ROOM_VIEW`, `ROOM_AMENITY`. Verbatim: *"in this part just show a two
-  parts - selected unselected - user can selected one or more of any features and put
-  to selected section -- the selection part needs to be neatly grouped based on the
-  feature type/group."* This produced the reusable `RoomFeaturePicker` dual-panel
-  component (`src/components/inventory/room-feature-picker.tsx`).
-- **Dropdowns Manager for feature codes**: the underlying System Code lists for these
-  three categories switched from a `Select` dropdown to `Tabs` (one tab per category)
-  and the "current codes" list switched from stacked cards to a real `<Table>`, per
-  direct instruction: *"this section make tabs for the feature category and ability to
-  switch between them, -- just show a simple table view."*
+- **Pseudo room type** (`RoomType.isPseudo`): a non-physical room. Its rooms have no building,
+  no floor and no features; the Rooms screen hides those fields. Pseudo types are exempt from
+  availability, occupancy and licence caps.
+- **Housekeeping toggle** (`RoomType.housekeepingEnabled`): when off, rooms of the type are not
+  on the housekeeping board and cannot get a housekeeping task or a maintenance ticket. It
+  applies to new activity only; changing a room's status by hand still works.
+- **Inactive room type** (`RoomType.isActive`): blocks any new assignment to the type (create,
+  edit when the room or type is changing, room move, reassign, group pickup, new room) and sets
+  every one of its rooms to Out of Service. Nothing is deleted. Re-activating brings back only
+  the rooms the deactivation itself took out (`Room.statusBeforeTypeDeactivation`), as **Dirty**,
+  never Clean; a room that was Out of Order returns to Out of Order.
+- **Room features** are one multi-select system, not separate bed/view/amenity fields:
+  `RoomTypeFeature` on the type, `RoomFeature` on the room, in three groups (`BED_TYPE`,
+  `ROOM_VIEW`, `ROOM_AMENITY`), picked with the two-panel `RoomFeaturePicker`.
+- There is no base price on the room type: see "Base Rate Plan" (2026-07-19).
 
 ## Rooms (2026-07-18)
 
-- Renamed "Physical Rooms" → **"Rooms"** everywhere (facilities-manager tab label,
-  card title).
-- Creating/editing a Room: **Building must be selected first**, which drives a
-  dependent Floor dropdown (only floors under the selected building are offered).
-  Disabled until a building is chosen.
-- Room features are **inherited from the Room Type** (shown as fixed/read-only badges)
-  **plus** an option to add additional room-specific features on top, via the same
-  `RoomFeaturePicker` with an `excluded` prop hiding the already-inherited codes.
-- **Pseudo room types** (see above) skip Building/Floor/Features entirely for their
-  rooms — by design, not an oversight.
+- The screen is called "Rooms", not "Physical Rooms".
+- Building is chosen first and drives the Floor list.
+- A room inherits its type's features (shown read-only) and can add its own on top.
 
 ## Sequence Manager (2026-07-18)
 
-- New Controls feature tracking **pure sequential counters only** — no prefix/format
-  logic — for four document types: Registration No, Proforma Folio, Tax Invoice,
-  Receipt No. Verbatim: *"this does not manage prefixes -- just the number itself (make
-  sure these numbers i mentioned are sequenmtial numbers only) not alphanumerical."*
-  Backed by `PropertySequence {propertyId, sequenceType, currentValue}`, one row per
-  `(propertyId, sequenceType)`. The API (`api/settings/sequences/route.ts`) validates
-  `currentValue` as a non-negative integer — verified live that a non-numeric value is
-  rejected with 400.
+- Sequences are **plain sequential numbers only**, no prefix or format: Registration No,
+  Proforma Folio, Tax Invoice, Receipt No. One `PropertySequence` row per property and type;
+  the value must be a non-negative integer.
 
-## Tax & Charge Codes (2026-07-18)
+## Tax (2026-07-18)
 
-- **Charge Codes are a distinct concept from Tax**, split into two separate Controls
-  cards under Finance (previously one combined `FinancialsManager`).
-- Renamed "Maldives Tax Engine" → **"Maldives Tax"**, "Custom Tax Profiles" →
-  **"Custom Tax"**.
-- **Maldives tax calculation order** (verbatim example given): base amount $100, SVC
-  (service charge) 10% = $10, GST 17% calculated **on Base + SVC** = 17% × $110 =
-  $18.70. GST is *not* calculated on the base amount alone.
-- **Green Tax**: $12 per adult per night, $6 per child per night, **children under 2
-  years exempt**. Modeled as `EnterpriseSettings.greenTaxAdultAmount` (default 12.00),
-  `greenTaxChildAmount` (default 6.00), plus an existing exemption-age setting. **Now
-  posted** nightly in `night-audit/run/route.ts` — see "Green Tax posting & the
-  `infants` bucket" below for how the exemption is actually modeled.
+- **Charge codes and tax are separate things.** The two tax options are "Maldives Tax" (the
+  default engine) and "Custom Tax" (a profile).
+- **Maldives Tax order:** service charge is a percentage of the base; GST is calculated on
+  **base + service charge**, never on the base alone. Example: base 100, service charge 10% =
+  10, GST 17% of 110 = 18.70.
+- **Custom Tax profiles hold several named lines.** Each line is calculated either on the
+  subtotal or compounding on the running total (subtotal plus every prior line).
+- A charge code uses the default engine or one Custom Tax profile (`useDefaultTax`,
+  `taxProfileId`).
+- **`src/lib/tax-calc.ts` is the single tax authority** (`resolveChargeTax`). No route
+  calculates tax on its own.
+- **Prices include taxes** is a per-property setting (`Property.pricesIncludeTaxes`). A
+  per-transaction override is deferred by the owner: do not build it without a new decision.
 
-## Custom Tax profiles: multi-line, and actually wired to posting (2026-07-18)
+## Green Tax (2026-07-18)
 
-- **Gap found**: `ChargeCode.useDefaultTax`/`taxProfileId` were fully editable in
-  Controls but **never read by any charge-posting route** — `pos/charge`,
-  `folios/[id]/line-items`, and `night-audit/run`'s room charge all unconditionally
-  applied the single enterprise-wide default engine (Service Charge then GST),
-  regardless of what a charge code's tax config said. Selecting "Custom" + a profile
-  had zero effect on the actual amount charged.
-- **App owner's direction**: make Custom Tax profiles hold **multiple lines**, each
-  with the option to calculate **on the subtotal** (flat %, independent of other lines)
-  or **compounding on the running total** (subtotal + every prior line) — i.e.
-  generalize the existing fixed Service-Charge-then-GST relationship to any number of
-  named lines, and make sure charge codes actually connect to it. "Keep it versatile
-  and simple."
-- **`TaxRate`** (a `TaxProfile`'s lines) gained `name` (default `"Tax"`), `calculateOn`
-  (`"BASE" | "COMPOUND"`, default `"BASE"`), `order` (default `0`) — migration
-  `20260718172500_tax_rate_multiline`. `effectiveFrom`/`effectiveTo` were kept
-  (unused by the new UI, which always writes `effectiveFrom: now, effectiveTo: null`
-  and treats "editing a profile" as replacing its whole line set — simpler than
-  reconciling per-line history — but `resolveChargeTax` still filters to only
-  currently-effective lines, so the infrastructure isn't lost if a future UI wants it).
-- **`src/lib/tax-calc.ts`** is the one shared engine, and the one connection point every
-  posting route calls: `computeDefaultEngineTax` (unchanged Service Charge + GST
-  formula, now expressed as the BASE/COMPOUND special case), `computeCustomProfileTax`
-  (N lines, summed into one `taxAmount` — a Custom profile has no separate "service
-  charge" concept), and `resolveChargeTax(chargeCode, ...)`, which picks between them
-  based on `chargeCode.useDefaultTax`. `pos/charge`, `folios/[id]/line-items`, and
-  `night-audit/run`'s room charge all now call `resolveChargeTax` instead of each
-  duplicating the calculation inline (they used to, independently, in three places).
-  Verified numerically identical to the old formula for the default-engine case (91
-  tests passing, including `tests/business-rules/tax-calc.test.ts`'s exact-match on the
-  documented $100/SVC-10%/GST-17% example) and end-to-end that a Custom-Tax-linked
-  charge code now actually posts differently (`tests/business-rules/
-  custom-tax-posting.test.ts`).
-- **Tax Manager UI** (Controls → Finance → Custom Tax) redesigned: "Add/Edit Custom Tax"
-  now edits a dynamic list of named lines (name, rate %, On Subtotal/On Subtotal +
-  Prior Lines), not a single rate + historical-effective-date pair. The profile table
-  shows every line as a badge instead of one "Current Active Rate" column.
+- 12 per adult per night and 6 per child per night by default (set in Finance › Tax). It is a
+  flat government levy: not service-charged, not GST'd, and unaffected by "prices include
+  taxes".
+- **Infants are a third occupancy bucket** (`Reservation.infants`): fully exempt and not counted
+  toward room occupancy. The exemption is which bucket a guest is counted in, not an age check.
+- Posted by Night Audit, once per in-house reservation per night. Required only when Green Tax
+  is switched on for the property.
+- Since 2026-09-25 Green Tax is per guest: see that entry.
 
-## Green Tax posting & the `infants` bucket (2026-07-18)
+## Charge code hierarchy, generates and the Cashiering panel (2026-07-27)
 
-- **Problem discovered while implementing posting**: `Reservation.children` is a raw
-  headcount with no per-guest birthdate attached, so "children under `greenTaxExemptAge`
-  are exempt" couldn't be computed from it — `Profile.dateOfBirth`/`greenTaxExempt`
-  exist, but only apply to *named* profiles (primary guest, optional `AccompanyingGuest`
-  links), which aren't guaranteed to exist for every child in the headcount.
-- **App owner's resolution**: add a third occupancy bucket, `Reservation.infants`
-  (schema migration `20260718171500_reservation_infants`), alongside `adults` and
-  `children`. Infants are **fully exempt from Green Tax and not counted toward room
-  occupancy** — the exemption is structural (which bucket a guest is counted in), not
-  computed from an age comparison. Wired through `reservations` POST/PUT,
-  `groups/[id]/pickup`, and a new "Infants" field in the reservation form UI.
-- **Posting mechanics**: `night-audit/run/route.ts` posts one `FolioLineItem` per
-  checked-in reservation per audit run, alongside the existing room charge:
-  `amount = adults × greenTaxAdultAmount + children × greenTaxChildAmount` (infants
-  contribute nothing), against a `GTX` charge code looked up per enterprise the same way
-  `ROOM` already is. Unaffected by `Property.pricesIncludeTaxes` or the SVC/TGST
-  calculation — Green Tax is a flat government levy, not part of that chain. Only
-  enforced (i.e. the run 400s if the `GTX` code is missing) when
-  `EnterpriseSettings.greenTaxEnabled` is actually on for that enterprise — a Standard
-  enterprise that's never touched Green Tax settings won't suddenly need a `GTX` code to
-  run Night Audit.
-- **Inclusive/exclusive tax toggle**: property owner gets a **top-level** setting
-  (`Property.pricesIncludeTaxes`, moved off `EnterpriseSettings` — it's per-property,
-  not per-enterprise) applied to anything charged. A **transaction-level** override (per
-  posting) was explicitly deferred: *"when posting we will think of something"* — do
-  not build this without a follow-up decision.
-- **Charge code tax assignment**: when adding a Charge Code, the user picks **Default**
-  (uses the Maldives Tax engine) or **Custom** (picks a specific Custom Tax profile).
-  Modeled as `ChargeCode.useDefaultTax` (default `true`) + nullable `taxProfileId`.
+- **Three levels:** `ChargeGroup` → `ChargeSubgroup` → `ChargeCode`. The group carries
+  `reportBucket` (`ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM`), the
+  one classification every report rolls up into. System groups can be renamed and added to, but
+  their code and bucket cannot change.
+- **Posting type on the code:** `CHARGE | TAX | CREDIT | NON_REVENUE`. A `TAX` code is a levy:
+  posted at face value, never taxed itself, excluded from the GST base on every report.
+- **Nothing resolves a charge code by name.** Billing resolves by role (`ACCOMMODATION`,
+  `GREEN_TAX`, `COMMISSION`) through Cashiering › Posting Defaults.
+- **RULE #1 (owner): a posting always posts its generates.** No route builds a `FolioLineItem`
+  by hand; everything goes through `postCharge`.
+- **Posting a charge posts its taxes** as their own folio lines; the parent line keeps its net.
+  Totals and tax reports are unchanged by this: the money moved, it was not added.
+- **Tax codes are single** (2026-07-30): one Service Charge code (7000), one GST (8000), one
+  Green Tax (8500). The origin of every tax line is its parent line
+  (`generatedFromLineItemId`), and reports attribute it to the parent's bucket.
+- **Only a CHARGE is a taxable event. VAT/GST never generates on a payment, under any
+  circumstances** (owner): not on a payment, refund, paid-out, deposit, commission or system
+  adjustment. Enforced in the generates API, in `postCharge` and in the editor;
+  `canGenerateTax()` is the single predicate.
+- **Cancellation and no-show fees carry GST but no service charge** (no service was rendered);
+  changeable per property. The fee amount is gross or net per "prices include taxes".
+- **Tax rates stay where they are configured.** Generates only decide where an amount lands;
+  Finance › Tax is the one place rates and the Green Tax switch are edited.
+- **Green Tax is a rule about accommodation:** any code in the `ROOM` bucket levies it. A
+  generate row stored on a code always wins, so deleting one sticks.
+- A new property is seeded with the charge groups and the system codes only (see "Charge codes
+  belong to the property", 2026-09-24). Deposit, cancellation and no-show fee rules are created
+  linked to their codes but **inactive at zero**: a fee that charges real money is the owner's
+  decision.
+- **Charge-code pickers are filtered and grouped** through `src/lib/charge-code-options.ts`.
+  Tax and system codes are never hand-picked.
+- **An outlet's codes are picked at group, subgroup or code level.**
+- **Folio presentation styles:** Detailed, Detailed with taxes merged (the usual guest folio),
+  Summary by charge code, by date, by check. Every style totals the same. The property sets a
+  default; front office can override for one document (`src/lib/folio-presentation.ts`).
+- **Where it lives:** Cashiering holds charge groups, codes, generates and posting defaults.
+  Tax and payment methods stay in Finance.
 
-## Charge Code hierarchy, generates & the Cashiering panel (2026-07-27)
+## Folio printing (2026-07-18)
 
-Implements [/CHARGE_CODE_PLAN.md](DEV_LOG.md). Supersedes the flat
-"Charge Code categories" list above.
-
-- **Three levels, Opera-modelled**: `ChargeGroup` → `ChargeSubgroup` → `ChargeCode`.
-  The **Group** carries `reportBucket`, the one closed reporting classification
-  (`ROOM | FOOD_BEVERAGE | TRANSPORT | OTHER | TAX | NON_REVENUE | SYSTEM`) that every
-  revenue, tax, EOD and analytics report now rolls up into. The seven canonical groups
-  and their subgroups are system-seeded at property onboarding; a property may rename
-  them and add its own alongside, but cannot change a system group's code or bucket.
-- **Posting type on the code** (`CHARGE | TAX | CREDIT | NON_REVENUE`) makes explicit what
-  used to be implied by the code string. A `TAX` code is a **levy**: posted at face value,
-  never itself service-charged or GST'd, and excluded from the GST base on every report.
-  That is what replaced the hardcoded `code === "GTX"` special-cases.
-- **Nothing resolves a charge code by name any more.** Billing resolves by *role*
-  (`ACCOMMODATION` / `GREEN_TAX` / `COMMISSION`) through the enterprise's own pointers in
-  Controls → Cashiering → Posting Defaults, falling back to the system-seeded code.
-
-**Tax is attached at GROUP level** (owner, 2026-07-27): *"attach the taxes on group
-level — each distinct group mentioned should generate distinct tax charge codes but same
-default rule"*, and *"the purpose of defining generates on charge codes is so that
-whenever main charge code is posted taxes are auto calculated and posted through the
-system."*
-
-- Every revenue group owns a **Service Charge** and a **GST** charge code —
-  `SVCACM`/`GSTACM` for Accommodation, `SVCFNB`/`GSTFNB` for F&B, `SVCMPL`/`GSTMPL` for
-  Meal Plans, `SVCTRN`/`GSTTRN` for Transport, `SVCSPA`/`GSTSPA` for Spa,
-  `SVCEXC`/`GSTEXC` for Excursions, `SVCOTH`/`GSTOTH` for Other. Every posting code in a
-  group generates its group's pair, so tax attribution follows the revenue automatically.
-- **Same rule, different destination.** The `SERVICE_CHARGE` and `GST` generate methods
-  compute nothing: `src/lib/tax-calc.ts` resolves the charge exactly as before and the
-  generate only declares where each amount posts. One calculation, many codes — so the
-  groups cannot drift apart, and changing the GST rate in Finance > Tax moves all of them.
-- **Posting a charge posts its taxes.** The tax lands on its own folio line against the
-  group's code; the parent line keeps only its net. Each tax amount stays in the SAME
-  column it used to occupy on the parent (`serviceChargeAmount` / `taxAmount`), so folio
-  totals and every existing tax report are unchanged — the money moved, it wasn't added.
-- **Cancellation and no-show fees are GST-bearing but carry no service charge** — no
-  service was rendered. Changeable per property in the Generates editor.
-- **Deposits, commissions, payment and system codes are never taxed.**
-
-**Tax stays exactly where it was configured — this only chooses where it lands.** Owner
-direction, 2026-07-27: *"Tax Generates should work with the current tax configuration
-implemented — just make adjustments to define the charge codes alongside the default
-Maldives tax config or custom tax profile."*
-
-- The **generates** mechanism (posting one code auto-posts derived codes) has a
-  `GREEN_TAX` method that reads `EnterpriseSettings.greenTax*` at posting time. The rates
-  are **not** copied onto the generate row. So **Controls → Finance → Tax remains the one
-  place Green Tax amounts (and the on/off switch) are edited**, and a change there takes
-  effect on the next posting with no charge-code edit.
-- A charge code still attaches to the **Maldives Tax engine** or a **Custom Tax profile**
-  exactly as before (`useDefaultTax` / `taxProfileId`). The generates engine never
-  re-implements or bypasses `src/lib/tax-calc.ts`, which stays the single tax authority.
-- Green Tax is treated as a rule about **accommodation**, not about one code: any code in
-  the `ROOM` bucket levies it (a new one gets the generate row seeded on create, and Night
-  Audit supplies it implicitly for codes that predate the hierarchy). A generate row
-  actually stored on a code always wins, so deleting one sticks.
-
-**Standard chart of accounts** (owner, 2026-07-27 — *"clean slate"*): a property is
-seeded with 10 groups / 26 subgroups / 48 charge codes covering Accommodation, one F&B
-outlet, Meal Plans, Transport, Spa, Excursions, Other Revenue, all the per-group tax
-codes, Non-Revenue (commission, deposits, payment movements) and System. `CXL`, `NOSHW`
-and `DEP` each get their own code, and each property's Deposit / Cancellation / No-Show
-fee rule is created already linked to it — **inactive at zero**, because a fee that
-charges real money is the owner's decision, not a seeder's. Seeded by
-`scripts/seed/seed-charge-codes.ts` and, identically, at property onboarding.
-
-**RULE #1 — a posting always posts its generates** (owner, 2026-07-27, emphatic):
-*"ALL POSTINGS THAT HAS GENERATES ENABLED MUST POST GENERATES … it should not falter no
-matter what the situation."* Enforced structurally — no route builds a `FolioLineItem` by
-hand; everything goes through `postCharge`. The guard grep is in CHARGE_CODE_PLAN.md §10.
-Two consequences worth knowing:
-- **Only a CHARGE is a taxable event.** TAX / CREDIT / NON_REVENUE codes post at face
-  value, which is what lets a commission credit or a deposit share the posting path.
-- **Cancellation and no-show fees are now taxed.** A fee rule's amount is treated like
-  every other configured price — gross or net per the property's "Prices Include Taxes"
-  setting — so the guest is charged the configured amount, split into net + GST rather
-  than posted untaxed as before.
-
-**VAT/GST NEVER generates on a payment** (owner, 2026-07-27): *"VAT does not generate on
-any payments and is not allowed under any circumstances."* Only a `CHARGE` posting type is
-a taxable event — a payment, refund, paid-out, deposit, commission or system adjustment
-moves money that has already been taxed, so tax on it would be charging twice. Enforced in
-three places: the generates API refuses to create or edit such a row (including one
-disguised as a `PERCENT` targeting a tax code), `postCharge` filters it out at posting
-time so a hand-edited database still can't produce tax, and the Generates editor doesn't
-offer the tax methods or tax targets on a non-sale code. `canGenerateTax()` in
-charge-tree.ts is the single predicate.
-
-**Charge-code pickers are filtered and grouped** (2026-07-27): the standard chart is 48
-codes, most of which must never be hand-picked — the 15 tax codes are posted BY generates,
-the System codes are the app's own movements. `src/lib/charge-code-options.ts` is the one
-place that judgement lives; every picker in the app funnels through it and widens
-explicitly (`includeTax`, `includeNonRevenue`, `buckets`) rather than re-deciding locally.
-
-**Outlet charge codes are picked at Group / Subgroup / Code level** (owner, 2026-07-27):
-properties organise codes subgroup-wise per outlet, so an outlet's pool is selected by
-ticking a whole Group or Subgroup, with individual codes as the exception. Tax and System
-codes aren't listed at all — nothing sold over a counter.
-
-**Folio presentation styles** (owner, 2026-07-27): a Proforma / Tax Invoice / Interim Bill
-asks for a layout before it is generated — **Detailed** (every transaction, taxes as their
-own lines), **Detailed — taxes merged** (the usual guest folio), **Summary by charge
-code**, **Summary by date**, **Summary by check** (outlet charges rolled to their sales
-check). Every style totals to the same figure; grouping never changes what is owed. Lives
-in `src/lib/folio-presentation.ts`. The property's default is set in **Stationaries >
-Invoices > Default Folio Style** (`EnterpriseSettings.defaultFolioStyle`); the picker opens
-on it and front office can still override for one document.
-
-**Controls layout** (owner direction, 2026-07-27): a **new Cashiering panel** holds
-everything charge-code — Charge Groups & Subgroups, Charge Codes (incl. the Generates
-editor), and Posting Defaults. **Tax and Payment Methods stay in the Finance module.**
-The old combined "Posting & Settlement Defaults" card was split accordingly: the
-charge-code roles moved to Cashiering, and the City Ledger settlement *payment method*
-stayed in Finance beside Payment Methods.
-
-## Folio Printing (2026-07-18)
-
-- The two near-duplicate folio print routes were resolved: **`/e/[slug]/dashboard/
-  folios/[id]/print` is canonical** (app owner's explicit call — this was the route
-  they said they were migrating *to*, even though at the time it was actually the less
-  feature-complete of the two). `/print/folios/[id]` (previously linked from
-  `FolioPanel`) has been **deleted** after porting its extra features — payee-profile
-  display, Green Tax line-item handling, more robust print CSS — into the canonical
-  page first, so nothing regressed. `FolioPanel`'s print button now opens the canonical
-  URL directly (resolves the enterprise slug via `useParams()`).
+- One print route: `/e/[slug]/dashboard/folios/[id]/print`.
 
 ## Outlets (2026-07-18)
 
-- **What an Outlet is**: a revenue-generating point of sale scoped to one Property —
-  Spa, Restaurant, Bar, Retail, Transport, Recreation, or Other. Verbatim brief: "log
-  revenue generation from outlets... facilitate sales without bookings... a spa can
-  allow guests who are already booked to request treatments and have the charges added
-  to their room bill... generate separate bills for guests who visit only the outlet
-  without staying... creating and onboarding any outlet should be smooth and
-  seamless... a top-level tax calculation can be selected, which will be applied to all
-  charge codes processed through it... properly linked with the POS... pre-book for
-  reservations or passerby."
-- **Charge codes are never owned by an Outlet** (app owner's explicit call, offered as
-  an alternative to "each code belongs to one outlet"): a `ChargeCode` stays
-  enterprise-wide and independent; an Outlet curates a many-to-many pool of which
-  existing codes it exposes in its own POS view (`OutletChargeCode`). The same code
-  (e.g. a generic "Late Checkout Fee") can be offered by more than one outlet, or none.
-- **Walk-in billing** (app owner's explicit call, offered as an alternative to a
-  brand-new standalone-bill entity or auto-creating a fake reservation): extend `Folio`
-  itself — `reservationId` is now nullable, with `walkInGuestName`/`walkInGuestContact`
-  populated only when it's null. Reuses every existing folio/line-item/payment/print code
-  path unmodified; the only structural cost was giving `Folio` its own `propertyId`
-  (previously only reachable via `reservation.propertyId`) so scoping still works when
-  there's no reservation to hop through. See "Session/scope engineering conventions"
-  below for the full retrofit list.
-- **Outlet tax override** (app owner's explicit call, offered as an alternative to
-  "mandatory, every outlet must pick one"): **optional**. `Outlet.taxOverrideMode`
-  (`NONE` | `DEFAULT_ENGINE` | `CUSTOM`) — when `NONE` (default), every charge code
-  posted through the outlet uses its own tax setting exactly as it would anywhere else
-  in the app; when set, it overrides every charge code's own setting, whether that code
-  was on the default engine or its own Custom Tax profile. Implemented as a thin
-  wrapper (`resolveOutletChargeTax` in `src/lib/tax-calc.ts`) around the existing
-  `resolveChargeTax`, not a modification to it.
-- **Pre-booking scope** (app owner's explicit call, offered as an alternative to full
-  resource/room-capacity booking): a **simple appointment log** only — no bookable
-  "resources" (therapists, tables, treatment rooms), no hard conflict rejection.
-  Verbatim: *"have a simple appointment log - but able to set a cap to how many
-  appointments, I do want users to get notified if they make a double booking, extended
-  full version can be managed in a newer version/higher tier of plan."* Modeled as
-  `Outlet.appointmentCapPerSlot` (optional Int) — when a new `OutletAppointment` would
-  push an overlapping time window's count over that cap, the create still succeeds
-  (`201`) but the response carries a `capWarning: {cap, overlappingCount}` for the UI to
-  surface as a non-blocking toast. Never a hard block. Full resource-capacity booking is
-  explicitly deferred to a future higher-tier feature — don't build it without a fresh
-  decision.
-- **Where things live in the UI**: Outlet CRUD is a Controls concern (new "Outlets" tab,
-  positioned right after Inventory, gated by the existing `CONTROLS` permission like
-  every other Controls section). Day-to-day outlet *operations* — posting a charge
-  through an outlet, starting a walk-in bill, booking/managing appointments — all live
-  on the existing POS page (a new "Appointments" tab alongside the existing charge-
-  posting flow), gated by the existing `POS` permission. Deliberately no new sidebar
-  item or RBAC module: the whole point of reusing `POS`/`CONTROLS` was to avoid opening
-  the "does this need to mirror the sidebar" question for a feature this tightly
-  coupled to modules that already exist.
-- **Amenities relocated** (explicit request: *"move the 'Amenities' from inventory to
-  next to Outlets"*): `FacilityAmenitiesManager` (the `Facility` model — a guest-facing
-  Pool/Gym/Spa marketing list, unrelated to Outlets' revenue-tracking purpose despite
-  the name overlap) moved from the Inventory tab to sit alongside the new Outlets tab.
-  No code changes to the component itself, purely a Controls-tab-tree relocation.
-- **Never lose revenue/appointment history**: `DELETE /api/outlets/[id]` follows the
-  same pattern as `RoomType.isActive` — blocked (400) if the outlet has any
-  `FolioLineItem` or `OutletAppointment` history; deactivation (`PATCH
-  {isActive: false}`) is the real path once an outlet has seen any activity.
+- An outlet is a revenue point of sale in one property (spa, restaurant, bar, retail,
+  transport, recreation, other).
+- **An outlet never owns charge codes.** It exposes a pool of the property's existing codes
+  (`OutletChargeCode`); the same code can be offered by several outlets.
+- **Walk-in billing uses `Folio` itself:** `reservationId` is nullable and the folio carries
+  `walkInGuestName` / `walkInGuestContact` and its own `propertyId`.
+- **Outlet tax override is optional** (`taxOverrideMode` NONE, DEFAULT_ENGINE, CUSTOM). When
+  set it overrides every code's own tax setting for charges posted through that outlet.
+- Outlet setup is configuration (`CONTROLS`); posting through an outlet is `POS`.
+- **Never lose history:** an outlet with any posting cannot be deleted, only deactivated.
+- Outlet appointments were removed on 2026-07-25 (see "Fast Post").
 
-## Theming & Design System
+## Theming and design system
 
-- The design system, its tokens and the reasoning are in [`DESIGN_PLAN.md`](DESIGN_PLAN.md),
-  which is the single source of truth and is largely implemented. Verify against the code
-  before assuming a gap it lists is still open.
-- **Per-property banner accent, not per-enterprise**: `Property.bannerColor` renders as a thin
-  line at the top of the page (`PropertyBannerBar`). `--primary` (buttons, links, focus rings)
-  stays a fixed neutral for every property; the banner is the only sanctioned accent surface
-  (`DESIGN_PLAN.md` §3.3).
+- The design system is in [`DESIGN_PLAN.md`](DESIGN_PLAN.md), the single source of truth.
+- **The accent is per property:** `Property.bannerColor`. `--primary` stays a fixed neutral for
+  every property.
 
-## Session/scope engineering conventions (for agents working on this repo)
+## Engineering conventions for this repository
 
-- New `tests/tenant-isolation/*.test.ts` or `tests/room-types/*.test.ts` files must
-  `upsert` the INTERNAL Osta enterprise using the **exact same slug `"test-osta"`** as
-  `tests/scope.test.ts` — `getOstaEnterpriseId()` caches the first INTERNAL enterprise
-  id for the life of the Vitest process (`fileParallelism: false`), so a differently-slugged
-  INTERNAL enterprise in a second test file desyncs every `ctx.isInternal` check.
-- Windows: the dev server holds the Prisma query-engine `.dll.node` open — stop it
-  (`taskkill //PID <pid> //F`, PID via `netstat -ano | grep ":3000"`) before every
-  `npx prisma generate`, and restart the dev server after, since a `next dev` process
-  already running keeps the *old* client in memory even after `node_modules/@prisma/client`
-  changes on disk (Next only watches `src/`).
-- Base UI (this app's shadcn preset — **not Radix**) renders `Checkbox`/`Switch` as
-  `<span role="checkbox">`, not a native `<button>`/`<input>`. When scripting UI
-  interaction for verification, target `[role="checkbox"]`, not `button`.
-- **`Folio.reservationId` is nullable** (since 2026-07-18, for walk-in/Outlet billing —
-  see "Outlets" above). Any route or component reading `folio.reservation.propertyId`
-  (or anything nested under `.reservation`) must switch to `folio.propertyId` directly
-  and null-guard reservation-specific display fields (guest name, dates, room
-  assignments) — `folio.reservation` is only ever present for a reservation-backed
-  folio now. Every `prisma.folio.create` call (direct or nested under a
-  `reservation.create`) needs an explicit `propertyId` — Prisma does not auto-inherit a
-  sibling scalar from a parent nested-create.
-- **A stale/cached compile error in one browser tab's console history is not proof of a
-  real bug** — Turbopack's dev-server error overlay can retain an error from an
-  intermediate edit state and keep echoing it into `read_console_messages` even after a
-  forced navigation on that same tab, while the actual current file compiles and
-  renders fine. If a console error's cited line numbers don't match the file you just
-  read, open a *brand-new* tab and check there before assuming the code is broken —
-  don't trust a single stale tab's console buffer over a fresh `tsc --noEmit` and a
-  fresh page load.
+- Tests that need the INTERNAL Osta enterprise must upsert it with the slug **`"test-osta"`**;
+  `getOstaEnterpriseId()` caches the first INTERNAL enterprise for the whole Vitest process.
+- Windows: stop the dev server before `npx prisma generate` and restart it after.
+- The UI kit is Base UI, **not Radix**: `Checkbox` and `Switch` render as
+  `<span role="checkbox">`.
+- **`Folio.reservationId` is nullable.** Read `folio.propertyId`, never
+  `folio.reservation.propertyId`, and null-guard reservation fields. Every
+  `prisma.folio.create` needs an explicit `propertyId`.
+- A compile error in one browser tab's console can be stale. Check a fresh tab and
+  `tsc --noEmit` before believing it.
 
-## Confirmation Letter (2026-07-19)
+## Confirmation letter (2026-07-19)
 
-- Sent to a guest once their stay is confirmed — entry to the Maldives requires a hotel
-  confirmation, and this is the "nice letter" sent to satisfy that, by mail. App owner
-  supplied a reference image (a branded "Sunset Hotel & Resort" template with a colored
-  side strip, logo, salutation, stay details, policy paragraph, and signature block) and
-  asked for both delivery paths: "printable and smtp both options."
-- **Required content** (verbatim from the app owner): guest names including any
-  accompanying guests, stay period, nights, room category, and reservation remarks —
-  plus generic hotel info and policy text, kept to one page.
-- **Branding**: reuses `EnterpriseSettings.invoice*` fields rather than inventing a
-  parallel branding system for just this one letter. The reference image's illustrated
-  geometric/beach artwork is represented only as a 3px brand-color accent strip — no
-  image assets exist for the illustration and recreating it was judged disproportionate
-  scope for a "make it one page... generic info" request.
-- **`Reservation.remarks`** is a plain free-text field on the reservation itself, not
-  sourced from `ReservationTrace` — that model is an operational task/message log, a
-  different kind of data from curated guest-facing letter text.
-- **SMTP sending is real**, via new `src/lib/mailer.ts` (nodemailer), reading
-  `EnterpriseSettings.smtp*`. This was built on top of a known pre-existing gap:
-  `smtpPassword` is stored in **plaintext**, and `GET /api/tenant-settings` already
-  returned it in full to the browser before this feature existed. Encrypting at rest
-  and/or redacting the GET response were both judged out of scope for this feature
-  (need a key-management decision and a UI rework respectively) — flagged in TODO.md as
-  a real follow-up, not silently fixed or silently ignored.
+- Sent once a stay is confirmed (entry to the Maldives requires a hotel confirmation). It can be
+  printed or emailed.
+- **Content:** guest names including accompanying guests, stay period, nights, room category,
+  reservation remarks, generic hotel information and policy text, on one page.
+- `Reservation.remarks` is free text on the reservation, separate from traces (which are an
+  operational task log).
+- Email goes through `src/lib/mailer.ts`.
 
-## Invoice redesign, Payment Receipt, Currency Exchange Receipt (2026-07-19)
+## Invoices, receipts and currency exchange (2026-07-19)
 
-- **Tax Invoice vs. Proforma Invoice**: app owner clarified these are **two buttons
-  producing the same underlying data**, not separate document models — the only
-  differences are the title ("Tax Invoice" vs. "Proforma Invoice"), a small "This is not
-  a tax invoice." disclaimer on Proforma, and which of two independent document-number
-  fields gets stamped. `GET /api/folios/[id]/invoice-data?type=tax|proforma` drives it
-  (defaults to `tax` if the param is absent).
-- **Document numbering finally wired up**: the Sequence Manager (see "Sequence Manager"
-  above) existed but nothing consumed it before this feature. New
-  `src/lib/document-sequence.ts` (`allocateSequenceNumber(propertyId, sequenceType)`)
-  atomically increments a `PropertySequence` row and returns the new value — called
-  **exactly once per document, only when the target field is still null**:
-  `Folio.taxInvoiceNumber` (`TAX_INVOICE` sequence, `INV-00001` format),
-  `Folio.proformaInvoiceNumber` (`PROFORMA_FOLIO` sequence, `PRO-00001` format),
-  `Payment.receiptNumber` and `CurrencyExchange.receiptNumber` (**share the same**
-  `RECEIPT_NO` sequence and `RCT-00001` format — a payment receipt and an exchange
-  receipt are the same kind of document to the numbering system, verbatim from the
-  plan: "Receipts... Payment Receipt, Exchange Receipt"). Reprinting any of these
-  documents reuses the stored number rather than allocating a new one — verified live
-  (same folio printed twice keeps the same `INV-00001`).
-- **Invoice line-item columns simplified** to Date / Description / Reference / Amount
-  (explicit override of the initially-offered options — "no need for qty and rate").
-  Maldives tax math (Service Charge/TGST/Green Tax) is still computed and shown, just
-  rolled into the totals block instead of broken out per line.
-- **No QR code** on any of these documents — Payment Information is a **text-only**
-  block (Account Name/Number/IBAN/Bank Info, new nullable `EnterpriseSettings` columns)
-  shown in a printed footer. The app never moves money itself; this is informational
-  only, not a payment-gateway integration.
-- **Currency Exchange is a real recorded transaction**, not a stateless print form —
-  new `CurrencyExchange` model (`propertyId`, `shiftId`→`CashierShift`, `guestName?`,
-  `fromCurrency`, `toCurrency`, `rate`, `amountFrom`, `amountTo`, `receiptNumber?`,
-  `createdByUserId`). Posted from Cashiering (Controls-adjacent, not Controls itself)
-  against the caller's own open `CashierShift`, auto-opening one at 0 float if they
-  don't have one — mirrors the existing pattern in
-  `src/app/api/folios/[id]/payments/route.ts`, **not** the older `POST
-  /api/payments/route.ts`, which still trusts a client-supplied `shiftId` (a known
-  deviation — do not copy that one).
-- **Payment Receipt** is scoped **one per existing `Payment` row** (confirmed
-  explicitly, not a separate "receipt batch" concept) — printed from a per-row action
-  in the Folio Panel's payments table, which previously had no trailing actions column.
+- **Tax Invoice and Proforma Invoice are the same data.** They differ in the title, a "This is
+  not a tax invoice" line on the proforma, and which number field is stamped.
+- **A document number is allocated exactly once**, when the field is still empty
+  (`allocateSequenceNumber`, `src/lib/document-sequence.ts`). Reprinting reuses the number.
+  Formats: `INV-00001`, `PRO-00001`, `RCT-00001`. Payment receipts and exchange receipts share
+  the receipt sequence.
+- Invoice lines show Date, Description, Reference, Amount (no quantity or rate columns). Tax is
+  in the totals block.
+- **No QR code.** Payment information is a text block; the app never moves money.
+- **A currency exchange is a recorded transaction** (`CurrencyExchange`), posted in Cashiering
+  against the user's own open shift. Never trust a shift id sent by the client.
+- A payment receipt is one per `Payment` row.
 
 ## Debtors (Accounts Receivable) (2026-07-19)
 
-The first Debtors design. Its ledger model (one pooled AR folio per account, a "Bill to
-Account" action, a `bill-charges` endpoint) was **replaced the same day** by the
-checkout-triggered invoice pipeline in the next Debtors section. What still holds:
+- **Credit accounts are `Profile` rows** (company or travel agent) with `isCreditAccount`;
+  there is no separate account model.
+- **Debtors only works once the guest has checked out** (owner). No in-house reservation ever
+  appears in Debtors.
+- **A debtor invoice is the reservation's own folio.** `isDebtorAccount` flips to true only at
+  check-out, only for a folio settled to City Ledger with a valid credit account attached. What
+  makes a folio City Ledger is a City Ledger payment (see "Folio: before arrival, documents and
+  settlement", 2026-08-03).
+- **Night Audit ignores settlement:** it always posts to the reservation's own folio.
+- **Check-out is the trigger.** A `DIRECT` folio must balance to zero or check-out is blocked. A
+  `CITY_LEDGER` folio is exempt, but only when its travel agent or company is a valid credit
+  account; if not, check-out is blocked (see "Check-out settlement", 2026-07-24).
+- **There is no "Bill to Account".** To split billing: add a second folio on the reservation,
+  move the charge to it, and settle that folio with a City Ledger payment. It becomes its own
+  invoice at check-out.
+- **Credit limit warns, never blocks.**
+- **Aging is per invoice**, by the age of its check-out date: Current, 1-30, 31-60, 61-90, 90+.
+  "Open" means a balance above zero, not `Folio.isClosed` (check-out closes every folio).
+- **A payment can be recorded on a closed folio only when it is a debtor invoice.**
+- The statement shows one line per invoice with the guest name and totals, plus an aging summary
+  of open invoices. The statement and the receipt are separate documents.
+- `DEBTORS` is its own module, granted to Cashier beyond Admin and Manager; Front Desk and
+  Reservations were deliberately not given it.
 
-- **Credit accounts extend existing `Profile` rows** (COMPANY / TRAVEL_AGENT), activated by
-  `Profile.isCreditAccount`; there is no separate account model.
-- **Credit limit is warn-only, never blocking.**
-- **Aging** is Current / 1-30 / 31-60 / 61-90 / 90+, and the Account Statement can be printed
-  or emailed.
-- **Module access**: `DEBTORS` is its own module, granted to Cashier beyond Admin and Manager;
-  Front Desk and Reservations were deliberately not granted it.
-- A new reservation's first folio defaults to `CITY_LEDGER` only when its travel agent is a
-  credit account; a later staff override sticks.
-- `PrintDocumentShell` has an `extraActions` slot for documents that need more than Print.
+## Roles: a new module reaches existing roles by itself (2026-07-19)
 
-## RBAC self-healing permission backfill (2026-07-19)
+- `requireSession()` back-fills any module missing from a role the first time it is used.
+  System and support roles get their defined value; custom roles get no access.
+- **System roles cannot be edited by a customer.** They are shared across every enterprise.
 
-App owner asked to address the gap discovered above directly: "adding a new RBAC
-module isn't retroactively granted to existing enterprises' System roles, and System
-roles can't be edited via the Controls UI at all."
+## Occupancy pricing, derived rate plans and meal plans (2026-07-19)
 
-- **Chose self-healing over a one-off migration script**: `requireSession()`
-  (`src/lib/scope.ts`) already re-queries the live `User`→`Role`→`RolePermission`
-  chain fresh on every request (no JWT/session caching of permissions — confirmed by
-  reading the whole function first). A one-time migration script would only fix
-  enterprises that exist *today*; a self-healing check fixes every enterprise
-  automatically, forever, the first time any of its users makes a request after a new
-  module ships — no deploy-time step to remember, no risk of a new enterprise's
-  System roles drifting out of sync again the next time `MODULES` grows.
-- **What it does**: after loading `user.role.permissions`, diff the module names
-  present against the current `MODULES` array. If any are missing, backfill them:
-  System/Support roles get the canonical value from `SYSTEM_ROLE_DEFS`/
-  `SUPPORT_ROLE_DEFS` (looked up by exact role name — both dicts merged into one
-  lookup table), custom (non-system) roles get all-`false` (`NO_ACCESS`) — the same
-  default they'd have received had the module existed when an enterprise admin
-  created that role via the Controls UI. Cheap on the common path (`missing.length
-  === 0` returns immediately) and self-limiting (a no-op forever once a role has been
-  backfilled once).
-- **SQLite doesn't support `createMany`'s `skipDuplicates`** (Postgres/MySQL/
-  CockroachDB only) — the backfill instead does one `upsert` per missing row, keyed
-  on `RolePermission`'s `@@unique([roleId, module])` compound key. Still fully
-  race-safe if two concurrent requests for the same under-provisioned role both hit
-  the gap at once.
-- **Deliberately did not touch the "System roles cannot be edited" restriction** in
-  the Controls UI (`src/app/api/roles/[id]/route.ts`) or relax it in any way — that
-  block exists because System roles are shared *across every enterprise*, and letting
-  one enterprise's admin edit a shared row (or silently forking it per-enterprise on
-  first edit) is a materially different, riskier feature than what was actually
-  asked for. The self-heal fixes the concrete bug (a legitimate new module never
-  reaching existing roles); it doesn't change who can edit what.
-- **Live-verified against the real dev database, not just the two new
-  `tests/scope.test.ts` cases**: found 8 genuinely pre-existing roles missing the
-  `DEBTORS` row from before this fix shipped (Manager, Front Desk, Housekeeping,
-  Maintenance, Cashier, Reservations, Osta Support, Osta Support Admin) — logged in
-  as the `Manager` role and confirmed the row appeared correctly on the very first
-  request, matching `SYSTEM_ROLE_DEFS.Manager.DEBTORS` exactly, with no server
-  restart or manual step involved.
-
-## Debtors: checkout-triggered invoice pipeline redesign (2026-07-19)
-
-App owner: "statement and receipt currently together -- it should be two seperate
-ones, statement should show line per invoice with totals and guest name and also
-summary age of folios (open only)." Digging into "one row per invoice" surfaced a
-real architecture mismatch with the original Debtors design (see "Debtors (Accounts
-Receivable)" above): every charge billed to a credit account landed on **one shared
-pooled ledger folio per (account, property)**, with no memory of which
-guest/reservation it came from — structurally impossible to produce "one row per
-invoice" from. Asked to clarify what "open folios" should mean; the app owner's
-answer redefined the pipeline outright: **"Debtors will only work once guest is
-checked out - so no active reservations should be there. Make sure the debtors
-module also follow the same pipeline."**
-
-- **A debtor invoice is now a reservation's own `Folio`** — not a shared pooled
-  ledger folio. This supersedes the "one per `(Profile, Property)`,
-  `findOrCreateDebtorFolio`" design from the original Debtors entry above, which is
-  now fully removed (the function and the pooled-folio model both deleted, no
-  successor). Every field reused, no schema migration: `settlementMethod` and
-  `payeeProfileId` are now **both** set at reservation creation (previously only
-  `settlementMethod` was); `isDebtorAccount` is **repurposed** to mean "this
-  specific folio has been finalized into a debtor invoice," flipping `true` only at
-  **checkout**, only for a folio still `CITY_LEDGER` at that moment with a still-valid
-  `isCreditAccount` travel agent attached. Before checkout it's always `false` — this
-  is the literal mechanism that keeps in-house reservations invisible to Debtors.
-- **Night Audit reverted to settlement-agnostic**: the City-Ledger routing branch
-  added by the original Debtors work is removed entirely. Night Audit always posts
-  the nightly Room/Green Tax charges to the reservation's own folio, full stop — no
-  credit-limit checks or account routing during the stay. Charges accumulate exactly
-  like a normal guest folio throughout the stay; only checkout transfers them.
-- **Checkout is now the pipeline trigger**, not Night Audit and not a manual action.
-  The balance check is split by settlement method: `DIRECT` folios must still net to
-  ~0 (unchanged rule) or checkout is blocked; `CITY_LEDGER` folios are excluded from
-  that requirement — but only if `reservation.travelAgentId` still resolves to a
-  valid `isCreditAccount` profile at that moment (a defensive fallback mirroring the
-  one removed from Night Audit) — otherwise the folio is treated like `DIRECT` for
-  the balance check, so a misconfigured folio can't silently write off real revenue.
-  Qualifying folios get `isDebtorAccount: true` + `payeeProfileId` set inside the
-  same transaction that closes every folio and marks the reservation
-  `CHECKED_OUT`. A non-blocking credit-limit check (same `checkCreditLimitWarning`
-  helper as before) runs after the transaction and returns in the checkout response.
-- **The mid-stay "Bill to Account" feature is removed outright** — a real capability
-  removal, not an oversight. `POST /api/debtors/accounts/[profileId]/bill-charges`
-  and the Folio Panel's "Bill to Account" button/dialog are both deleted. The old
-  feature let staff cherry-pick individual charges onto a shared account ledger *at
-  any point* during a stay, which doesn't fit "no active reservations in Debtors,
-  ever." The equivalent split-billing scenario (guest pays for the room, one POS
-  charge goes to a corporate account) is still fully achievable with existing
-  primitives that needed no changes: **Add Folio** (open a second window on the same
-  reservation) → toggle that window's **Settlement** to City Ledger → **Move to
-  Folio** the specific charge onto it. That window finalizes into its own invoice at
-  checkout exactly like the main folio.
-- **Aging changed from FIFO-over-flat-line-items to per-invoice bucketing**:
-  `computeAgingBuckets` (which applied payments FIFO against the oldest charges
-  first, across one shared ledger) is replaced by `computeFolioAgingBuckets`, much
-  simpler since each invoice/folio is now independent — bucket each still-open
-  invoice's own balance by the age of its own `reservation.checkOutDate`, no
-  cross-invoice allocation needed. "Open" means `balance > 0.005`, not
-  `Folio.isClosed` (checkout closes every folio regardless of settlement method, so
-  `isClosed` can no longer mean "unpaid").
-- **A real regression was caught and fixed while building the account detail
-  page**: `POST /api/folios/[id]/payments` unconditionally rejected payments to any
-  closed folio. Since checkout now closes every folio including finalized
-  City-Ledger ones, this would have made "Record Payment" against any debtor invoice
-  completely non-functional — every invoice is closed the moment it's born. Fixed to
-  allow payments on a closed folio specifically when `isDebtorAccount` is true.
-- **Debtors account list/detail/statement now query per-reservation invoice folios
-  directly** (`WHERE payeeProfileId = ? AND isDebtorAccount = true`), each result row
-  = one invoice via the new shared `buildInvoiceSummary()` helper
-  (`src/lib/debtor-accounts.ts`) — guest name from `folio.reservation.primaryGuest`,
-  total/balance from the same charge-minus-payment formula as before. The account
-  detail page, Statement print page, and send-statement email all rebuilt around this
-  invoice-table shape instead of a flat charge/payment ledger.
-- **Stationaries preview split accordingly**: the combined "Receipt / Statement"
-  preview mode in `StationariesManager` is now two separate modes — `ReceiptPreview`
-  (Payment Receipt / Currency Exchange Receipt, unchanged content) and a new
-  `StatementPreview` (dummy invoice table + open-folio aging summary strip,
-  reflecting the new statement shape). No changes to which settings fields apply to
-  which document — same matrix from the original Stationaries entry above still
-  holds, Statement just gets its own accurate mockup now.
-- **Full suite rewritten**: `tests/tenant-isolation/debtors.test.ts` (15 tests) and
-  `tests/business-rules/debtor-aging.test.ts` (9 tests) replaced entirely — the old
-  bill-charges and pooled-folio tests no longer apply. New coverage: Night Audit
-  posts to the guest's own folio regardless of settlement method; an in-house
-  City-Ledger folio does not appear in Debtors until checkout; checkout finalizes a
-  qualifying folio into an invoice and succeeds despite nonzero balance; checkout
-  still blocks a nonzero `DIRECT` folio and falls back to blocking when the travel
-  agent isn't a valid credit account; a post-checkout invoice shows the correct guest
-  name/total; recording a payment against one invoice updates only that invoice.
-  149/149 full suite passing, `tsc --noEmit` clean.
-
-## Occupancy pricing, Derived Rate Plans, and decoupled Meal Plans (2026-07-19)
-
-Three related app-owner requests in one session: extra adult/child pricing on the
-Price Calendar ("that price is default occupancy rate - please also add for extra
-adult, extra child prices"); renaming the Revenue tabs (Manager Flash / Rate Plans /
-Rate Details) with the same extra pricing on Rate Details' bulk tool; and a design
-discussion on Meal Plan being awkwardly coupled to Rate Plan ("I have to create
-seperate Rates for seperate Meal Plans... ideally i want the meal plan to be
-configurable in the controls as well"). The app owner then proposed their own
-mechanism for the same underlying pain — "derived" rate plans that inherit a parent
-plan's price plus a percent/flat adjustment — and asked for both designs to be
-built, not one instead of the other. They solve different problems: Derived Rate
-Plans is a general rate-variant tool (works for meal-plan variants, but also
-negotiated/OTA/promo rates); Meal Plans is a dedicated, simpler per-(RoomType,
-MealPlan) surcharge that doesn't require minting a whole new Rate Plan per
-combination.
-
-- **Occupancy pricing — `RoomType.baseOccupancy`**: no existing concept of "adults
-  included in the base rate" existed anywhere (`maxOccupancy` is purely a capacity
-  label, confirmed via a full-codebase check to be read in exactly 3 CRUD-only
-  places and enforced nowhere). Added `baseOccupancy` (Int, default 2, editable per
-  room type) as the threshold: adults beyond it incur `PriceCalendar.extraAdultPrice`
-  per night; every child incurs `extraChildPrice` (no "included children" baseline —
-  deliberately kept simple, matching how Green Tax already treats children as a flat
-  per-child charge with no exemption threshold below the separate infants bucket).
-  Both extra-price fields live on `PriceCalendar` (same granularity as `price`, so
-  seasonal variation applies to them too) with no `RoomType`-level fallback — unset
-  simply means no surcharge for that day, not "use a default."
-- **Derived Rate Plans — resolved live, never materialized**: `RatePlan` gains a
-  self-relation (`parentRatePlanId`, `onDelete: SetNull` so deleting a parent
-  doesn't cascade-delete its derived children) plus `derivedAdjustmentType`
-  (PERCENT|FLAT) and `derivedAdjustmentValue` (signed — negative means a discount).
-  A derived plan has **no `PriceCalendar` rows of its own**; every lookup (Price
-  Calendar display, Night Audit) resolves the parent's entry for that date and
-  applies `applyRateAdjustment()` (`src/lib/derived-rate.ts`) — including as the
-  final step when falling back to `RoomType.basePrice` if the parent has no
-  calendar entry for that day, so a derived plan is always "parent price +
-  adjustment" no matter where the parent's price came from. This means a derived
-  plan can never drift out of sync with its parent — there's no sync/materialize
-  step to forget. **Chaining is explicitly disallowed** (a derived plan's own
-  parent must not itself be derived, and a plan that already has children can't
-  become derived itself) — enforced in the API on both create and update, not the
-  DB, keeping every resolution path a single hop. The Price Calendar page shows a
-  read-only explanatory banner instead of the Bulk Update form for a derived plan;
-  both `POST /api/price-calendar` and `.../bulk` reject direct price-pushes to one
-  server-side too (not just a UI omission).
-- **Meal Plans decoupled from Rate Plans**: new property-scoped `MealPlan` model
-  (code/name/isActive) and `RoomTypeMealPlanRate` join (one flat per-night
-  surcharge per Room Type × Meal Plan — deliberately **not** date-seasonal like
-  `PriceCalendar`, since the app owner described it as "a set rate," not something
-  needing its own calendar). `RatePlan.mealPlan` is removed entirely — a Rate Plan
-  is now purely about the room's own price curve, meal plan is a fully orthogonal
-  concern. `Reservation.mealPlan` deliberately stays a plain string (not converted
-  to a hard FK) to minimize blast radius — it now sources its dropdown options from
-  the live `MealPlan` list instead of 5 hardcoded values baked into two separate
-  duplicated `<Select>`s (Rate Plan form + Reservation form), resolved by
-  `(propertyId, code)` at Night Audit time, the same lookup pattern already used for
-  `ChargeCode`. New Controls category "Revenue" (previously Meal Plans had no home;
-  grouping money-adjacent config together — Finance for tax/charge codes/payment
-  methods, Revenue for pricing structure) hosts a combined Meal Plans list +
-  Room Type × Meal Plan rate matrix (per-cell save-on-blur, not a bulk submit).
-  Migration seeds BB/HB/FB/AI per existing property (matching the old hardcoded
-  dropdown's 4 non-"Room Only" options) so Controls isn't empty after upgrade —
-  "Room Only"/NONE is deliberately never seeded, since no `MealPlan` row for it
-  means no surcharge lookup at all, which is exactly correct for a zero-cost plan.
-- **Also fixed while in this area**: `POST /api/reservations` now returns a
-  non-blocking `capacityWarning` when a booking's adults+children exceeds a room
-  type's `maxOccupancy` — surfaced in the reservation form's save notification, the
-  first time this field has ever been enforced anywhere (previously a pure label).
-  `BulkPricingTool` (Rate Details) switched from two plain `<input type="date">`
-  fields to the shared `DateRangePicker` component per the AGENTS.md convention it
-  had been quietly violating.
-- **Live-verified end-to-end**: created "BAR-BB" derived from "BAR" at +$20 flat;
-  confirmed its Price Calendar shows the computed $170 (not directly editable) when
-  BAR itself is $150; configured a $25 Bed & Breakfast rate for Standard Room via
-  the new Controls > Revenue matrix; booked a reservation on the derived plan with
-  that meal plan and 6 occupants (correctly triggering the capacity warning); ran
-  Night Audit and confirmed the folio posted exactly three separately-itemized,
-  correctly-taxed line items: $170.00 room charge, $25.00 meal plan charge, $60.00
-  Green Tax. 149/149 full suite passing, `tsc --noEmit` clean.
-
-**Correction, same day**: the `RoomTypeMealPlanRate` matrix described above was
-removed again a few hours later, per explicit app-owner feedback on a screenshot of
-it — *"this isn't required as i mentioned the association will be done on rate
-detail level... BAR / BAR-BB / BAR-HB / BAR-FB / BAR-AI will create rates
-seperately."* The Derived Rate Plan mechanism (already built, above) **is** the
-meal-plan-pricing association — a reservation booked on "BAR-BB" already gets the
-right total nightly price with no separate charge needed. `MealPlan` (the LOV —
-code/name/isActive) stays; `RoomTypeMealPlanRate`, its API route, the Controls rate
-matrix, and the Night Audit "Meal Plan Charge" posting block were all deleted.
-`Reservation.mealPlan` is now purely an informational tag, not a Night Audit
-pricing input. New migration `20260719100019_remove_meal_plan_room_type_rates`
-drops the table. 149/149 passing, `tsc --noEmit` clean after the removal too.
+- **`RoomType.baseOccupancy`** (default 2): adults beyond it pay the extra-adult price per
+  night; every child pays the extra-child price. Both extra prices are per day on the price
+  calendar; unset means no surcharge.
+- A booking over `maxOccupancy` gets a warning, not a block.
+- **Derived rate plans are resolved live, never stored.** A derived plan has a parent and a
+  percent or flat adjustment (negative is a discount) and no prices of its own. Every lookup
+  takes the parent's price for the date and applies the adjustment, so it can never drift.
+  **Chaining is not allowed** (one hop only). Prices cannot be pushed to a derived plan.
+- **Meal plans are separate from rate plans.** `MealPlan` is a property list (code, name,
+  active). There is no per-room-type meal surcharge table. Per-person meal pricing goes through
+  Allocations.
 
 ## Allocations (2026-07-19)
 
-- **New first-class revenue entity**: an Allocation is a per-person, date-range-priced
-  component (BF/LN/DN, transfers, spa, excursions) configured under Revenue >
-  Allocations, linkable to Rate Plans (package contents) and Meal Plans (BB → BF),
-  attachable manually per reservation, and posted by Night Audit against its own
-  ChargeCode. Full architecture and phase history: `ALLOCATIONS_PLAN.md` in this folder.
-- **Owner-confirmed rules** (all dated 2026-07-19, given verbally in-session):
-  - Prices are **adult/child only — infants are never charged** (consistent with the
-    Green Tax infant exemption). No infant price field exists anywhere.
-  - Pricing is **controlled by date only** — date ranges that must not overlap
-    (API-validated, like rate pricing). Room type and meal plan never affect an
-    allocation's price.
-  - The Include-in-Rate / Add-to-Rate / Sell-Separate **mode is defined per allocation
-    item/code** — one allocation can be include-in-rate while another is add-to-rate,
-    but a single allocation is never both.
-  - **Include-in-Rate = revenue carve-out**: room line reduced by the allocation amount
-    (clamped at zero), folio total unchanged, attribution moves to the allocation's
-    charge code.
-  - **Departure-night rhythm posts on the stay's last night** (no audit runs for a
-    guest on their checkout date).
-- **Supersedes (extends) the "price meal plans via Derived Rate Plans" decision
-  above**: a derived plan mathematically cannot price per person, so per-pax meal
-  pricing now flows through MealPlan → Allocation links. Derived Rate Plans remain
-  fully supported for flat/percent room-rate adjustments — the two mechanisms compose
-  (a reservation on "BAR-BB" can get BAR+$20 room pricing AND the BB meal plan's BF
-  allocation).
-- **Attachment is materialized at booking/edit time** into `ReservationAllocation`
-  (source RATE_PLAN | MEAL_PLAN | MANUAL, with optional negotiated price overrides) —
-  Night Audit reads only those rows, so later edits to a plan's links never silently
-  reprice an in-house stay. Derived plans inherit their parent's links unless they
-  have their own.
-- 167/167 full suite passing (18 new allocation tests: rhythm gating, date-range
-  selection, pax math, carve-out clamp, override honouring, link inheritance,
-  materialization lifecycle, tenant isolation), `tsc --noEmit` clean.
-
-## Allocations: Sell-Separate is an independent toggle, not a mode (2026-07-19)
-
-**Correction to the Allocations entry above, same day**, from app-owner feedback on the
-built UI (verbatim intent): *"sell separate — it is a separate toggle from add to rate /
-include in rate. Despite including in rate or not, sell separate allows users to attach
-these packages manually to reservation. The purpose of defining allocations like BF, LN,
-DN was so revenue allocations are allocated by default and posted during night audit."*
-
-- **`Allocation.mode`** is now strictly 2-way: `INCLUDE_IN_RATE | ADD_TO_RATE` — it only
-  governs how the allocation posts *when it is part of a rate plan*.
-- **`Allocation.sellSeparate`** (new Boolean, independent of `mode`) — when true, the
-  allocation is *additionally* offered as a manual add-on in the reservation form,
-  whether or not it's part of any rate/meal plan. It does not change posting behavior.
-- **All allocations are linkable** to rate plans and meal plans now (the earlier rule
-  that SELL_SEPARATE allocations couldn't be packaged is removed — that concept no
-  longer exists). The reservation Add-ons picker shows only `sellSeparate` allocations
-  that aren't already auto-attached via a rate/meal plan.
-- **UI**: the allocation form's 3-way "Rate Behaviour" radio became a 2-way radio
-  (Include in Rate / Add to Rate) plus a separate "Sell Separately" switch. The Rate
-  Plan dialog was widened and split into two side-by-side columns — rate definition on
-  the left, a chip-style allocation picker grouped by type (selected chips highlighted,
-  unselected gray) on the right — to fix an unscrollable single-column dialog.
-- Migration `20260719140000_allocation_sell_separate` adds the column and backfills any
-  legacy `mode='SELL_SEPARATE'` row to `mode='ADD_TO_RATE', sellSeparate=true`.
-- 169/169 suite passing (2 new tests: SELL_SEPARATE rejected as a mode value; a
-  sell-separate allocation is still linkable to a rate plan), `tsc --noEmit` clean.
-
-## Base Rate Plan replaces RoomType.basePrice (2026-07-19)
-
-App-owner instruction (verbatim intent): *"Remove the column base price from Room Type
-config — by default during onboarding a 'Base' Rate will be created which is locked
-and cannot be deleted (lock icon). You cannot edit anything for the rate detail
-section — however packages can be added if preferred — this will be default rate for
-all room types all rate plans if nothing custom is specified."*
-
-- **`RoomType.basePrice` is gone** (dropped column, migration
-  `20260719170000_remove_room_type_base_price`). The Room Type form/table no longer
-  shows it.
-- **Every property gets exactly one locked Rate Plan** (`RatePlan.isLocked = true`,
-  code `"BASE"`, name "Base Rate", priority 999) — created automatically at property
-  onboarding (`POST /api/properties`). A migration
-  (`20260719160000_rate_plan_locked` + a one-time backfill script,
-  `scripts/dev-tools/backfill-base-rate-plans.ts`, now historical/inert since the
-  column it read no longer exists) provisioned one for every pre-existing property
-  and carried its room types' old `basePrice` values forward into today's
-  `PriceCalendar` row, so no configured pricing was silently lost.
-- **Clarified interpretation of "cannot edit rate detail"**: this locks the plan's own
-  *identity* fields (code, name, priority, negotiated flag, derive-from settings) —
-  not its pricing. The Base plan is priced through the **exact same Price Calendar
-  mechanism as any other rate plan** (Calendar button / Revenue > Rate Details), so an
-  admin can and should bulk-price it (e.g. a year or more out) via the existing
-  seasonal/bulk pricing tool. **Package Allocations remain fully editable** on it, per
-  the instruction. Enforced both in the UI (disabled inputs, lock icon, hidden delete)
-  and independently in the API (`PUT` on a locked plan silently ignores everything
-  except `allocationIds`; `DELETE` 400s; `POST` rejects a client-submitted code of
-  `"BASE"` as reserved).
-- **Night Audit fallback chain**, in order: (1) the reservation's `overrideRate`, (2)
-  the assigned rate plan's own Price Calendar entry for tonight (or its parent's, if
-  derived), (3) **the property's Base Rate plan's Price Calendar entry for the same
-  room type/date** (skipped if the assigned plan already IS the Base plan), (4) `0` if
-  even that's missing — same as `RoomType.basePrice`'s old implicit `@default(0.0)`
-  when a room type was never explicitly priced. A derived plan's adjustment still
-  applies on top of whichever raw price resolves, including a Base-sourced one.
-  **Practical consequence worth knowing**: unlike the old `RoomType.basePrice` (a
-  single number that worked for literally every future date with zero setup), the
-  Base plan's fallback is only as good as its Price Calendar coverage — an
-  unconfigured future date has no price at all (posts $0) unless the admin has bulk
-  priced that far out.
-- Seed (`scripts/seed/seed-veyo.ts`) demonstrates this: creates Veyo's locked Base
-  plan and bulk-inserts a full year of Price Calendar rows per room type at the
-  former `basePrice` values (250/450), via `createMany` rather than 730 individual
-  upserts.
-- Also added while in this area: the `GTX` (Green Tax) charge code was missing from
-  Veyo's seed entirely — `EnterpriseSettings.greenTaxEnabled` defaults to `true`, so
-  Night Audit would have 400'd on "Missing GTX charge code" the moment it was run.
-  Also seeded a sample chart of charge codes (Accommodation/F&B/Transport/Spa, `RV`
-  suffix) per the app owner's list.
-- 177/177 suite passing (8 new Base Rate Plan tests: onboarding auto-creation, lock
-  enforcement on PUT/DELETE/POST, and the full Night Audit fallback chain incl. the
-  derived-plan-on-top-of-Base-fallback case), `tsc --noEmit` clean.
-
-## Charge codes, payment methods, room-charge posting code (2026-07-19)
-
-App-owner instructions this session, with two design questions the owner answered:
-
-- **PAYMENT category removed from Charge Codes** — payment types are Payment Methods,
-  and having both was redundant ("payment method and charge code seems redundant —
-  remove payment from charge codes"). `ChargeCode.category` is now
-  ROOM | FOOD_BEVERAGE | TRANSPORTATION | OTHERS | TAX | SYSTEM.
-- **Payment Methods** gained a **CITY_LEDGER** type (alongside CASH/CARD/TRANSFER/
-  CHEQUE/VOUCHER). Veyo seed now provisions Cash, Credit Card, Bank Transfer, City
-  Ledger.
-- **Tax reporting — owner chose "identify from source charge code"** (not separate tax
-  charge codes): taxes stay embedded on each folio line (`taxAmount` +
-  `serviceChargeAmount`) tagged by the charge code that produced them, so reports break
-  tax down per charge code natively with no decoupling. Green Tax remains its own
-  GTX-coded line. (If per-tax-line itemisation of a multi-line custom profile is ever
-  needed, add a per-line breakdown child table on top — flagged, not built.)
-- **Rate plans can select an accommodation charge code** (`RatePlan.chargeCodeId`,
-  nullable FK, onDelete SetNull) — the code its nightly room charge posts against at
-  Night Audit. Editable even on the locked Base plan (a posting setting, not identity).
-- **Enterprise posting/settlement defaults** (`EnterpriseSettings`
-  `defaultAccommodationChargeCodeId` + `cityLedgerPaymentMethodId`, Controls > Finance
-  > "Posting & Settlement Defaults"). Night Audit resolves the room charge code as:
-  rate plan's own chargeCode → enterprise default accommodation code → legacy "ROOM"
-  code; 400 only if none of the three exist.
-- **Allocations repointed to dedicated charge codes** in the seed (BF→60RV Package
-  Breakfast, LN→61RV Package Lunch, DN→62RV Package Dinner, Airport→50RV, Speedboat→
-  51RV) instead of the generic FB, so F&B/transfer revenue breaks down by service.
-- **City Ledger settlement — owner chose to LEAVE checkout behavior as-is (2026-07-20).**
-  The settlement *code* (which CITY_LEDGER payment method settles debtor folios) is
-  definable in Controls > Finance, but **no settlement Payment line is posted at
-  checkout, deliberately.** Reason surfaced when the owner and I looked closer: the app
-  models a City-Ledger folio AS the debtor invoice itself (checkout flips
-  `isDebtorAccount = true` and the folio is excluded from the guest-balance check), so
-  the guest already nets to zero and the debtor already carries the full invoice —
-  posting a literal settlement Payment onto that same folio would net it to zero and
-  *erase the debtor's balance*, which is wrong. A visible auditable settlement line
-  would require a two-folio transfer (guest folio gets the payment; a separate invoice
-  folio opens on the debtor account) — owner declined that for now ("option 1"). Do NOT
-  build a checkout settlement-payment posting without first switching to the two-folio
-  model; the current single-folio transfer is the intended behavior. `Payment.shiftId`
-  was therefore left required (no nullable-shift migration needed).
-- 190/190 suite passing (3 new room-charge-code-resolution tests), `tsc --noEmit`
-  clean. Note: a concurrent alpha-hardening pass (availability guard, Night Audit
-  transaction/idempotency, reservation state machine, sequence numbers) also landed in
-  the working tree this session — the Night Audit room-charge-code change layers on top
-  of that pass's refactor of the same route.
-
-## Profiles redesign (2026-07-20)
-
-Full architecture in [PROFILES_REDESIGN_PLAN.md](DEV_LOG.md). Per direct
-app-owner request: replace Loyalty with a configurable VIP tier, split single Communication/
-Address/ID fields into real multi-row child tables, add CRM fields, and consolidate all
-profile types (Guest/Staff/Company/Corporate) into one table.
-
-- **Loyalty → VIP**: `Profile.loyaltyTier` removed, replaced with `Profile.vipLevel`
-  (free-string, sourced from a new `VIP_LEVEL` SystemCode LOV in Controls, not a hardcoded
-  enum — matches every other LOV in the app).
-- **ProfileContact split into `ProfileCommunication` + `ProfileAddress`**, each a real
-  multi-row child table (type + value/fields + `isPrimary`), replacing the old
-  one-row-per-profile `ProfileContact`. `ProfileDocument` (Identification) kept its existing
-  shape but was upgraded from destructive `deleteMany+create` "replace-all" to real per-row
-  CRUD, matching Communications/Address. **Rule: at most one primary per profile per
-  resource type** — enforced server-side by demoting all siblings before setting a new
-  primary, never client-trusted.
-- **Communications value validation is type-aware**: EMAIL and MOBILE each have their own
-  regex (`src/lib/profile-communications.ts`), SOCIAL just requires non-empty.
-- **Attachments are a URL-referenced list, not real file upload** — owner confirmed this
-  scope explicitly (no upload/storage infra exists elsewhere in the app to build on).
-- **STAFF is a 4th `ProfileType`, independent of the `User` login/RBAC model** — owner
-  confirmed explicitly. A Staff profile is purely a directory bucket (same fields as Guest);
-  it has zero relation to who can log in or what they can do.
-- **Company/Corporate profiles use a single `Name` field and skip Personal
-  Information/Identification entirely** (`companyName` already existed on `Profile`; the
-  form conditionally renders based on `profileType`) — per the owner's explicit follow-up
-  ("Company and Corporate the personal information and identification is not needed, Name
-  also would be just one single field"). All four profile types share one `Profile` table.
-- **"Visits to Property" and "Visits to Property Chain" are live-computed, never stored
-  columns** — `Profile` has no `propertyId` (shared enterprise-wide, same precedent as
-  Debtors' per-property AR balance against a shared Profile), so a per-property visit count
-  can't be a simple column. Computed on demand by the new `GET /api/profiles/[upid]/
-  stay-history` endpoint from `Reservation` rows, filtered by `propertyId` when the caller
-  has an active property in context.
-- **`Profile.originPropertyId` is a set-once breadcrumb, not a scoping field** — captured
-  from the caller's active property at creation time if it validates against the caller's
-  enterprise, and never changed after. Profile itself stays enterprise-wide/unscoped; this
-  field only answers "where was this profile first created."
-- **Stay History (Future/History tab)** shows past+upcoming reservations with a per-stay
-  revenue breakdown by charge code, computed from non-void folio line items
-  (`amount + taxAmount + serviceChargeAmount`). Split: `RESERVED`/`IN_HOUSE` with a
-  checkout date still in the future → Future; `CHECKED_OUT` → History.
-- Migration `20260720140000_profile_communications_addresses` (additive) →
-  `scripts/dev-tools/backfill-profile-communications.ts` (one-time, historical, ran
-  successfully against all 5 existing `ProfileContact` rows) →
-  `20260720150000_drop_profile_contact` (destructive, drops the old table) — same two-phase
-  pattern as the earlier Base Rate Plan migration.
-- 210/210 suite passing (13 new Profiles tests), `tsc --noEmit` clean.
-
-## Negotiated Rate Plans restricted to specific agent profiles (2026-07-20)
-
-Prompted by the app owner asking what `RatePlan.isNegotiated` (checkbox: "This is a
-negotiated rate (Corporate/Wholesale)") actually did — **answer: nothing**, it was a
-purely cosmetic flag (badge only) with zero gating anywhere, and no mechanism linked a
-Rate Plan to a Profile at all. Per the owner's follow-up request, built the actual
-restriction:
-
-- **New join table `RatePlanAgentAccess`** (migration `20260720142424_rate_plan_agent_access`,
-  additive, `@@unique([ratePlanId, upid])`) links a `RatePlan` to specific Company/Travel
-  Agent `Profile`s. Only meaningful when `RatePlan.isNegotiated` is true; a negotiated plan
-  with zero linked profiles is unselectable by anyone (not a bug — it means "negotiated but
-  not yet configured," same as any negotiated plan with a non-matching travel agent).
-- **Managed from the Profile side**, per the owner's explicit ask: a new "Negotiated Rates"
-  section on the Company/Travel Agent `ProfileForm` (`isB2B`-only, mirrors the Guest-only
-  CRM section's `isIndividual` gating) — a checkbox list of every negotiated Rate Plan
-  across the enterprise's properties (`GET /api/profiles/[upid]/negotiated-rates`), grouped
-  by property, saved via whole-set replace on each toggle (`PUT`, same convention as
-  Preferences). Matching read-only summary added to the profile View page.
-- **Enforced on the reservation form**: `GET /api/rate-plans` now also returns each plan's
-  `negotiatedForProfileIds`. The Room Segments' Rate Plan selector filters out a negotiated
-  plan unless the booking's own Booking Source/Travel Agent field
-  (`Reservation.travelAgentId`) is one of that plan's linked profiles — a non-negotiated
-  plan is never filtered, exactly as before. Group Block pickup is untouched (a block
-  already carries its own fixed rate plan, no free-form selector to restrict).
-  Revenue &gt; Rate Plans' list also gained a "N agents linked" / "No agents linked" badge
-  next to "Negotiated" so an admin can see at a glance whether a negotiated plan is
-  actually reachable by anyone yet.
-- 212/212 suite passing (2 new tests in `tests/business-rules/negotiated-rates.test.ts`:
-  linkage validation incl. rejecting a non-negotiated or cross-enterprise plan, and
-  `negotiatedForProfileIds` exposure on the rate-plans list), `tsc --noEmit` clean.
-  **Live-verified end-to-end**: created a Company profile and a negotiated Rate Plan via
-  the real API, linked them via the real checkbox in the profile's Negotiated Rates
-  section, opened New Booking and confirmed the plan was absent from the Rate Plan
-  dropdown with no Travel Agent selected, then present (labeled "(Negotiated)") the moment
-  that Company was selected as the Booking Source. Test data cleaned up afterward.
-
-## Travel Agent commission, calculated and posted at checkout (2026-07-20)
-
-Follow-up to Negotiated Rate Plans, per direct app-owner request: "make sure a
-commission % amount can be set per rate plan - optional... once room rate is posted
-and settled to city ledger for that account make sure commission is calculated if
-eligible (use a commission charge code created under non revenue)."
-
-- **`RatePlanAgentAccess.commissionRate`** (optional Float, 0-100, validated server-side)
-  — the per-rate-plan-per-agent commission %, set in the same Negotiated Rates section
-  on the Company/Travel Agent profile (checkbox reveals a "%" input). `GET/PUT
-  /api/profiles/[upid]/negotiated-rates` restructured from a flat `ratePlanIds[]` to
-  `links: [{ratePlanId, commissionRate}]` to carry it.
-- **Commission is calculated at *checkout*, not Night Audit** — Night Audit always posts
-  nightly charges to the reservation's own folio regardless of settlement method (see
-  the "Debtors: checkout-triggered invoice pipeline redesign" entry above); a City-Ledger
-  folio only becomes the account's actual debtor invoice (`isDebtorAccount: true`) at
-  checkout. That is the moment "room rate is posted and settled to city ledger" the app
-  owner meant, and the only correct place to calculate a commission against real, final
-  room revenue.
-- **`FolioLineItem.roomAssignmentId`** (new nullable FK to `RoomAssignment`, additive) —
-  Night Audit now tags the Nightly Room Charge and Extra Occupancy Charge lines with
-  which assignment/segment posted them. Needed because a split-stay reservation can span
-  more than one Rate Plan; without this tag there'd be no way to attribute posted room
-  revenue back to the specific plan (and therefore the specific commission rate) that
-  earned it. `src/lib/commission.ts`'s `calculateFolioCommission` is the pure function
-  that does this attribution (assignment → rate plan → commission link → this rate
-  plan's own room-revenue share × its own %), independently unit-tested.
-- **Posted as a *negative* line (a credit) on the same debtor folio**, using the
-  enterprise's configured Commission charge code (`EnterpriseSettings.
-  commissionChargeCodeId`, new Controls > Finance selector) — reduces the net amount the
-  agent's invoice shows, which is the correct real-world treatment (the hotel owes the
-  agent the commission; there's no separate Accounts-Payable ledger in this app to record
-  it against instead, so crediting the same invoice nets it correctly and is the standard
-  small-PMS convention for negotiated/wholesale settlement). **Flagged explicitly to the
-  app owner as the one modeling assumption made without an explicit answer** — if the
-  intended treatment is actually a separate payable that does *not* reduce what the agent
-  is invoiced, this needs revisiting.
-- **"If eligible" is enforced at three independent gates**, any one of which silently
-  disables commission (no error, since it's meant to be optional): (1) the linked rate
-  plan actually has a `commissionRate` set for this specific agent — being merely listed
-  in Negotiated Rates isn't enough; (2) `EnterpriseSettings.commissionChargeCodeId` is
-  configured at all — leaving it unset disables commission posting enterprise-wide; (3)
-  the folio is actually finalizing to a debtor account at this checkout
-  (`qualifiesForAccount`) — a DIRECT-settlement or guest-payable stay never triggers it
-  regardless of any commission rate on file.
-- **New `NON_REVENUE` charge-code category** (Controls > Finance > Charge Codes) so a
-  Commission code doesn't inflate room/F&B revenue reporting — added to both the UI
-  constant and the **separate server-side allowlist** in `src/app/api/charge-codes/
-  route.ts` / `[id]/route.ts` (a real bug caught live: the UI would have offered the
-  category but the API rejected it with "Invalid category" until both lists were
-  updated).
-- 217/217 suite passing (5 new tests in `tests/business-rules/commission.test.ts`: pure
-  attribution/eligibility math, and a full checkout-route integration test for the
-  posted-credit case, the no-charge-code-configured case, and the no-commission-rate-
-  linked case; `negotiated-rates.test.ts` updated for the new `links[]` payload shape).
-  `tsc --noEmit` clean.
-- **Live-verified end-to-end against the real Veyo dev database**: created a `COMM`
-  charge code (category Non-Revenue) via the real Add Charge Code dialog, set it as the
-  Commission Charge Code in Controls > Finance, created a Travel Agent profile and a
-  negotiated Rate Plan, checked the box and typed `15` into the real commission-%
-  input in the profile's Negotiated Rates section (confirmed persisted via a fresh
-  fetch), booked a real reservation on that plan with a $250 override rate, checked it
-  in, ran a real Night Audit (posted $194.25 base room revenue after Maldives tax
-  back-out, tagged with the assignment's id), then checked out and confirmed the
-  response returned `commissionsPosted: [{amount: 29.1375, agentName: "Commission Test
-  Agency"}]` (194.25 × 15%) and the folio gained a real `-29.1375` line item against
-  `COMM`, dropping the Debtors account balance from what it would otherwise have been.
-  Cleaned up the test reservation's side effects afterward (Night Audit had flipped an
-  unrelated pre-existing reservation, RES435395, to NO_SHOW as an incidental side effect
-  of running a real audit in the shared dev database — reinstated it to RESERVED).
-  **Left in place, not test pollution**: the `COMM` charge code and the Commission
-  Charge Code setting are the actual feature configuration, not throwaway test
-  artifacts. **Not fully cleaned up**: the test reservation (VBR0000000003, checked out,
-  real charges) couldn't be deleted per the existing checked-out delete-guard, and its
-  linked test Travel Agent profile *was* deleted successfully — this is the same
-  pre-existing "dangling payeeProfileId" gap already flagged under Debtors above, not a
-  new one.
-
-## Price Calendar range bumped to 10 years + negative-amount hardening (2026-07-20)
-
-Follow-up to the above, per direct app-owner request: "why is it limited to two years?
-set the maximum date range to 10 years min 1 day, proper validation as well end date
-cannot be less than begin date... no negative rate amounts."
-
-- **Shared `MAX_PRICE_CALENDAR_RANGE_DAYS`/`_YEARS` constant** added
-  (`src/lib/price-calendar.ts`, `365 * 10`) and used by both `/api/price-calendar` and
-  `/api/price-calendar/bulk` instead of each hardcoding its own `365 * 2` — avoids the
-  two endpoints drifting apart again the way the "2 years" cap did.
-- **`/api/price-calendar/bulk` gained the negative-price/extra-price check it never
-  had** (`price < 0 || extraAdultPrice < 0 || extraChildPrice < 0` → 400) — the
-  single-room endpoint already had this via its Zod schema (`z.number().min(0)`), but
-  the bulk endpoint parsed with plain `parseFloat` + only a `isNaN` check, silently
-  accepting a negative price before now.
-- Min-1-day is unchanged (already enforced — `totalDays < 1` / an inverted-range check
-  — this session's earlier fix), just re-confirmed with an explicit same-day-range test.
-- 9 new tests added to `tests/business-rules/price-calendar-bulk.test.ts` (min-1-day,
-  exact-boundary accept-at-10-years / reject-one-day-over for both endpoints via a
-  computed boundary date rather than a hardcoded one, negative price/extra-price
-  rejection for both endpoints). 228/228 suite passing, `tsc --noEmit` clean.
-
-## Rate Plan: Complimentary / House Use flags (2026-07-20)
-
-Per the same request: "please also set two tickbox on rate plan level to mark them as
-complimentary, house use." Added as **pure classification labels, deliberately with no
-posting/reporting behavior wired yet** — same starting point `isNegotiated` had before
-its Negotiated Rates follow-up (see above). `RatePlan.isComplimentary` /
-`RatePlan.isHouseUse` (migration `20260720162039_rate_plan_comp_house_use`), two new
-checkboxes in the Rate Plan dialog (disabled on the locked Base plan, like the existing
-Negotiated checkbox), and matching badges on the Rate Plan list. 1 new test in
-`base-rate-plan.test.ts` (create + update round-trip, defaults to false when omitted).
-**Flagged, not fixed** (see the redundancy audit the owner also asked for, same
-request): neither flag currently stops Night Audit from posting a real nightly charge —
-a "Complimentary" or "House Use" rate plan bills exactly like any other unless staff
-also manually zero the room's `overrideRate`. Revisit when/if the owner wants automatic
-$0 posting tied to these flags.
-
-## Price Calendar page: multi-room-type Bulk Update (2026-07-20)
-
-Per direct app-owner request: the Price Calendar page's own Bulk Update sidebar only
-ever wrote to whichever single Room Type was selected in the Configuration card,
-forcing the whole select-room-type → set-range → set-price → Apply cycle to be
-repeated once per room type. Rate Details' "Bulk Seasonal Pricing Tool" already solved
-this with a room-type checkbox list backed by `/api/price-calendar/bulk`
-(`roomTypeIds[]`) — ported that same pattern into the Price Calendar page instead of
-maintaining two different UX patterns for the same underlying action.
-
-- New `bulkRoomTypeIds` state, independent of the Configuration card's single Room Type
-  selector (which now only controls what the grid *displays*, not what Apply Prices
-  writes to). Defaults to the currently-viewed room type whenever that selector
-  changes, with a "Select all" / "Clear all" toggle to expand from there.
-- `handleBulkUpdate` now posts to `/api/price-calendar/bulk` (not the single-room
-  `/api/price-calendar`) with the checked room type list — same validation, same
-  auto-navigate-to-month behavior from the earlier date-range fix, unchanged.
-- The Rate Plan pre-selection from the Rate Plans list's "Calendar" link
-  (`?ratePlanId=`) was already working correctly before this change — confirmed, not
-  touched.
-- `tsc --noEmit` clean, full suite 228/228 (no dedicated new tests — this is a pure UI
-  wiring change onto an endpoint the Rate Details tool already exercises).
-  **Live-verified**: checked both room types via Select All, applied a price to July
-  20–31 in one Apply Prices click, got "Successfully updated 24 price records" (12 days
-  × 2 room types), and confirmed via a direct API read that the room type *not* being
-  viewed in the grid (Overwater Suite) received the identical price.
-
-## Price Calendar page: Configuration panel redesign (2026-07-20)
-
-Direct app-owner correction on the multi-room-type redesign above, from a screenshot
-circling the Configuration card: "when i click calender here - it takes me to a generic
-price calender page - but it needs to take the rate withi it so i don't have to take the
-rate again in config part - make it simple... the select rate should show and be loced
-cannot swithc no need to show it twice - the calender view section header part you can
-have a toggle switch buttons to switch between different room types."
-
-- **Rate Plan `<Select>` in Configuration is now locked/disabled** (shows the plan the
-  page was entered with via a specific Rate Plan's "Calendar" link, no `onValueChange`).
-  Reason: the page is always entered scoped to one rate plan, and Bulk Update always
-  writes against that same plan — letting staff switch it there would silently desync
-  what the grid displays from what Apply Prices actually writes to.
-- **Removed the duplicate Room Type `<Select>` from the Configuration card entirely** —
-  it was redundant with the Bulk Update sidebar's own room-type checkbox list added in
-  the entry above.
-- **Room-type switching moved to a toggle-button group in the Calendar Grid's own
-  header** (one button per room type, `default`/`outline` variant reflecting selection)
-  — controls only what the grid *previews*, fully independent of Bulk Update's
-  multi-select checkboxes which control what gets *written*.
-
-## Allocation Calculation mode: Meal Plan vs Rate Plan level (2026-07-20)
-
-Per direct app-owner request, added a top-level per-property toggle in
-Controls > Revenue ("Allocation Calculation") deciding which side drives automatic
-Allocation attachment on a reservation. Two live examples were walked through with the
-owner and confirmed before implementation:
-
-- **Meal Plan level** (`Property.allocationCalculationMode = "MEAL_PLAN"`): the
-  reservation's selected Meal Plan is the only source of automatic allocations (e.g. a
-  "BB" meal plan linked to the `BF` Breakfast allocation in Controls > Revenue > Meal
-  Plans auto-attaches `BF`). A Rate Plan's own Package Allocations (Revenue > Rate Plans)
-  are **disabled and never post**, even if configured.
-- **Rate Plan level** (`"RATE_PLAN"`, the schema default): the assigned Rate Plan's own
-  Package Allocations drive what attaches. The reservation's Meal Plan field becomes
-  display-only — it never affects posting.
-- **Exclusive, not additive** — this replaced `resolveLinkedAllocationIds`'s prior
-  behavior of combining both rate-plan-linked and meal-plan-linked allocations with
-  dedup-by-id. Confirmed with the owner this was intentional, not a bug to preserve.
-- **Scope confirmed by the owner**: per-property (not enterprise-wide) — different
-  properties in the same enterprise can run different modes. **Not retroactive** —
-  switching only affects reservations created or edited *after* the change; existing
-  bookings keep whatever allocations they already materialized. A "refresh rate" tool to
-  re-apply the current mode to an already-booked reservation is planned but explicitly
-  **not built in this pass**.
-- Implementation: `Property.allocationCalculationMode` (migration
-  `20260720172019_allocation_calculation_mode`, default `"RATE_PLAN"`);
-  `resolveLinkedAllocationIds` (`src/lib/allocations.ts`) takes a required `mode` param
-  and branches exclusively; `materializeReservationAllocations`
-  (`src/lib/allocations-server.ts`) fetches the property's mode and passes it through;
-  reservation-form client-side allocation preview mirrors the same branch; new
-  `AllocationCalculationManager` component in Controls > Revenue.
-- 14 tests in `tests/business-rules/allocations.test.ts` (pure-function exclusivity for
-  both modes, materialization integration tests for both modes including the
-  default-when-unset case). Full suite 230/230 passing.
-- **Live-verified against the real Veyo database**: set Veyo to `MEAL_PLAN` mode, linked
-  a Package Allocation (`TRF-AIR`) to the `BAR` rate plan (which had none previously) and
-  confirmed `BB` meal plan already had `BF` linked from seed data, then created a real
-  reservation with `ratePlanId: BAR` and `mealPlan: BB`. Result: only `BF`
-  (`source: "MEAL_PLAN"`) attached; `TRF-AIR` did not — matching the mode's contract
-  exactly. Test reservation, the `TRF-AIR`→`BAR` link, and the mode override were all
-  cleaned up afterward; Veyo is left at the `RATE_PLAN` default.
-
-## Reservation booking dialog: Look-to-Book redesign (2026-07-21)
-
-Per direct app-owner request ("review the reservation creation flow... do your research
-on Opera Oracle Hospitality App how reservation module works and come up with a
-beautiful adjustment"). Modeled on OPERA Cloud's Look to Book Sales Screen (stay
-criteria → rate/availability grid → guest & booking details → Book Now), adapted to
-what this app already has. Design confirmed by the owner before building: the grid
-REPLACES the old room-type/rate-plan dropdowns (not offered alongside them), and
-Special Requests use a proper join table (owner chose this over a JSON column).
-
-- **New flow order** in the same single dialog (widened to 920px): "1 · Stay" (arrival/
-  departure/occupancy + Booking Source, which moved up because it gates negotiated
-  rates), "2 · Room & Rate" (the grid), "3 · Guest & Details", "4 · Allocations &
-  Add-ons", and an estimated-total footer (room + extra occupancy + allocations,
-  labeled est., excl. taxes).
-- **`GET /api/reservations/rate-availability`** powers the grid in one round trip:
-  per room type the minimum sellable-room count across every night of the window
-  (OPERA's "minimum stay availability"; pseudo types exempt/unlimited; supports
-  `excludeReservationId` so an edit doesn't count the reservation's own holds against
-  itself) and per rate plan × room type the total/avg-nightly price. Pricing mirrors
-  Night Audit's resolution chain EXACTLY (derived plan → parent entry + adjustment;
-  missing entry → locked Base plan fallback; extra-occupancy from the assigned/parent
-  plan's own entry only) so the quote can never disagree with what posts. One
-  deliberate difference: a fully-unpriced night is reported (cell shows "No rate")
-  instead of Night Audit's post-$0 behavior. 365-night query cap.
-- **Grid behavior**: rows = rate plans by priority, columns = room types with "N left"
-  / "Sold out {date}" headers; sold-out cells struck through and disabled; negotiated
-  plans appear only when the selected TA unlocks them (same RatePlanAgentAccess gating
-  as before, now controlling grid rows); clicking a cell fills the ACTIVE segment's
-  room type + rate plan together. Split stay preserved: each segment card is clickable
-  to become active, the grid re-quotes for that segment's own date range (OPERA Trip
-  Composer, simplified), and per-segment date pickers only appear when there's more
-  than one segment. Room number + flat override rate stay per-segment.
-- **Status dropdown removed from the dialog entirely** — a new booking is always
-  RESERVED and transitions go through Check-In/Check-Out/Cancel actions; the PUT
-  route's status field became optional (schema `z.string().optional()`) with the
-  change-rejection guard intact, and edit mode shows a read-only StatusBadge in the
-  header instead.
-- **Special Requests**: `ReservationSpecialRequest` join table (migration
-  `20260721084759_reservation_special_requests`; `code` stores the SPECIAL_REQUEST
-  SystemCode code string, same convention as Profile.vipLevel — this is the "will be
-  later linked with reservations" follow-through from the LOV category created
-  2026-07-20). Tappable chips in the dialog; validated server-side against active
-  codes (shared `validateSpecialRequestCodes` in src/lib/special-requests.ts); PUT
-  replaces the set only when the field is sent. Seeded five starter options.
-- Also removed dead `availableRooms` state (fetched via /api/rooms/available but never
-  read anywhere).
-- 9 new tests (`rate-availability.test.ts`: Base-fallback pricing, derived adjustment,
-  extra-occupancy parity with Night Audit, min-availability + excludeReservationId,
-  inverted-range rejection; `special-requests.test.ts`: create/dedupe, unknown+inactive
-  rejection, PUT replace-vs-omit semantics, status-optional PUT). Full suite 239/239,
-  `tsc --noEmit` clean. Live-verified in the browser: grid renders real prices for the
-  quoted range with availability counts, negotiated plan hidden without a TA, cell
-  click moves the selection and the footer recomputes (4 nights × $175 + HB
-  allocations = $860 est.), special requests round-trip via API confirmed (invalid
-  code 400s).
-
-## Booking dialog → dedicated pages, allocation calculation breakdown, full tax breakdown (2026-07-21)
-
-Three direct follow-ups on the Look-to-Book redesign above.
-
-- **Dialog → pages**: the create/edit form is no longer a modal — it's now
-  `/reservations/new` and `/reservations/[id]/edit`, both rendering a shared
-  `<BookingForm>` (`src/components/reservations/booking-form.tsx`). Reason: with more
-  room types the rate grid didn't have room to breathe inside a fixed-width dialog.
-  Added `GET /api/reservations/[id]` (didn't exist before — edit only had PUT/DELETE)
-  so the edit page can fetch its own data instead of relying on the list's in-memory
-  copy. The list page (`reservations/page.tsx`) shrank from ~1490 to ~590 lines —
-  "New Booking"/"Edit" are now plain links; every piece of form state, the grid effect,
-  and the allocation preview moved into `BookingForm`. Delete/Special-Request/Folio/
-  Notification stayed as dialogs on the list page — out of scope, still small and
-  contextual to a specific row.
-- **Layout**: two-column — the 4 numbered sections on the left, a sticky "Booking
-  Summary" sidebar on the right (stay recap, room/rate per segment, allocations,
-  taxes, grand total). This sidebar is the new home for both asks below.
-- **Allocation calculation breakdown** (`allocationStayBreakdown` in
-  `src/lib/allocations.ts`): walks the exact same rhythm/rate resolution as
-  `allocationAmountForNight`/`allocationStayTotal` night-by-night instead of collapsing
-  straight to a total, grouping consecutive nights that share a unit price into
-  segments (a mid-stay seasonal rate change produces two segments, not one wrong
-  average). Rendered per attached allocation as e.g. "1 adult × $10.00 = $10.00/night
-  × 2 nights (every night) = $20.00"; a rhythm-qualifying night with no rate configured
-  is called out separately ("N night(s) had no rate configured — not charged") instead
-  of silently vanishing into the total.
-- **Full tax breakdown**: the old footer only estimated a room+extras+allocations
-  total with "excl. taxes" — now backed by a genuine server-side dry-run,
-  `computeReservationQuote` (`src/lib/reservation-quote-server.ts`, exposed at
-  `POST /api/reservations/quote`), which projects the ENTIRE stay (not just tonight)
-  through the identical resolution chain Night Audit posts with: derived-plan
-  adjustment, locked Base-plan fallback, INCLUDE_IN_RATE carve-out before tax, each
-  charge code's own tax handling (`resolveChargeTax` — default Service Charge/GST
-  engine or a Custom Tax profile, per charge code), and flat Green Tax. Every
-  `TaxBreakdownLine` from every room/extra-occupancy/allocation charge is aggregated
-  by name across the whole stay, so the summary shows one "Service Charge (10%)" line
-  and one "GST (17%, compound)" line (or whatever a Custom Tax profile's own named
-  lines are) rather than one per charge instance — Green Tax is listed separately
-  since it never goes through the tax engine. Nothing is written; this is a pure read,
-  debounced off `assignments`/`adults`/`children`/`mealPlan`/`manualAllocationIds`.
-- 23 new tests (`allocationStayBreakdown`: single/multi-segment grouping, rhythm
-  gating, unpriced-night reporting; `computeReservationQuote`: Service Charge + GST
-  math against Night Audit's own formula, a Custom-Tax-profile allocation kept
-  separate from the room's default engine, Green Tax flat math, tax-inclusive price
-  back-out reconstructing the original gross, override-rate replacing the calendar
-  price, unpriced-night warning). Full suite 248/248, `tsc --noEmit` clean.
-  Live-verified: `/reservations/new` and `/reservations/[id]/edit` render as real
-  pages (no dialog in the DOM); picking BAR × Deluxe Beach Villa for Aug 1-3 showed
-  "Service Charge (10%) $18.64 / GST (17%, compound) $34.88 / Green Tax
-  (1×$12.00 × 2n) $24.00 / Grand Total $264.00"; switching to Bed & Breakfast showed
-  the Breakfast allocation's own line "1 adult × $10.00 = $10.00/night × 2 nights
-  (every night) = $20.00" while the grand total stayed $264.00 (the allocation's value
-  moved from the room line to its own line via the INCLUDE_IN_RATE carve-out, exactly
-  as designed) confirmed via direct API round-trip.
-
-## Reservations — date validation & occupancy override (2026-07-21)
-
-- **Departure cannot precede (or equal) arrival — hard validation, not just a rejection
-  after the fact.** Bug report was a screenshot showing Arrival 01 AUG 2026 next to
-  Departure 30 JUL 2026 with a "0 Nights" badge. Fixed with three layers in
-  `src/components/reservations/booking-form.tsx` and
-  `src/components/ui/date-picker.tsx`: (1) `DatePicker` gained a `minDate` prop that
-  hard-disables invalid days in the calendar itself via react-day-picker's
-  `disabled={{ before: minDate }}` — so an inverted range can't even be picked, not
-  merely flagged after selection; every "To"/Departure picker (top-level and per
-  split-stay segment) now passes `minDate = dayAfter(startDate)`. (2) Changing an
-  Arrival/segment-start date that would make the current end date invalid
-  auto-clears that end date rather than leaving a stale invalid value sitting in
-  state. (3) `handleSubmit` still guards
-  `form.assignments.some(a => a.endDate <= a.startDate)` as a final backstop. All
-  three layers live-verified together, including the "moving Arrival past an
-  already-set Departure auto-clears Departure" edge case.
-- **Occupancy: base vs. max are two different concerns, not one.** App owner's
-  verbatim ask: guests over a room type's *base* occupancy should incur an
-  extra-person charge (already handled by the existing quote engine — see the
-  Allocations entry above), but guests over *max* occupancy needed something new.
-  Asked the owner whether a different UX would be easier to understand than a
-  charge-based override; proceeded with the simplest option (a checkbox) rather than
-  waiting, since it was already the lowest-friction pattern available. Design:
-  max-occupancy is a hard physical/legal capacity limit — when `adults + children`
-  for a segment exceeds its room type's `maxOccupancy`, a destructive-styled banner
-  appears in Room & Rate naming the offending room type(s) and their max, with an "I
-  understand and want to book this anyway" checkbox
-  (`form.acknowledgeOverCapacity`). `handleSubmit` blocks (no toast side effects
-  beyond the validation notification) until it's checked; the ack auto-resets via a
-  `useEffect` keyed on total occupants + assigned room-type ids, so it can't be
-  checked once and silently carried through an unrelated later change. The Room &
-  Rate grid's column header also gained a small "Occ. {base}–{max}" hint per room
-  type so limits are visible before picking, and Section 1 (Stay) gained a one-line
-  explainer of the base-charge vs. max-override distinction. Live-verified
-  end-to-end: submission silently blocked with the checkbox unchecked, then a real
-  `POST /api/reservations → 201 Created` after checking it (test reservation
-  `VBR0000000006` deleted afterward). Full suite 248/248, `tsc --noEmit` clean.
-
-## Reservations — split-stay contiguity, scheduled room move, pax-capped accompanying guests, guest picker (2026-07-21)
-
-- **Split-stay segments must be back-to-back with no gaps.** App owner's rule,
-  verbatim: "segmentation always have to be consecutive dates i.e first segment from
-  1-2Aug then second segment must be from 2 onwards - there should not be any
-  breaks." Implemented as a hard *lock*, not just validation: in
-  `src/components/reservations/booking-form.tsx`, every segment after the first has
-  its "From" `DatePicker` rendered `disabled`, with a caption ("Locked to Segment
-  N's departure"). A reconciliation `useEffect` cascades forward whenever any
-  segment's dates change (edit/add/remove) — forcing `assignments[i].startDate =
-  assignments[i-1].endDate`, clearing a now-invalid `endDate` if needed, and
-  re-deriving the top-level `checkInDate`/`checkOutDate` from the chain's two
-  endpoints. `handleSubmit` keeps a matching backstop guard. Enforced server-side too
-  via the new `assignmentsAreContiguous()` helper
-  (`src/lib/reservation-assignments.ts`), called from both `POST /api/reservations`
-  and `PUT /api/reservations/[id]` — a client bypassing the UI still gets a 400.
-- **"Scheduled room move"**: when a split stay's segments assign different physical
-  rooms (owner: "if the room is different the reservation must be flagged with
-  having a 'scheduled room move'"), this is a *booking-time-planned* mid-stay room
-  change — distinct from the existing ad-hoc "Move Room" action
-  (`room-move-modal.tsx` / `[id]/room-move/route.ts`), which only ever acts "as of
-  today" and is unrelated to a reservation's own segment structure. No execution step
-  is needed for the scheduled case — the correct room is already baked into the
-  reservation's `RoomAssignment` rows from creation; this is purely a heads-up.
-  Design (chosen via `AskUserQuestion`, "badge + worklist" over badge-only or full
-  automation): added `Reservation.hasScheduledRoomMove` (migration
-  `20260721105555_add_reservation_scheduled_room_move`), computed at create/update
-  time via `detectScheduledRoomMove()` (same helper file, compares adjacent
-  segments' `roomId` after sorting by `startDate`) and stored so the Front Office
-  dashboard doesn't need to recompute it by joining every reservation's segments on
-  every load. Surfaced as: (1) a "Room Move" badge next to the status badge on the
-  Reservations list (`reservations/page.tsx`); (2) an in-form preview badge on the
-  affected segment card in the booking form (client-side mirror of the same
-  comparison, before save); (3) a new **"Room Moves Due Today"** tab on the Front
-  Office dashboard (`front-office/page.tsx`, sourced from
-  `/api/front-office/summary`) — for each in-house reservation with a segment
-  starting today, checks whether the immediately-preceding segment (same
-  reservation, `endDate === this startDate`) used a different room, and lists
-  guest/conf#/from-room/to-room/new-room-type. No "execute" action — informational
-  only, so staff can coordinate the physical move (luggage, keys, housekeeping).
-- **Accompanying guest cap = adults + children − 1.** Owner's ask: "cannot attach
-  accompanying guest more than defined no of pax." Clarified via `AskUserQuestion`
-  that "no of pax" means total occupants minus the primary guest's own slot (not
-  adults-only, not uncapped). `AccompanyingGuest` already existed
-  (`prisma/schema.prisma`) with no cap previously enforced anywhere. Enforced in the
-  booking form (hides the add-picker once the cap is hit, shows "X / Y pax" and a
-  "Max reached" explainer instead) and, as a hard stop, in both `POST
-  /api/reservations` and `PUT /api/reservations/[id]` (400 if
-  `accompanyingGuestIds.length` exceeds the cap) — a client bypassing the UI still
-  can't exceed it.
-- **Guest selection via search-and-quick-create modal, not the 50-row
-  `SearchableSelect`.** Owner's ask: "open a modal - user can search based on first
-  name, last name, email, address for existing profiles - if existing not there in
-  the same screen give option to quick create a profile and select them without
-  breaking the reservation creation flow." Built `GuestPickerModal`
-  (`src/components/reservations/guest-picker-modal.tsx`), reused for both Primary
-  Guest and Accompanying Guest (an open/close mode flag, not two components) —
-  debounced server-side search against `GET /api/profiles`, whose `search` `OR`
-  clause was extended to also match `ProfileCommunication.value` (email/phone) and
-  `ProfileAddress.fullAddress`, not just name fields. Quick-create is an inline
-  sub-form (First Name required — matches the Profile API's actual minimum; Last
-  Name/Email/Phone optional) that `POST`s `/api/profiles` and immediately selects the
-  new profile without navigating away. The Primary Guest's native-`required`-input
-  trick from the prior segment was dropped in favor of an explicit `handleSubmit`
-  guard (`if (!form.primaryGuestId) ...`) — simpler and avoids relying on
-  browser-native validation quirks.
-- All four changes live-verified: segment lock (Segment 2's "From" shown disabled
-  and captioned, locked to `05 AUG 2026`); guest picker (searched
-  "david.williams" by email → filtered to one match → selected → "Primary Guest:
-  David Williams"; quick-created "Quicktest Guest" → appeared via `GET
-  /api/profiles`, cap correctly prevented auto-attaching it as accompanying since
-  cap was 0); pax cap ("0 / 0 pax" + "Max reached" text with 1 adult, 0 children);
-  scheduled room move (`POST /api/reservations` with segments in Room 101 then 102
-  → `hasScheduledRoomMove: true` → "Room Move" badge rendered on the Reservations
-  list next to "RESERVED"). 9 new tests added
-  (`tests/business-rules/reservation-segments.test.ts`): pure-function contiguity/
-  room-move-detection cases, `POST` rejecting gapped segments, `POST` tagging
-  `hasScheduledRoomMove` true/false correctly, `POST` rejecting an over-cap
-  accompanying-guest list, and a `PUT` round-trip re-validating contiguity and
-  recomputing the flag. Full suite 257/257, `tsc --noEmit` clean. All test
-  reservations/profiles created during verification deleted afterward.
-
-## Osta platform-admin console (2026-07-21)
-
-Owner's ask, verbatim: Osta is "a top Enterprise that manages all the Enterprises and
-sees the properties registered under them," not a PMS itself. Three concrete
-requirements: (1) a tenant can create as many properties as they want, but each one
-"has to approve it from admin side" before use; (2) Osta manages "licenses (add-ons)
-that can be enabled and disabled for that particular enterprise"; (3) Osta needs its
-own completely different UI/UX, plus DB health and performance visibility. A lot of
-adjacent plumbing already existed and was reused rather than duplicated:
-`Enterprise.type` INTERNAL/STANDARD + `ctx.isInternal`, a full `SupportAccessGrant`
-request/approve/deny/revoke/enter workflow, and an `EnterpriseLicense`/
-`TierModuleAccess` scaffold that was previously unenforced ("fails open... scaffold
-only, not real enforcement" per its own old comment).
-
-Three architecture-defining choices were confirmed via `AskUserQuestion` before any
-code was written (recorded here since they're not obvious from reading the code):
-
-- **Property approval is a hard gate**, not just an audit trail. A newly-created
-  property is written `status: "PENDING"` (`POST /api/properties`) and is fully
-  locked out of real use — `assertPropertyAccess()` in `src/lib/scope.ts` now rejects
-  (403) any non-`ACTIVE` property, and since that one function is the chokepoint
-  called by ~70+ existing routes (reservations, rooms, rate plans, ...), this single
-  edit propagates the gate everywhere with no per-route changes. The property
-  switcher (`resolveCurrentPropertyId`, `GET /api/session/current-property`) also
-  filters to `status: "ACTIVE"` so a pending property never becomes the "current"
-  one. **Existing properties are unaffected** — `status` keeps its `@default("ACTIVE")`,
-  so the hard gate only ever applies going forward to new tenant-created properties;
-  only `POST /api/properties` was changed to start writing `PENDING` instead of
-  relying on the default. Osta support acting inside an approved `SupportAccessGrant`
-  is exempted from the gate (`!ctx.isActingAsSupport`), so troubleshooting a still-
-  pending property is possible without a separate carve-out mechanism.
-  Property gained `reviewedByUserId`/`reviewedAt`/`rejectionReason` fields directly
-  (not a `SupportAccessGrant`-style side table) — this is a 1:1 lifecycle state of the
-  row itself, read on the same hot path as `status`, so a join table would force a
-  second query everywhere `assertPropertyAccess` runs today. A rejected property CAN
-  be resubmitted by the tenant (`POST /api/properties/[id]/resubmit`, only legal from
-  `REJECTED`, clears the reviewed fields and flips back to `PENDING`) — rejection
-  isn't a dead end.
-- **Module licensing is a per-enterprise override**, not just tier-based. New
-  `EnterpriseModuleAccess` model (`{enterpriseId, module, enabled}` unique on the
-  pair) sits ABOVE the existing `TierModuleAccess` in the fallback chain: an
-  enterprise's own override row wins if present, else the tier default, else enabled
-  by default (same fail-open-as-last-resort behavior as before, now genuinely the
-  last resort instead of the only rule). `CONTROLS` and `ACTIVITY_LOG` are
-  hardcoded-exempt from this in `computeLicensedModules()` — a locked-out enterprise
-  still needs to reach Controls (to understand why) and its own audit trail; the
-  Licensing UI doesn't even expose toggles for those two modules. This is now REAL
-  enforcement, not a scaffold: `AuthContext` gained a `licensedModules: Set<Module>`
-  computed once per request inside `requireSession()` (same place the existing
-  `backfillMissingRolePermissions` precomputation already runs), and
-  `requirePermission()` — the one function nearly every route already calls, kept
-  fully synchronous, no call-site changes anywhere — denies immediately if the
-  module isn't in that set, before even checking the role's own permission. The old
-  `requireModuleLicensed()` (confirmed unused everywhere) was deleted outright rather
-  than kept alongside.
-- **A genuinely separate console, not more Controls tabs.** Previously "Osta admin"
-  meant logging in and seeing two extra `ostaOnly`-gated tabs (Licensing, Support
-  Access) bolted onto the exact same `/e/{slug}/dashboard/controls` page every
-  tenant uses. That's now a real, separate route tree at `/osta/...` (sibling to
-  `/e/`, not nested under it — Osta's own enterprise `slug` was always an incidental
-  schema leftover, never a real design decision) with its own layout
-  (`src/app/osta/layout.tsx`, no `PropertyProvider`/property-switcher since Osta has
-  no operational property of its own) and sidebar (`OstaSidebar` — a small static
-  nav, deliberately NOT module/permission-filtered like the tenant `AppSidebar`,
-  since these aren't tenant RBAC modules). Login now returns `isInternal` from
-  `POST /api/auth/login` and the client branches straight to `/osta` instead of
-  `/e/{slug}/dashboard`; a defensive server-side redirect was also added to the
-  tenant dashboard layout (`if (ctx.isInternal && !ctx.isActingAsSupport)
-  redirect("/osta")`) so a direct URL visit can't land an Osta user in the tenant
-  shell. `LicensingManager` and `SupportAccessManager` moved to dedicated
-  `/osta/licensing` and `/osta/support-access` pages; the tenant Controls page kept
-  its own (non-Osta) "Support Access" tab, since a tenant admin still needs to
-  approve/deny incoming requests from their side — only Osta's duplicate rendering
-  of it and the `ostaOnly` bolt-on (`buildSections`'s filter, the "Osta Internal"
-  mobile/desktop separators) were removed.
-- **Approve/reject actions are logged into both trails.** `logActivity()` gained an
-  optional `targetEnterpriseId` — an Osta admin's action lands in Osta's own
-  activity trail by default (`ctx.enterpriseId`), which the tenant would never see;
-  passing the tenant's enterprise id writes a second copy into their own trail too,
-  so "your property was approved/rejected, by whom, why" is visible to the tenant
-  admin, not just to Osta internally.
-- **DB Health is real instrumentation, not just static counts** (the owner explicitly
-  chose "deeper performance metrics" over a basic read-only dashboard, understanding
-  the tradeoff). `src/lib/db.ts`'s `PrismaClient` now emits `query`/`error`/`warn`
-  log events into a bounded in-memory ring buffer (`src/lib/db-metrics.ts`, last
-  ~500 query events, grouped by normalized query text) — deliberately NOT a
-  persisted table, to avoid write-amplification from logging every single query.
-  This is called out explicitly in the `/osta/db-health` page's own UI copy: the
-  metrics reflect *this server instance only*, since its last restart — on a
-  multi-instance/serverless deployment it's not a global aggregate, and a real
-  historical-trend version (a persisted snapshot table + cron flush) is a deliberate
-  future increment, not attempted here. **Superseded 2026-11-08** by per-minute rollups — see
-  "Osta Monitoring" below. Baseline stats (row counts for a fixed list
-  of the heaviest tables, migration-status comparison of `prisma/migrations/` on
-  disk against the `_prisma_migrations` table via `$queryRaw` — no shelling out to
-  the CLI — and DB file size when `DATABASE_URL` is a local `file:` path, `null`
-  otherwise since prod may be a remote libSQL/Turso URL) round out the dashboard.
-- Live-verified via 10 new tests across two files
-  (`tests/tenant-isolation/property-approval.test.ts`: PENDING-on-create, cross-
-  enterprise approval queue gating, approve/reject/resubmit lifecycle, dual
-  activity-log writes; `tests/business-rules/module-licensing.test.ts`: override
-  GET/PATCH, the `enabled: null` reset-to-tier-default path, Osta-only gating) plus
-  the Phase A additions to `tests/scope.test.ts` (a `PENDING` property fails
-  `assertPropertyAccess`; an `EnterpriseModuleAccess` override wins over the tier
-  default in both directions; `CONTROLS`/`ACTIVITY_LOG` stay accessible even when
-  explicitly disabled at either level). Full suite 271/271, `tsc --noEmit` clean
-  throughout every phase. **Live browser verification could not be completed this
-  session** — the sandboxed Browser pane could not reach `localhost:3000` (external
-  sites loaded fine, and a direct `curl` from the same environment confirmed the dev
-  server itself was healthy and serving every route correctly), an environment
-  limitation distinct from the code itself. Recommend a manual UI pass (create a
-  property as a tenant, approve/reject/resubmit it as Osta, toggle a module override
-  and confirm the sidebar item disappears, check `/osta/db-health` renders real
-  numbers) before considering this fully done.
-
-## Alpha v4 owner decisions (2026-07-21)
-
-The five open decisions listed at the bottom of [ALPHA_V4_PLAN.md](DEV_LOG.md)
-were put to the app owner directly and answered as follows. These govern Phases 1-3
-of that plan — do not re-ask or reverse without a fresh instruction.
-
-- **Deposits are a real pre-arrival concept, not just a check-in payment step**
-  (owner's verbatim intent): *"There is Deposit option and also payment collection
-  once the guest is checked in (basically payment can be applied in any time of the
-  stay - can be checked out if the balance is zero whether settling to City Ledger
-  or Taking actual payment). Deposit collected will show on manage reservation and
-  will automatically transfer to the billing window upon check in."* Implications:
-  a deposit can be collected while the reservation is still `RESERVED` (which means
-  the folio must exist — or be creatable — before check-in), the deposit shows on
-  the manage-reservation surface, and at check-in it appears on the folio ("billing
-  window") automatically. Payments remain acceptable at any point during the stay;
-  the existing checkout rule stands (zero balance required, City Ledger folios
-  exempt via the debtor pipeline).
-- **INSPECTED gates arrivals via a per-property toggle**: new property setting;
-  when enabled, checking a guest into a room that isn't `INSPECTED` warns/blocks.
-  INSPECTED stops being cosmetic.
-- **Out-of-Order is modelled as fields on `Room`** (nullable `oooReason` +
-  `expectedReturnDate`), not a separate dated `RoomStatusBlock` history model.
-  Maintenance tickets can set a room OOO at creation and return it to DIRTY on
-  resolve. No history of past OOO periods in v1.
-- **The Availability Matrix is the one maintained tape chart** (the drag-drop
-  grid, `tape-chart-grid.tsx`). The read-only calendar view
-  (`reservations/calendar/page.tsx`) is to be retired once the matrix gains the
-  Phase 2 additions (click-empty-cell to book, bar context actions).
-- **Vacant Rooms KPI semantics confirmed as shipped in Phase 0**: headline number
-  = all unoccupied sellable rooms (excluding OOO/OOS), with a "clean & ready"
-  (CLEAN/INSPECTED) subcount underneath.
-
-## Business date + folio rework (2026-07-22)
-
-Reservation-detail review feedback, implemented across four commits (business
-date → folio posting rules → routing → proforma). Owner decisions captured:
-
-- **Business date is per-property** (`Property.businessDate`), the operational
-  "today" for check-in/out gating, arrivals/departures, and every posting/revenue
-  date. `EnterpriseSettings.systemDate` stays the real server/wall-clock date.
-  Business date rolls forward ONLY when Night Audit (EOD) runs — manual for now;
-  a future Auto-EOD will roll it off the server date. Because EOD rolls the date,
-  running it twice advances two days (each run = one business day); the
-  one-COMPLETED-run-per-business-date guard still prevents same-date double-posts.
-  All domain date-only comparisons are UTC (reservation dates + business date are
-  UTC midnights) — `src/lib/allocations.ts` was switched from local to UTC to match.
-- **Checkout is due-or-overdue** (business date ≥ checkout date); leaving earlier
-  is an explicit **Early Check-Out** (`{ early: true }`, server-enforced via
-  `earlyCheckoutRequired`). The reservation detail shows Check Out vs Early
-  Check-Out from the property business date.
-- **Folio charge posting is gated to checked-in** guests. Deposits (payments)
-  pre-arrival are unaffected; a deliberate **cancellation/no-show fee** is the one
-  exception (`preArrivalFee: true`) — the folio panel exposes the charge form as a
-  labelled pre-arrival fee when the guest isn't in-house. Walk-in/outlet folios
-  are always billable.
-- **Negative amounts** are allowed on charges and payments (adjustments/refunds);
-  only zero/non-numeric is rejected.
-- **Folio payee** can be the attached travel agent / corporate profile (not just
-  guest + sharers).
-- **Line Description auto-fills from the charge code**; a new
-  `FolioLineItem.reference` free-text field prints in the invoice Reference column
-  (was the charge code).
-- **Routing Instructions** (`FolioRoutingRule`): standing per-reservation rules —
-  charge code(s) → a target folio window or another in-house room's folio. Applied
-  by Night Audit and manual posting; creating a rule also moves already-posted
-  matching charges (apply-now). Manual "Move to Folio" now allows any open folio at
-  the same property (cross-reservation/room), not just the same reservation.
-- **Proforma = full projected cost of stay** (reuses `computeReservationQuote`),
-  regardless of what's posted; the Tax Invoice remains actually-posted charges.
-
-## Deposit / Cancellation / No-Show fee rules + EOD guard (2026-07-22)
-
-App owner course-corrected the pre-arrival/cancellation/no-show fee handling: fees
-are collected through the **Deposit module (typed), never billing**, driven by
-per-property Rules. Plus a 12-hour EOD recency guard. Answers given in-session:
-
-- **Fees are Deposit-module money, not billing charges.** The `preArrivalFee`
-  billing bypass added earlier was removed — folio charges are strictly
-  check-in-gated again. The Deposit dialog/route gained a `purpose`
-  (`Payment.depositPurpose`): DEPOSIT | PRE_ARRIVAL_FEE | CANCELLATION_FEE |
-  NO_SHOW_FEE, so collected money is identifiable.
-- **Rules are per-property** (`PropertyFeeRule`, one row per (property, ruleType)
-  DEPOSIT/CANCELLATION/NO_SHOW), auto-computed from a `basis`: FLAT | PERCENT |
-  FIRST_NIGHT | FULL_STAY. PERCENT/FIRST_NIGHT/FULL_STAY reuse
-  `computeReservationQuote` (the same projection the Proforma and Night Audit use).
-  CANCELLATION/NO_SHOW rules carry a `chargeCodeId` (the fee posts against it);
-  DEPOSIT needs none. Configured in Controls > Finance > "Deposit & Fee Rules".
-- **Cancellation: cancel proceeds; retain the held deposit up to the fee.** When an
-  active CANCELLATION rule applies, cancelling posts the fee (a rule-driven system
-  posting, not manual billing) and proceeds regardless of balance; the response
-  returns `{ fee, depositHeld, refundDue, shortfall }` so front office refunds the
-  remainder or collects the shortfall. With no active rule, the pre-existing
-  zero-balance cancel guard still applies. A "Cancel" action was added to the
-  reservation detail page (there was none before — only hard Delete).
-- **No-show at Night Audit: retain from a held deposit, else flag as owed.** When
-  an active NO_SHOW rule applies, the fee posts to the no-show's open folio if one
-  exists (deposit was held); folio-less no-shows are returned in
-  `noShowFeesOwed` for front office to collect. Nothing is auto-refunded.
-- **EOD 12-hour recency guard**: running End-of-Day again within 12h of the last
-  successful run returns 409 `{ requiresConfirmation }`; proceeding needs
-  `{ confirmed, reason }` and logs a NIGHT_AUDIT/EOD_OVERRIDE activity row. Separate
-  from the same-business-date idempotency guard.
-
-## End-of-Day redesign — resumable step wizard (2026-07-22)
-
-App owner redesigned EOD from a single atomic run into a step-by-step, resumable
-wizard with an OPEN/CLOSED business date. Answers given in-session: resumable step
-wizard; departures must be resolved (force check-out or extend) before posting;
-reports snapshotted per date; force-logout is PROPERTY-scoped only.
-
-- **EodRun model** — one per (property, businessDate), status IN_PROGRESS/COMPLETED,
-  with a completion timestamp per step (departures/cashier/post/reports/finalize).
-  The business date is OPEN until its run reaches COMPLETED; a partial run is resumed
-  from the first null-timestamp step. Engine + step metadata in `src/lib/eod.ts`.
-- **Steps** (`POST /api/eod/step`, status via `GET /api/eod/status`):
-  1. **Departures** — blocks while any in-house guest is due out (checkout ≤ business
-     date); each is force-checked-out (existing check-out route) or extended
-     (`POST /api/eod/extend-stay`).
-  2. **Cashier** — force-closes every open shift for the property's PROPERTY-scoped
-     staff, recording the drop as the expected cash (zero discrepancy).
-  3. **Post** — delegates to the existing Night Audit run route (its
-     same-business-date idempotency IS the double-post guard); posts room/tax/
-     packages/Green Tax, marks no-shows, rolls the business date. A 409-already-run
-     is treated as done. The EodRun.postAt guard prevents re-posting on resume.
-  4. **Registration** — assigns each arriving guest a Green Tax registration number
-     (see the Registration No entry below).
-  5. **Reports** — snapshots the six reports for the closed date (see the EOD Reports
-     entry below).
-  6. **Finalize** — sets `Property.eodSessionsInvalidAt` (force-logout watermark) and
-     marks the run COMPLETED.
-- **Force-logout** — stateless JWTs, so `requireSession` (scope.ts) rejects a
-  PROPERTY-scoped user whose token `iat` predates their property's
-  eodSessionsInvalidAt, forcing a re-login. Enterprise-scoped users are unaffected.
-- **UI** — the Night Audit page is now the EOD wizard: business-date OPEN/CLOSED
-  badge, an animated vertical stepper, per-step panels (departures resolution list,
-  cashier close, post, reports, finalize), and resume.
-### EOD Reports — the six per-date snapshots (2026-07-22)
-
-The reports step freezes six reports as immutable `EodReport` JSON blobs, one row per
-(property, businessDate, reportType). Generation lib: `src/lib/eod-reports.ts`
-(`generateEodReports` computes, `snapshotEodReports` persists). Read via
-`GET /api/eod/reports` (no `date` → the list of snapshotted dates; `&date=YYYY-MM-DD`
-→ the six parsed reports). Archive viewer + print at
-`financials/night-audit/reports`.
-
-- **The six:** Trial Balance (day's charge debits by category + payment credits by
-  method + closing Guest/AR/Deposit ledger positions), Guest Ledger (open in-house
-  non-debtor folio balances), AR Ledger (finalized debtor invoices with a balance),
-  Deposit Ledger (money held on RESERVED/CONFIRMED reservations), Cashier Summary
-  (the day's collections grouped by cashier then method), Manager Flash (occupancy %,
-  ADR, RevPAR, revenue by category, arrivals/departures/no-shows/in-house).
-- **Date semantics:** FLOW figures (postings, collections) — charges filter on
-  `FolioLineItem.date ∈ [D, D+1)` (business-date stamped, accurate); payments have no
-  business date so they filter on `createdAt ∈ [D, D+1)` (accurate for daily-EOD
-  cadence — noted in the lib header if that assumption ever needs revisiting).
-  POSITION figures (ledger balances) are the live folio state at snapshot time, which
-  is exactly "as of close" of D. Occupancy excludes pseudo/day-use room types and
-  counts the night D (checkInDate ≤ D < checkOutDate, IN_HOUSE).
-- **Idempotency:** `snapshotEodReports` upserts, so a manual regenerate overwrites
-  rather than duplicating; the reports step's own guard normally prevents re-running.
-
-### Registration No — Green Tax guest numbering (2026-07-22)
-
-New EOD step (`assignRegistrationNumbers`, `src/lib/guest-registration.ts`) that gives
-every arriving guest — primary and accompanying — a sequential Green Tax registration
-number for the government report. Order: check-in date then check-in time
-(`Reservation.checkedInAt`, set at check-in). Pseudo/day-use room types are excluded.
-The `GUEST_REG_NO` PropertySequence is year-scoped (`resetYear`) and resets on the
-first assignment of each new calendar year. Idempotent (an already-registered guest is
-skipped). Written as `GuestRegistration` rows (unique per property+year+number and per
-reservation+profile). Distinct from the existing `REGISTRATION_NO` sequence, which is
-the reservation confirmation number ("Reservation No" in the Sequence Manager).
-
-### Reporting module — engine + Opera-style catalog (2026-07-22)
-
-Replaced the old two-report Daily Reports page with a registry-driven reporting
-engine. A report is one `ReportDef` in `src/lib/reports/` (`{ key, module, name,
-params, run() → ReportResult }`); the engine derives the parameter form, runs it
-per current property/business date, and renders to **PDF / Excel (.xlsx, via
-exceljs) / CSV** with property+enterprise branding. Endpoints: `/api/reports/
-catalog` (UI list), `/api/reports/options` (dynamic param option lists),
-`/api/reports/generate` (POST → file). UI: `dashboard/reports`.
-
-- **PDF renderer** (`render/pdf.ts`) rewritten — fixes the old pagination bug
-  (drew overflow rows onto the wrong page), repeats headers per page, right-aligns
-  numerics, supports grouping/subtotals/totals + landscape, and **sanitizes text to
-  WinAnsi** (standard fonts can't encode ★, smart quotes, non-Latin scripts).
-- **Phase 1 shipped:** the engine + Front Desk reports — Arrival, Departure (with
-  balances), In-House, Guest Event Calendar (birthdays/anniversaries over a stay
-  window), Outlet Calendar. Remaining phases (by module): Reservations, Revenue,
-  Financial, Housekeeping + extras (VIP in-house, room discrepancy, EOD ledgers as
-  ad-hoc, police/immigration list).
-- **Locked decisions for later phases** (app owner):
-  1. **Tax split → store per-tax at posting.** When building the Financial tax
-     reports, add a green-tax / GST / service-charge breakdown to `FolioLineItem`
-     (+ tax-calc), populated at posting. Applies to charges posted after the change.
-  2. **Add small schema fields when reached:** `Reservation.cancelledAt` +
-     `cancellationReason` + `noShowAt` (Cancellations/No-Show report);
-     `HousekeepingTask.startedAt` (Attendant time-on-task report).
-  3. **Financial ledger/flash reports → snapshot if the business date is closed
-     (reuse `EodReport`), else compute live.**
-- **Known data gaps** (from the feasibility survey): taxes currently lumped in
-  `FolioLineItem.taxAmount`; no cancellation timestamp/reason; no housekeeping
-  start-time/duration; `OutletAppointment` has no assigned-staff field.
-
-### Reporting module — Phases 2–5 complete (2026-07-22)
-
-All five report modules are now live (16 reports): Front Desk (5), Reservations
-(5), Revenue (3 — History & Forecast, Nationality Statistics, Profile Production),
-Financial (6 — Transaction Journal, Cashier Summary, Outlet Sales, Folio Tax,
-Green Tax by registration no, GST), Housekeeping (2 — Special Requests, Attendant).
-
-- **Tax-split decision, revised.** The earlier "store per-tax at posting" decision
-  was based on the assumption GST and Green Tax were lumped in `taxAmount`. On
-  inspecting `tax-calc.ts` + the Night Audit posting, that's not the case:
-  `serviceChargeAmount` is its own column, `taxAmount` is GST (default engine),
-  and Green Tax is its own `GTX`-coded line (`taxAmount` 0). The split already
-  exists in stored data, so the Folio Tax / GST / Green Tax reports compute from
-  existing fields — **no schema/posting change was needed.** Caveat: a Custom Tax
-  profile lumps its own lines into `taxAmount`, so for non-default charge codes the
-  "GST" column is really "profile tax". Fine for the standard Maldives setup.
-- **HousekeepingTask.startedAt added** (migration 20260722220000), set on the first
-  IN_PROGRESS transition, powering the Attendant report's time-on-task.
-
-## Excursions Booking (2026-07-22)
-
-Full design in [EXCURSIONS_PLAN.md](DEV_LOG.md) (all six phases now done); the
-owner decisions behind it are recorded there too. Logged here only because they're the
-kind of business rule someone would otherwise have to rediscover by reading routes:
-
-- **Sold as a per-property add-on, not per-enterprise** — the first feature in the app
-  gated this way. Defaults **off** for every property; only Osta toggles it
-  (`/osta/properties/[id]`), never the enterprise's own admin. This introduced a new
-  generic mechanism, `PropertyModuleAccess`, reusable by any future add-on.
-- **Catalog management (`ExcursionType`/`Rate`/`Schedule`) is gated by `CONTROLS`, not
-  `EXCURSIONS`** — corrected mid-build from an earlier draft that conflated the two.
-  Matches every other catalog in the app (`RatePlan`, `Allocation`, `Outlet`): editing
-  the catalog is a Controls-level action; `EXCURSIONS` itself only ever means
-  day-to-day bookings.
-- **Cancelling a booking's *charge* requires `CASHIERING`, not `EXCURSIONS`** — found by
-  reading the existing void-charge route rather than assumed. A booking can always be
-  cancelled by anyone with `EXCURSIONS update`/`delete` (per the cutoff rule below); if
-  the actor also has `CASHIERING update` the charge is voided, otherwise it's left in
-  place with a note for cashiering staff. Two independent gates, not one.
-- **Cutoff window is a per-guest rule, whole-departure cancellation is not** — the
-  `cutoffHours` / manager-override split only applies to cancelling one booking.
-  Cancelling an entire departure (e.g. weather) is manager-only (`EXCURSIONS delete`)
-  regardless of how close the departure is — it's an operator decision affecting other
-  people's bookings without their consent, not a timing rule.
-- **A closed folio can never be voided or paid into** (confirmed in both the void and
-  payments routes) — so a paid-and-closed walk-in booking's cancellation can cancel the
-  booking record but explicitly cannot touch the money; refunding it is a manual,
-  outside-the-system action. Same rule blocks "moving" that booking to a replacement
-  departure (would double-charge the guest), surfaced as an explicit "needs manual
-  handling" item rather than silently skipped.
-- **Infant is a real priced tier for Excursions** (adult/child/infant), unlike
-  Allocations where infants are always free — a deliberate difference between the two
-  systems, not an oversight.
-
-## Billing module — owner rules (2026-07-24)
-
-Requested as a full billing build; being delivered as reviewable increments. Owner's
-verbal rules (capture verbatim intent — several have edge cases):
-
-- **Billing lifecycle:** charging/billing opens only **after check-in** and is frozen
-  **after check-out**. Corrections after checkout are done via **reverse check-out** (and
-  **reverse check-in**), not by editing closed folios. (Post-after-checkin + freeze already
-  enforced today; reverse routes are the new part.)
-- **Interim Bill** = read-only "information invoice" of **currently-posted** charges +
-  payments, generated mid-stay. No posting, no ledger change (distinct from Proforma,
-  which is the full *projected* estimate).
-- **Advance Bill** = guest wants to **settle everything before checkout** → it **POSTS**
-  the remaining charges in one go so they can pay upfront. Rules:
-  - User chooses **how many nights** to advance-post, **max = remaining nights**.
-  - If night audit hasn't run yet on arrival day, it can post Rate + Transport + Extra
-    Allocations for the chosen nights **on one date**.
-  - If 2 of 4 nights already passed, advance bill offers only the **remaining** nights.
-  - **Early Departure:** advance bill may charge the full amount, OR skip charging and do
-    an early departure — **if early departure is done, the check-out date auto-changes to
-    that date.**
-  - **Revenue recognition = the date a line is actually posted on** (always). Critical for
-    accurate revenue/ADR. So advance-posted lines book to the settlement date, not spread.
-- **Reverse check-out:** **always allowed**. But:
-  - **Direct-bill** folios can be reversed **only on the same date as the check-out date**.
-  - **Guest payments** may be reversed on other dates too — but **never delete a
-    transaction** (reversals/negatives only; financial history is preserved).
-  - Reversal must undo: status → IN_HOUSE, reopen folios, revert room + housekeeping,
-    reverse the debtor transfer and the auto-posted TA commission (as reversing entries,
-    not deletions).
-- **Reverse check-in:** undo IN_HOUSE → RESERVED (guarded so it can't strand posted money).
-
-## Reservation lifecycle states + fee-rule selection (2026-07-24)
-
-Owner specified the full front-desk status model and corrected the fee-rule model.
-
-- **Derived front-desk states.** The DB still stores only RESERVED / IN_HOUSE /
-  CHECKED_OUT / NO_SHOW / CANCELLED. **Due In** and **Due Out** are DERIVED from the stay
-  dates vs the property business date (`src/lib/reservation-state.ts`):
-  - *Reserved* — arrival in the future → **Cancel only**.
-  - *Due In* — arrival = business date → **Check-in enabled**.
-  - *In-House* — staying → **Early departure enabled**.
-  - *Due Out* — departure = business date → **Check-out enabled**.
-- **Check-in is strictly gated to the arrival day** (arrival = business date). Enforced in
-  the reservation detail page and the reservations list (front-office board was already
-  date-scoped to today's arrivals). A past-arrival that never checked in is Night Audit's
-  No-Show, not a check-in.
-- **Reinstate is date-bounded** (`status/route.ts`): **Cancelled → Reserved** only while
-  arrival is still in the future; **No-Show → Reserved** only while within the stay period
-  (business date ≤ departure). ⚠️ OPEN INTERACTION: a reinstated No-Show with a past
-  arrival is "Reserved" but not "Due In", so it can't be checked in under the strict gate —
-  flagged to the owner (do we auto-move its arrival to today on reinstate?). Not yet decided.
-- **No-show → billing: DONE (2026-07-24).** Every no-show's charge is **always posted to a
-  folio** (Night Audit creates one if the reservation has none) so it carries into billing —
-  superseding the earlier "folio-less no-shows are only flagged owed" (2026-07-22). Amount
-  comes from the reservation's selected No-Show rule (FIRST_NIGHT basis = the room rate).
-  Deposit-less charges are still surfaced in `noShowFeesOwed`/`...Warning` for collection.
-- **Fee rules: MULTIPLE per type, selected per reservation — DONE (2026-07-24, supersedes
-  the 2026-07-22 "one rule per (property, ruleType)").** A property defines **several** named
-  rules per type (Deposit / Cancellation / No-Show); a reservation **picks one of each** and
-  the amount is computed from the selected rule at event time. Delivered:
-  - `PropertyFeeRule` gained `name`, dropped the per-type unique (now `@@index`).
-  - `Reservation.depositFeeRuleId / cancellationFeeRuleId / noShowFeeRuleId` (plain id refs;
-    a deleted/absent rule = no fee; DELETE detaches referencing reservations).
-  - Fee Rules API is full CRUD (`/api/settings/fee-rules` GET/POST/PUT/DELETE); Controls card
-    lists named rules per type; booking form has a "Fee Policies" 3-picker block.
-  - Posting resolves the reservation's selected rule via `getFeeRuleById` (replaced
-    `getActiveFeeRule`): cancellation in `status/route.ts`, no-show in `night-audit/run`.
-  - Selection is optional (default "none" = no fee); an explicit selection is honored even if
-    the rule is later marked inactive (inactive only hides it from NEW pickers).
-
-## Billing increments #2 delivered (2026-07-24)
-
-- **Interim Bill — DONE.** `type=interim` on the folio invoice-data route + print page: the
-  actually-posted charges/payments so far, mid-stay, labelled "Interim Bill", NOT numbered
-  and NO ledger change (distinct from the Proforma's full projection). Folio-panel button.
-- **Advance Bill — DONE.** Posts N upcoming nights upfront (`api/reservations/[id]/
-  advance-bill`), N chosen by front desk ≤ remaining un-billed nights. Charges = Rate +
-  Extra Occupancy + Allocations + Green Tax + any uncharged Transport, computed by
-  `computeReservationQuote` over assignments **clipped to the night window**, posted as folio
-  lines **dated today** (revenue recognized on the settlement date, per owner rule — not
-  spread). Key safeguard: `Reservation.advanceBilledThrough` (last billed night); **Night
-  Audit skips room/allocation/green-tax posting for any night ≤ it** (the one place that
-  would otherwise double-charge). Transport is double-post-safe via `chargedLineItemId`.
-- **Early departure auto-moves the checkout date.** An early check-out now sets
-  `checkOutDate` to the business date (the real departure), so stay length reflects reality
-  and no future night stays billable — owner rule. (An early departure that should charge the
-  full stay is done by generating an Advance Bill first, then checking out.)
-
-## Checkout settlement rules — owner clarification (2026-07-24)
-
-Owner reframed "force-settle": there is NO write-off / proceed-with-balance override. A
-guest can NEVER check out with an open balance — that's the whole point.
-
-- **City Ledger → must have an AR account.** A City-Ledger folio transfers to the profile's
-  Debtor (AR) account at checkout; if the travel agent / company profile is not an AR account
-  (`isCreditAccount`), checkout is **BLOCKED** (error carries `cityLedgerNoAccount: true`).
-  DONE — replaced the old silent fallback-to-guest-payable in check-out/route.ts. Fix by
-  creating the AR account or changing the folio's settlement method.
-- **FIT / guest-settled → settle one way or another.** The zero-balance checkout guard stays.
-  If the guest won't pay, staff settle the balance to a **Service Recovery account** — a
-  payment method the property creates/manages (Controls > Finance > Payment Methods) and posts
-  the balance against, zeroing the folio. No new mechanism: it's the existing payment flow,
-  and the checkout block message now advises it. Tested in commission.test.ts.
-- **Checkout settlement document = the Tax Invoice.** The existing numbered Tax Invoice (final
-  posted charges + payments + zero balance) is the settlement document printed at checkout; no
-  separate doc type was added. A distinct "Settlement Receipt" would be a quick add (mirroring
-  the Interim bill) if the owner wants one — flag before building.
-
-## Check-in procedure (wizard) + Registration Card stationary (2026-07-24)
-
-Owner requested a guided check-in procedure and a printable registration card.
-
-- **Check-in is now a wizard** (`src/components/front-office/check-in-wizard.tsx`), opened
-  from every check-in entry point (reservation detail, reservations list via `?checkin=1`,
-  front-office board). Steps:
-  1. **Room** — a room must be assigned to proceed (REQUIRED; mirrors the server readiness
-     gates: OOO/OOS blocked, DIRTY warns). Assigns the arrival (earliest) segment.
-  2. **Identification** — per guest, one by one (lead + each accompanying). Shows existing
-     DOB / Nationality / ID on file for a returning guest to CONFIRM; flags an **expired** ID;
-     inline quick-entry (DOB + Nationality via `PATCH /api/profiles/[upid]`; ID docs via the
-     reused `IdentificationManager`). **Not enforced** — a warning, skippable.
-  3. **Registration Card** — per guest: print + a "printed/signed collected" checkbox. **Not
-     blocking** (the signature is physical/off-system). Shown only when the stationary is
-     enabled. Skipped entirely if `registrationCardEnabled` is off.
-  4. **Confirm** — summary (+ incomplete-ID / expired-ID warnings) + optional payment →
-     the existing `POST check-in` (+ reassign if the room changed, + payment via the returned
-     folioId). The old single-screen `CheckInDialog` was removed.
-- **Registration Card stationary** — themed like the Confirmation Letter (shared print shell),
-  one card per guest (`?guest=<upid>`), system pre-fills known fields and leaves the rest as
-  blank writable lines, with a Terms block + Guest/Front-Office signatures. Configurable in
-  Controls > Stationaries (new tab): enable toggle + welcome message + Terms, stored on
-  `EnterpriseSettings` (`registrationCard*`).
-- Added a partial `PATCH /api/profiles/[upid]` (DOB/Nationality only) since PUT is a
-  full-scalar replace; `IdentificationManager` gained an optional `onChange` callback.
-
-## Point of Sale → "Fast Post" rework (2026-07-25)
-
-Owner renamed POS to **Fast Post** and reshaped it to a pure posting terminal.
-
-- **Rename is label-only.** `MODULE_LABELS.POS`, the sidebar title, and the page header now
-  say "Fast Post". The permission enum key `"POS"` and the route `/dashboard/pos` are kept
-  (they're stored in role/module-access rows) to avoid a data migration.
-- **Appointments removed entirely.** Dropped the `OutletAppointment` model + `Outlet.
-  appointmentCapPerSlot` (migration), the `/api/outlets/[id]/appointments/*` routes, the
-  Appointments tab + `outlet-appointments-panel`, the Outlets-manager cap field, and the
-  "Outlet Calendar" report. **Spa appointments (`SpaAppointment`) are a separate system —
-  untouched.**
-- **Both flows kept**: post an outlet charge to an in-house guest's room, OR make a walk-in
-  bill. Only Appointments was stripped.
-- **Walk-in bill is now a modal** (was a right-side Sheet): **Tax Invoice / Void Bill / Take
-  Payment / Close** — no Proforma. **Void Bill** voids the whole bill via
-  `POST /api/folios/[id]/void-bill` (reason required; flags every line void, never deletes).
-- **History tab**: closed walk-in bills for the property, filterable by date
-  (`GET /api/folios/walk-in`). A bill can be **reopened for adjustments only while the
-  property business date still equals its close date** — enforced by a new
-  `Folio.closedBusinessDate` (stamped on close, gated on reopen in `PATCH /api/folios/[id]`).
-
-## Property Availability page + Stop Sale (2026-07-26)
-
-App owner asked for a new **Property Availability** page: a pivot of Date × Room Type
-showing available rooms by default, expandable to Arrivals / Occupancy / Departures /
-Adults / Children / Infants at both House and room-type level, themed like the tape
-chart. Second function: **Stop Sale** restrictions (default Open, or Closed) at property
-or room-type level per date. Clarifying answers given before building:
-
-- **Stop Sale enforcement = HARD block** (app owner's explicit choice over store-and-
-  display-only). A Closed date/room-type blocks new reservations in `POST` and `PUT
-  /api/reservations` (409). Unlike the *soft, acknowledgeable* overbooking guard
-  (`findTypeAvailabilityConflicts`), there is **no override** — "cannot sell on those
-  dates" is literal. On edit, only nights the reservation **newly** sells are blocked; a
-  segment it already held on a since-closed date is exempt (`findStopSaleConflicts`'s
-  `existingSegments`), mirroring the inactive-room-type "only block on change" rule.
-- **Restriction types = Open / Closed only** (app owner's choice). No CTA/CTD/min-stay in
-  v1 — deferred; the model can grow later.
-- **Placement = new `AVAILABILITY` RBAC module + sidebar page** (app owner's choice over
-  reusing `TAPE_CHART`). New sidebar item under Operations, right after Tape Chart.
-  Admin/Manager FULL; Front Desk `EDIT_NO_DELETE`; Reservations FULL. The grid is gated on
-  `AVAILABILITY:view`; **setting Open/Closed is gated on `AVAILABILITY:update`** (a single
-  bit governs both close via POST and open via DELETE — Front Desk's canUpdate covers it).
-  New modules default to licensed (scope.ts's `?? true`) and self-heal onto existing roles
-  on next request, so no migration/backfill step was needed.
-- **Data model — `AvailabilityRestriction` (presence = Closed)**: a row means the date is
-  CLOSED; **absence = Open (the default), never stored** — "set to Open" deletes the row.
-  `roomTypeId null` = a property-wide closure that date (blocks every type); set = one
-  type. Dates are UTC midnights (PriceCalendar/Reservation convention). SQLite treats NULL
-  as distinct in the `@@unique([propertyId, roomTypeId, date])` index, so property-level
-  duplicates aren't DB-prevented — the API's delete-then-create (close) / delete-all
-  (open) keeps it idempotent (a duplicate "closed" row is harmless anyway).
-- **Group-block holds count only when DEFINITE** (app owner, 2026-07-26): on the
-  availability grid, a group block's outstanding held rooms reduce availability and appear
-  in a new **"Group Blocks"** expandable detail row **only if the block is `DEFINITE`** — a
-  `TENTATIVE` block does not count here. Implemented via a new `blockStatusIn` param on
-  `outstandingBlockHolds` (grid passes `["DEFINITE"]`); the booking overbook guard is
-  unchanged and still treats a tentative hold as a soft block (its default counts
-  TENTATIVE + DEFINITE). "Group Blocks" shows *outstanding* holds (quantity − picked-up), so
-  it never double-counts rooms already materialized into reservations (those show under
-  Occupancy). Empty detail cells render `0`, not blank (app owner ask).
-- **Availability math reuses `src/lib/availability.ts`**: per night, `available = capacity
-  − inventory-holding assignments − outstanding DEFINITE group-block holds` (oversell shows
-  negative in red). Occupancy/arrivals/departures/pax are derived per-night from the same overlapping
-  assignments in `GET /api/availability`; House = column-wise sum across types. Each grid
-  column is the **night** of that date, so a closure on a stay's checkout date never blocks
-  it (checkout day isn't a night).
-- **Verification**: `tsc` clean; new `tests/business-rules/availability-restrictions.test.ts`
-  (4 tests: type-level block + reopen, property-wide block, checkout-date-only doesn't
-  block, grid metrics + closed flags) passing; scope/licensing/booking suites still green.
-  Live-verified the page compiles/renders and the nav item + `AVAILABILITY` permission
-  resolve; full visual-with-data was limited because the in-session user's enterprise has
-  no properties (added a graceful "Select a property" empty state).
-
-## Stationery redesign — branding moves to Property, per-document tabs (2026-07-27)
-
-App owner request (with a PDF template, "Stationery redesign project.pdf"): (1) drop the
-Stationaries **Branding** tab — branding is read from the property's own General control;
-(2) add a **font** picker to General > Appearance so all stationaries inherit it; (3) the
-tabs should be **Invoices** (Proforma + Tax, differing only by header line), **Receipts**,
-**Confirmation Letter**, **Registration Card**, **Account Statement** (template TBD); (4)
-recreate every document to match the template; (5) the live preview must follow the
-selected tab (previously required switching the tab *and* a separate dropdown).
-
-Decisions taken (owner-confirmed via questions):
-- **Branding source = Property.** Documents source identity (name/logo/tax/phone/email/
-  **address**) from the property's General profile, accent from **Property.bannerColor**,
-  and font from a new **Property.stationeryFont** — all resolved by
-  `resolveStationeryBrand()` in `src/lib/stationery-brand.ts`. Added `Property.address`
-  (General > Property Information) and `Property.stationeryFont` (General > Appearance,
-  new `PropertyStationeryFontManager`). The outlet-header override for on-behalf-of-outlet
-  walk-in bills is unchanged (outlet identity wins; property accent/font still apply).
-- **Deprecated, not dropped:** the old `EnterpriseSettings.invoice*` branding columns
-  (name/logo/colour/font/tax/phone/email/address) are retained in the DB but nothing reads
-  them for rendering and the UI no longer writes them — remove in a later cleanup migration.
-- **Footer/terms are per-document** (owner chose "separate per document"): added
-  `EnterpriseSettings.receiptFooterText/receiptTerms/statementFooterText/statementTerms`.
-  Invoices keep `invoiceHeaderText` + payment-info block + `invoicePaymentTerms` +
-  `invoiceFooterText`; Confirmation Letter and Registration Card keep their existing fields.
-- **One set of document components** (`src/components/print/stationery/`): redesigned
-  blocks + five document layouts (`InvoiceDocument`/`ReceiptDocument`/
-  `ConfirmationLetterDocument`/`RegistrationCardDocument`/`StatementDocument`). Both the
-  real print pages (live data) and the configurator preview (sample data via `sample.ts`,
-  scaled by `StationeryPreviewFrame`) render the *same* components — the preview can no
-  longer drift from what prints. The Confirmation Letter, previously a standalone layout,
-  now uses the shared `PrintDocumentShell` + document component too.
-- **Font map de-duplicated** into `src/lib/stationery-fonts.ts`
-  (`resolveStationeryFontClass`); the three old copies (Stationaries manager, print shell,
-  confirmation-letter inline) are gone. `src/components/print/print-blocks.tsx` deleted.
-- **Preview follows the tab**; the Invoices tab has a Proforma⇄Tax preview toggle (header
-  line only). Account Statement tab is scaffolded (footer/terms editable, interim preview)
-  pending the owner's dedicated statement template.
-- Supersedes the three-tab (Branding / Financial Documents / Confirmation Letter) grouping
-  and the separate preview dropdown described in the 2026-07-19 "Stationaries page" entry.
-- **Verification**: migration `20260726224317_stationery_property_branding` applied; `tsc`
-  clean (only a pre-existing dev-tools script error remains); new
-  `tests/business-rules/stationery-brand.test.ts` (6 tests) passing.
-
-## Channel manager: inventory & overbooking authority — owner ruling (2026-07-27)
-
-Answers plan decision **D-7** in [HUB_CHANNEL_MANAGER_PLAN.md](DEV_LOG.md).
-
-**The rule:** what we push to the channel manager is the **actual available inventory**.
-Overbooking allowance is **never** included in that number.
-
-**Overbooking is a manual-only privilege** — it stays available to a human creating a
-reservation at the desk (with the existing confirmation step), and is never something an
-OTA booking can trigger.
-
-**Why this is the safe direction:** the channel manager can never *cause* an overbook,
-because we never advertise a room we do not have. Overbooking remains a deliberate act by
-someone who can see the whole picture and take responsibility for it, rather than an
-emergent consequence of inventory arithmetic happening in another system.
-
-**Consequences for the sync engine:**
-- Availability pushed = true sellable inventory. If a manual overbook has already pushed
-  the count negative, push **0** — never a negative number, and never "0 plus headroom".
-- The overbooking confirmation path in the reservation UI is unaffected; it is explicitly
-  the one place overbooking may still happen.
-- Stop-sale must close the room type at the channel, not merely push availability 0.
-
-### Group-block held rooms — owner ruling (2026-07-27)
-
-**Held-but-unpicked block rooms are withheld from the channel until the block's cutoff
-date, then released automatically.**
-
-Before cutoff: held rooms are subtracted from pushed availability (the group may still
-pick them up). After cutoff: they are released and sellable through the channel.
-
-**This needs no schema change and is already safe.** `GroupBlock.cutoffDate` exists, and
-`src/app/api/groups/[id]/pickup/route.ts` **already refuses pickup past the cutoff** — so
-a group cannot pick up rooms we have released, which is exactly what makes releasing them
-consistent with the no-channel-overbooking rule above.
-
-⚠️ `cutoffDate` is **nullable**. A block with no cutoff can be picked up at any time, so
-its held rooms must be withheld for the block's whole life — "no cutoff" means "hold
-indefinitely", never "release immediately".
-
-### Inbound overbooking race — owner ruling (2026-07-27)
-
-An OTA booking is **already confirmed to the guest** by the channel manager before it
-reaches us, so refusing it is not genuinely available to us.
-
-**Accept the booking, and raise a visible "channel overbook" alert for the desk.** The
-guest holds a confirmation either way; the only real choice is whether the desk finds out
-days ahead or at the door. It must be days ahead.
-
-This does not weaken the rule above — the desk never *chose* this overbook, so it must be
-surfaced as an exception needing resolution, not folded in silently as though it were a
-deliberate manual overbook.
-
-### End-of-Day force logout is keyed on location, not user scope — owner ruling (2026-07-28)
-
-**Any user with an active session in a property that has just run its End-of-Day roll is
-signed out — regardless of their scope, including the person who ran the audit.**
-
-The system therefore has to know *where* each session is working, not just who it belongs
-to. That "where" is `AuthContext.sessionPropertyId`: a PROPERTY-scoped user's fixed
-location, or an ENTERPRISE-scoped user's currently-selected property (the
-`current_property_id` cookie). `resolveCurrentPropertyId()` and the force-logout check now
-share one resolver, so the property a session is signed out of is always the property it
-was working in.
-
-The previous rule gated on `scope === "PROPERTY"`, which left enterprise admins holding a
-stale business date on screen and still able to post into a day the property had closed.
-
-Scope of the lockout is the property, not the enterprise: the same enterprise admin, with
-a different property selected, is unaffected.
-
-Because the notice matters as much as the logout, `requireSession()` throws a distinct
-`EodLockoutError` (`code: "EOD_ROLL"` on the wire) rather than a generic 401, and
-`/api/session/eod-status` is the **one route allowed to answer through the lockout**
-(`requireSession({ allowDuringEodLockout: true })`) — otherwise the browser could never
-explain why the user is being signed out. `EodSessionWatch` polls it: a banner while an
-EodRun is IN_PROGRESS, then a modal and a real sign-out when the date actually rolls.
-
-### Numeric transaction-code standard — owner ruling (2026-07-30)
-
-The chart of accounts follows the Opera-style numeric standard (owner's "Transaction
-Code Standardization" doc): **Group (AAA) → Subgroup (nnAA) → 4-digit code whose leading
-digits align with the subgroup number.**
-
-Groups: ACC 10RV · FNB 20–28RV per outlet + 29RV Meal Plans · SPA 30–39RV per outlet ·
-EXC 40–49RV per outlet · TRP 50RV · OTH 60RV · TAX (70SC/80TX/85GT) · NRV (90NR/95PY) ·
-SYS 99SY. Owner confirmed 4-digit codes and the 70SC/80TX/85GT tax block explicitly.
-
-**SINGLE TAX CODES (supersedes the 2026-07-27 per-group tax pairs):** one Service Charge
-code (7000), one GST (8000), one Green Tax (8500). There is no need to link each charge
-code to its own tax codes as long as the ORIGIN of every tax line is trackable — and it
-is, structurally: every generated line carries FolioLineItem.generatedFromLineItemId
-pointing at the main code's line, and lineReportBucket() attributes it to the parent's
-bucket in every report.
-
-Payments were explicitly excluded from the Opera doc's 90CA/90CL scheme ("ignore
-payments") but still carry codes (95PY: 9500–9510) — the ALL-POSTINGS-LINKED rule from
-2026-07-27 stands.
-
-### Hub-wide Spa/Excursion outlet links — owner ruling (2026-07-30)
-
-**Spa and Excursions each post through ONE outlet, shared across every property in the
-enterprise** (EnterpriseSettings.spaOutletId / excursionOutletId, managed via
-/api/module-outlets and the pickers placed FIRST in Controls > Spa / Excursions). The
-outlet may be homed at any property — cross-property posting is deliberate ("excursion
-and spa can be posted cross property-wise"). Scope confirmed: the OUTLET LINK ONLY is
-hub-wide; operational Spa settings (hours, booking policy) stay per-property. The two
-modules link independently.
-
-**No outlet, no posting:** while a module's link is null, any folio posting FROM that
-module is refused with a clear "link one under Controls" error — bookings themselves can
-still be created (AT_COMPLETION spa bookings), only the charge posting is blocked.
-Enforced in spa/appointments (AT_BOOKING), excursions/bookings (always posts) and
-departures move-bookings (re-posts; this route previously also failed to attribute the
-outlet at all — fixed in the same change).
-
-The old per-property links (SpaSettings.outletId / ExcursionSettings) are gone —
-ExcursionSettings held nothing else and was dropped entirely.
-
-## 2026-07-31 — SaaS licensing model (owner)
-
-- **No tier pricing.** License price is entered MANUALLY per enterprise
-  (EnterpriseLicense.monthlyPrice + priceCurrency). The counted attributes
-  (properties / room types / rooms / channels) are hard CAPS, not price inputs.
-  `tier` survives only as the module-defaults fallback key.
-- **Caps are per-property allowances** (PropertyLicenseAllowance), not enterprise
-  totals. Blank = unlimited, 0 = disallowed.
-- **PM (pseudo) room types and their rooms never count** toward any cap, and PM room
-  types are refused channel mapping outright ("PM room types will not be supported for
-  Channel levels").
-- **Expiry behaviour: grace then lockout.** Default 7 grace days (configurable per
-  license): users still sign in with a payment warning during grace; after it (or on
-  revoke) they are blocked at login AND live sessions die at requireSession. Osta and
-  support-access sessions are exempt.
-- **Invoicing is in-app + manual payment marking** (no gateway): LicenseInvoice rows,
-  printable under Osta's own stationery (/osta/controls), markPaid stamps a receipt.
-
-## 2026-07-31 — Enterprise-level module gating REMOVED (owner)
-
-"This is not controlled by us." The Module Access cards on Osta's Licensing screen —
-tier-wide defaults (TierModuleAccess) and per-enterprise overrides
-(EnterpriseModuleAccess) — are removed front AND back: UI cards, API routes
-(/api/licenses/tier-modules, /api/licenses/enterprise-modules), both Prisma models
-(migration `drop_enterprise_module_gating`), and the requireSession fallback chain.
-Every module is now licensed for every enterprise; which modules a tenant's users see
-is the tenant's own role-permission matrix. Osta's levers are the license lifecycle
-and the per-property attribute caps.
-
-Consequences, deliberate:
-- **Hub access is no longer grantable/revocable per enterprise** — it follows the role
-  matrix (INTEGRATIONS permission) alone; actual channel usage is capped by
-  PropertyLicenseAllowance.maxChannels.
-- `EnterpriseLicense.tier` is now fully vestigial (kept only to avoid a wide data
-  migration; drop later).
-- Per-PROPERTY sellable add-ons (Spa/Excursions via PropertyModuleAccess) are a
-  DIFFERENT mechanism and remain untouched.
-
-## 2026-08-02 — Spa/Excursions add-ons are ENTERPRISE-level (owner)
-
-Sellable add-ons (Spa, Excursions) are sold to the ENTERPRISE, not per property:
-once enabled, the add-on applies to every property in the enterprise.
-`PropertyModuleAccess` is replaced by `EnterpriseAddonAccess` (migration
-`enterprise_addon_access`, carrying data over: an enterprise is enabled if ANY of
-its properties was). The Osta toggle moved from /osta/properties/[id] to
-/osta/enterprises/[id]; the API moved from /api/licenses/property-modules to
-/api/licenses/enterprise-addons. `assertPropertyModuleAccess()` keeps its name and
-propertyId parameter (callers still need the property-scoping 403 first) but now
-checks the caller enterprise's addon row.
-
-Also 2026-08-02 (owner): eRegistration must be reachable wherever the Reg Card
-option is offered — added an eReg button + dialog on Front Office arrival rows
-(the reservation detail page already had the panel).
-
-## 2026-08-02 — PostgreSQL replaces SQLite (owner)
-
-Requested for the first real server deployment: "install and use postgres — I need the
-migrations to be clean and nice."
-
-Prisma allows exactly ONE datasource provider, so this is not a production-only change:
-dev, test, and production all run PostgreSQL 17 now. That removes the dev/prod engine
-mismatch rather than introducing one, and it fixes the real operational limit — SQLite
-serialises every write behind a single lock, which is wrong for a PMS where several
-front-desk users post charges concurrently.
-
-Consequences, deliberate:
-- **The 90 SQLite migrations were squashed into one baseline**
-  (`prisma/migrations/00000000000000_init`). Their DDL was SQLite-specific and could
-  never replay on Postgres, so squashing was required, not merely tidier. The old
-  history is preserved in git. Safe because NO deployment had data at the time.
-- **Local dev and CI now need a running Postgres.** `docker compose -f
-  docker-compose.dev.yml up -d` provides it and creates two databases: `ostastay` for
-  working data and `ostastay_test`, which `vitest.global-setup.ts` drops and rebuilds on
-  every run so tests can never destroy a developer's data.
-- ~~**`getStorageStats()` in src/lib/db-health.ts returns nulls.**~~ — **DONE**
-  (undated follow-up session): `getPostgresStorage()` was added alongside the SQLite
-  path — `pg_database_size()`/`pg_total_relation_size()`, dual-engine dispatch on
-  `DATABASE_URL`. The Osta DB Health storage panel shows real numbers on Postgres now.
-- ~~`better-sqlite3`, `@prisma/adapter-better-sqlite3`, and `@libsql/client` are now
-  dead dependencies~~ — **removed 2026-08-09**, along with the also-unused
-  `@prisma/adapter-libsql` (a 4th orphan this note hadn't caught — zero source
-  references, zero doc mentions, presumably left over from an earlier libsql/Turso
-  experiment). Confirmed zero usage across `src/`, `prisma/`, and test setup before
-  removing. Also dropped the `python3 make g++` C-toolchain layer from the Dockerfile's
-  `deps` stage — it existed solely for `better-sqlite3`'s native binding, and nothing
-  else in `package.json` needs it.
-
-Also 2026-08-02: DB-backed admin segments (`/osta/*`, `/e/[slug]/dashboard`,
-`/e/[slug]/hub`, `/e/[slug]/login`, `/dashboard`) now declare
-`export const dynamic = "force-dynamic"`. They ran Prisma queries with no dynamic marker,
-so `next build` tried to PRERENDER them — which failed the Docker build outright (P2021,
-no database at build time) and would otherwise have frozen build-time counts into static
-HTML. The Osta overview's enterprise/approval/grant counters were the visible symptom.
-
-### Bugs the PostgreSQL move exposed (2026-08-02)
-
-Three real defects that SQLite had been hiding. None were introduced by the migration —
-all were latent, and would have shipped to the first production deployment.
-
-1. **Every search box in the app was silently case-sensitive.** All 13 `contains:`
-   filters lacked `mode: "insensitive"` (Fast Post guest search, Profiles, Reservations,
-   Activity Log). SQLite's `LIKE` is case-insensitive for ASCII, so they appeared to
-   work; Postgres `LIKE` is case-sensitive. `/api/pos/search` even lower-cased the needle
-   first, which made the bug look handled while guaranteeing zero matches against any
-   capitalised guest name. Fixed by adding `mode: "insensitive"` to all 13.
-
-2. **Two partial unique indexes were nearly lost in the squash.**
-   `JobRun_one_running_per_job_enterprise` and
-   `CashierShift_one_open_per_user_property` are concurrency guards written in raw SQL
-   because Prisma cannot express a partial index — so
-   `migrate diff --to-schema-datamodel` did not regenerate them. They are re-added
-   explicitly at the end of the baseline migration. **Anyone squashing migrations again
-   must re-check for hand-written DDL**; the schema is not the whole story.
-
-3. **The job-runner lock is weaker than its test claimed.** The partial index prevents
-   CONCURRENT double-runs (verified: a genuinely overlapping claim still gets P2002 ->
-   SKIPPED_LOCKED). It does not prevent a second SEQUENTIAL run when the first job
-   finishes before the second INSERT lands, because the completed row leaves the
-   `WHERE status = 'RUNNING'` index. That is in contract — `Job.run` is documented as
-   "must be safe to run repeatedly" — but the test asserted a call count that only held
-   because SQLite serialises all writes. It now asserts peak concurrency, which is the
-   real invariant. A session-scoped advisory lock would be strictly stronger; see TODO.
-
-## 2026-08-03 — Every foreign key is now indexed
-
-PostgreSQL does not create an index for a foreign key constraint; MySQL does, which is
-where the common assumption comes from, and SQLite's planner hid the cost on the small
-local databases used before the 2026-08-02 migration. An audit of the live schema found
-**122 of 200 foreign keys** with no index on the FK column as the leading column, across
-72 of the 102 tables.
-
-Two costs were being paid:
-
-- **Reads.** Any join or filter on those columns was a sequential scan. This covered the
-  hottest paths in the product: `Reservation.propertyId` (the filter behind essentially
-  every front-office screen), `FolioLineItem.folioId` (opening a folio), `Payment.folioId`
-  (computing a balance), and every tenant-scoping `*.enterpriseId`.
-- **Deletes.** 51 of the 122 are `ON DELETE CASCADE`. Deleting one parent row makes
-  Postgres locate referencing rows in each child table; with no index that is a full scan
-  of the child table per parent row. Removing an Enterprise or Property would have scanned
-  dozens of tables.
-
-Measured on a 200,000-row `Profile` table, filtering by `enterpriseId`:
-
-| | Plan | Buffers | Time |
-| --- | --- | --- | --- |
-| Before | Parallel Seq Scan (2 workers) | 3,178 | ~16 ms |
-| After | Index Only Scan | 6 | ~0.5 ms |
-
-Storage cost is modest: on that table, 11 MB of indexes against 25 MB of data. Write
-amplification is real but immaterial at a PMS's write volume — a hotel posts hundreds of
-rows a day, not millions.
-
-**Applied while the tables were still effectively empty, deliberately.** Plain
-`CREATE INDEX` takes an ACCESS EXCLUSIVE lock for its duration. At current data volumes
-each statement completes in milliseconds. **Any index added to a table that already holds
-real data must be created manually with `CREATE INDEX CONCURRENTLY`, outside the
-migration** — Prisma wraps each migration in a transaction and `CONCURRENTLY` cannot run
-inside one, so a naive migration would lock the front desk out for the duration.
-
-Not done, and deliberately: no composite or covering indexes were added. Those should be
-driven by real query plans (`pg_stat_statements`, `EXPLAIN ANALYZE` on slow requests)
-rather than guessed at, and single-column FK indexes are the well-established default that
-carries its own justification.
-
-## 2026-08-03 — Closed reservations: presentation + allowed actions (owner)
-
-Verbal, on the reservations list.
-
-- **No strikethrough on cancelled bookings.** Use a very subtle whole-row background
-  tint instead: **red = cancelled, yellow = no-show, grey = checked out.** The guest
-  name and confirmation number must stay fully legible.
-- **Cancelled / no-show → the only actions are Reinstate and Edit** (plus viewing).
-  Explicitly *no* folio generation, no deposits, no housekeeping requests, no
-  confirmation letters, no delete. Reinstate is offered only when the dates allow it
-  against the property's current **business date** — cancelled needs its arrival still
-  in the future; a no-show needs its departure not yet passed.
-- **Checked out → Reinstate means "reverse check-out", and only on the day they
-  actually checked out** (departure = current business date). After that day the stay
-  is view-only, except that **folios can still be reprinted**.
-- **A checked-out reservation can never be edited** — view functions only. Enforced in
-  the UI *and* in `PUT /api/reservations/[id]`, because its folios are closed and any
-  debtor invoice is finalized; editing behind that would desync the booking from the
-  money. The correction path is Reverse Check-out first.
-
-Implementation: the gates live in `src/lib/reservation-state.ts`
-(`isClosedReservation`, `canEditReservation`, `canReinstate`, `canReverseCheckOut`,
-`reservationRowToneClass`) so the list, detail page and booking form can't drift apart.
-
-## 2026-08-03 — Reservation delete is internal-only (owner)
-
-Follow-up to the closed-reservation decision above. Asked for delete to be removed from
-the API, then revised: **"keep the API but it should be very safe — not allowed to any
-user unless specifically fired for internal purposes."**
-
-- **No delete button anywhere in the UI**, for any status. A hotel's operation for an
-  unwanted booking is **Cancel**, which preserves history. The Delete menu item, its
-  confirmation dialog and its handlers are gone from the reservations list.
-- **`DELETE /api/reservations/[id]` stays** for genuine internal cleanup (a bad import,
-  a test booking on a live property) behind four independent gates, all of which must
-  pass — see `src/lib/reservations/hard-delete-gate.ts`:
-  1. **Osta (INTERNAL) staff only.** No tenant user of any role, ever, regardless of the
-     `RESERVATIONS.delete` permission bit. Checked FIRST, deliberately, so a tenant's
-     refusal never names the internal mechanism.
-  2. **`ALLOW_RESERVATION_HARD_DELETE=true`** on the server process — unset in every
-     normal deployment, so the endpoint is dead code by default.
-  3. **The caller must echo the exact confirmation number** in the body
-     (`{ "confirm": "DMH-000000000002" }`), so it cannot be fired blind or replayed.
-  4. **Nothing financial posted, and the stay not live or departed.** A voided line still
-     counts as history. This one binds internal staff too.
-- Because an Osta user only reaches tenant data through an approved, time-boxed
-  `SupportAccessGrant`, every possible deletion carries a named operator and a grant id,
-  both written into the activity log — which is the only surviving record once the row
-  is gone.
-
-## 2026-08-03 — Folio: pre-arrival window, documents, and settlement (owner)
-
-Verbal, reviewing the Guest Folio panel and a printed proforma.
-
-**Nothing posts before arrival.** Not even a cancellation or no-show fee. Money taken
-before the guest arrives is a **deposit**, recorded against the reservation. It already
-lands on the folio the guest is billed from, so no transfer step exists or is needed —
-check-in reuses that same folio. The `preArrivalFee` opt-out is removed from
-`/api/pos/charge` (the folio line-item route never honoured it) and the Post Charge form
-is disabled pre-arrival.
-
-**Only a proforma exists before arrival.** A tax invoice and an interim bill both report
-posted charges, of which there can now be none; a tax invoice would also burn a fiscal
-sequence number against a stay that may never happen. Both are hidden in the panel AND
-refused by `/api/folios/[id]/invoice-data` — the print page is a plain URL, so the panel
-alone is not a gate.
-
-**A folio row is one day.** `by-code` and `by-check` grouped across the whole stay, so
-two nights merged into one row printing a single date beside a two-night figure. Both
-keys are now day-scoped: grouping compresses repetition inside a day, never across days.
-
-**Charges and payments are one ledger.** The separate "Payments & Credits" table is gone;
-payments appear in the detail table on their own date as negative figures. Consequently
-the **proforma now keeps real payments** — it previously blanked them, so a guest who had
-paid a deposit was quoted the gross total with no sign of their money.
-
-**Document identity vs stay identity.** The masthead carries only the document number and
-its date. Confirmation no, folio no, room + room type, meal plan and pax all moved into
-the Stay Summary block.
-
-**Print bleed.** `@page` carried a 15mm margin, and the margin box is exactly where a
-browser draws its own URL, date, title and page counter — which is why that chrome
-appeared on every stationery. Page margin is now zero, with the document's breathing room
-moved inside as padding the browser cannot write into.
-
-**Settlement follows the payment.** The "Settlement: Direct / City Ledger" toggle is
-gone. It asked the desk to declare an intention up front that then diverged from what was
-actually collected. Its place on the folio card is taken by a per-folio **Default payment
-method**, which pre-selects the Post Payment form. Paying with a `CITY_LEDGER`-type
-method is now what bills the stay to an account: the payments route stamps
-`settlementMethod`, and check-out finalizes the debtor invoice from either the stamp or
-the payment itself (group master folios still set the stamp directly at creation).
-
-- **Where the receivable lives.** A City-Ledger payment is a TRANSFER, not a receipt, so
-  it reads two ways: on the guest's bill it settles (check-out and every guest-payable
-  balance count it, so the desk can check out), and on the account's invoice it is
-  ignored — it is the thing that created the receivable. `computeReceivableBalance()` in
-  `src/lib/debtor-accounts.ts` is that second view, used by `buildInvoiceSummary` and so
-  by all four Debtors routes, which now select the payment method's type. Without the
-  type a transfer is indistinguishable from cash and every account would read as settled.
-  Pinned in `tests/business-rules/city-ledger-receivable.test.ts`.
-
-## Uppsolut brand integration — palette, marks, naming (2026-08-08)
-
-The marketing/sales team delivered a brand kit, now in-repo at `branding-guide/`
-(`uppsolut_brand_guidelines.html` v1.1 plus the asset kit). **That kit outranks
-DESIGN_PLAN.md** — where the two disagree, the kit wins, and §2.1's warm-neutral system
-is the specific thing it overrode. Owner confirmed this explicitly.
-
-**The product is UPPSOLUT STAY.** The guide defines a sub-brand architecture — Stay
-(Property), Stock (Inventory), Pay (POS), Desk (Service), Rent (Rentals) — and this app
-is the Property module, which is also why the domain is `stay.uppsolut.com`. "Uppsolut
-PMS", used briefly earlier in the rename from OstaStay, was never part of that system and
-is gone. The plain company name **Uppsolut** is still correct for vendor-level surfaces:
-license invoices and the `/osta` platform-admin console, which spans every module.
-
-**Palette.** The five brand values replaced the warm-neutral ramp wholesale. Crimson OS
-`#8B0000` is `--primary`; Platinum/Obsidian/Slate carry canvas, text and surfaces; Deep
-Maroon `#580816` is the sidebar rail in BOTH modes (the guide assigns it to "sidebar
-nav", and it is structural furniture rather than a surface that follows the canvas).
-Neutrals are now COOL — no warm greys anywhere; that consistency is the effect.
-
-- **Destructive vs primary is the live tension in a red-branded product.** In light mode
-  they separate by lightness (`#C22F2F` sits deliberately BRIGHTER than Crimson — do not
-  "correct" it darker). In dark mode both must be light enough to read, which collapses
-  that gap, so destructive shifts hue to a frank orange-red `#FF7043` instead. If the two
-  still read alike in practice, the next lever is making destructive buttons outline
-  rather than filled — not re-tinting the brand.
-- Every token pair was measured against `--card` and `--background` in both modes; all
-  AA text pairs pass. Dark `--primary` shipped once at `#E04343` and was caught at 4.07:1
-  before landing.
-
-**Per-property accent was scoped, not removed** (owner decision). Crimson is now the
-app's own accent, so a second accent in the same chrome muddied it. Dropped: the card
-header edge and the active sidebar-item wash — with them `PropertyAccentScope` and the
-`--property-accent` variable, now deleted. Kept: the thin banner bar, printed stationery,
-eRegistration, and the switcher's colour dots. `Property.bannerColor` and its picker are
-untouched.
-
-**Marks are rebuilt, not imported.** `src/components/brand/uppsolut-logo.tsx` renders the
-wordmark/lockup/icon as inline SVG. The kit's own SVGs `@import` Inter from Google Fonts
-inside the file, which would refetch a self-hosted font and break under a strict CSP. The
-kit's measurements (font sizes, `textLength` width-locks, baselines) are reproduced
-exactly — the odd numbers (14.6, -1, 216) are theirs, don't tidy them.
-
-**Favicons are baked, not hand-drawn.** The kit ships only `_approximate-do-not-ship`
-placeholders plus `bake-inter-favicons.py`, which extracts the true Inter Black "U" as an
-outlined path. Ran it against the real Inter variable font (OFL) at wght 900; output is in
-`public/`. Browsers do not load webfonts inside favicons, so the outline is what makes the
-icon and the wordmark's U the same shape.
-
-**`src/lib/brand.ts` is new** — the brand palette as JS literals, for the surfaces that
-cannot read a CSS custom property: HTML metadata/theme-color, PDF/XLSX renderers, email
-HTML. Registered in `eslint.config.mjs`'s `ALLOWED_HEX_FILES`. It exists because those
-contexts had each grown a private hex; the stationery default was indigo `#4f46e5`, from
-no palette this product ever used, and it accented every document of every tenant without
-a banner colour. Now Crimson.
-
-**JetBrains Mono is now loaded.** `--font-mono` aliased the sans stack, so ~45 `font-mono`
-call sites rendered in Inter. The guide reserves a mono face for labels and readouts.
-Numeric COLUMN alignment still comes from `tabular-nums`, not from this token.
-
-**Not done in this pass** (each would have bloated the change; see the spawned follow-ups):
-print stationery is still on the raw Tailwind slate ramp, the four email templates still
-carry their own inline grey palette, the PDF/XLSX renderers still hold `rgb()` literals,
-and `/e/[slug]/hub/permission-matrix` still uses raw `slate-*` classes (pre-existing, and
-broken in dark mode).
-
----
-
-## 2026-08-08 — Two email senders: tenant vs platform (owner)
-
-Mail splits by **who the message is from**, not by what it contains:
+The working rules are in the Allocations section of [DEV_LOG.md](DEV_LOG.md). The owner's
+rulings:
+
+- Prices are **adult and child only; infants are never charged.**
+- Price is controlled **by date only**; ranges must not overlap. Room type and meal plan never
+  change an allocation's price.
+- `mode` is **Include in Rate** or **Add to Rate**, per allocation. Include in Rate carves the
+  amount out of the room line (never below zero); the folio total does not change.
+- **Sell Separately is an independent switch**, not a mode. It additionally offers the
+  allocation as a manual add-on on the reservation. Every allocation can be linked to rate plans
+  and meal plans.
+- The departure-night rhythm posts on the stay's **last night**.
+- Attachments are fixed on the reservation at booking and edit (`ReservationAllocation`); Night
+  Audit reads only those, so a later change to a plan never re-prices a stay.
+- Derived rate plans and allocations combine: a booking on "BAR-BB" gets the adjusted room price
+  and the BB meal plan's breakfast allocation.
+
+## Base rate plan (2026-07-19)
+
+- **There is no base price on a room type.** Every property has exactly one locked rate plan,
+  code `BASE`, created at onboarding. It cannot be deleted and its identity fields cannot be
+  edited; its **prices and its package allocations can**.
+- **Night Audit price order:** (1) the reservation's override rate; (2) the assigned plan's
+  price for tonight, or its parent's if derived; (3) the Base plan's price for the same room
+  type and date; (4) zero. A derived plan's adjustment applies on top of whichever price is
+  found.
+- The Base plan covers only the dates it has been priced for. An unpriced future date posts
+  zero, so price it far ahead.
+
+## Payment methods and the room-charge posting code (2026-07-19)
+
+- **Payment is not a charge-code category.** Payment types are Payment Methods: Cash, Card,
+  Transfer, Cheque, Voucher, City Ledger.
+- **A rate plan can name its accommodation charge code** (`RatePlan.chargeCodeId`), editable
+  even on the locked Base plan. Night Audit resolves the room charge code as: the rate plan's
+  own code, then the property's default accommodation code.
+- **The City Ledger folio is the debtor invoice itself** (one folio, not two). Since 2026-08-03
+  the desk settles it with a City Ledger payment, which counts on the guest's bill and is
+  ignored on the account's invoice.
+
+## Profiles (2026-07-20)
+
+Structure is in the Profiles redesign section of [DEV_LOG.md](DEV_LOG.md). Rules:
+
+- **VIP Level** replaces loyalty tier and comes from a dropdown list.
+- Communications, addresses and identification documents are multi-row. **At most one primary
+  per profile per kind**, enforced on the server.
+- Email and mobile values are validated by type.
+- **Attachments are links, not uploaded files.**
+- **STAFF is a profile type with no relation to a login.**
+- Company and Travel Agent profiles have one Name field and no personal information or
+  identification.
+- "Visits to this property" and "visits to the chain" are counted live, never stored.
+- `originPropertyId` is set once at creation and never changes; profiles stay enterprise-wide.
+- Stay History: `RESERVED` and `IN_HOUSE` are Future, `CHECKED_OUT` is History, with revenue
+  per stay from non-void folio lines.
+
+## Negotiated rate plans (2026-07-20)
+
+- A negotiated plan (`RatePlan.isNegotiated`) is linked to specific Company or Travel Agent
+  profiles through `RatePlanAgentAccess`. **A negotiated plan with no linked profile cannot be
+  selected by anyone.**
+- The links are managed **from the profile** (its Negotiated Rates section).
+- On a reservation, a negotiated plan is offered only when the booking's Booking Source / Travel
+  Agent is one of the linked profiles. A non-negotiated plan is never filtered.
+- Group pickup is not affected (a block carries its own rate plan).
+
+## Travel agent commission (2026-07-20)
+
+- An optional commission % per rate plan per agent (`RatePlanAgentAccess.commissionRate`), set
+  beside the negotiated-rate link on the profile.
+- **Calculated at check-out, not at Night Audit**, because that is when a City Ledger folio
+  becomes the agent's invoice.
+- **Base:** posted room revenue (nightly room charge and extra occupancy), attributed to the
+  rate plan that earned it through `FolioLineItem.roomAssignmentId`, so a split stay across two
+  plans is commissioned correctly (`calculateFolioCommission`, `src/lib/commission.ts`).
+- **Posted as a negative line on the same debtor folio**, against the property's Commission
+  charge code (a non-revenue code). It reduces what the agent is invoiced. *This was the one
+  modelling choice made without an explicit owner answer; the Agent Portal plan (A-18, A-19)
+  adds a payable ledger for the other settlement modes.*
+- **Eligible only when all three hold:** the link has a commission rate; a Commission charge
+  code is configured; the folio is finalising to a debtor account at this check-out. Otherwise
+  nothing is posted and nothing errors.
+
+## Price calendar (2026-07-20)
+
+- A price update may cover from 1 day to **10 years** (`MAX_PRICE_CALENDAR_RANGE_DAYS`,
+  `src/lib/price-calendar.ts`, shared by both endpoints). The end date cannot be before the
+  start date. **No negative price** or extra-occupancy price.
+- The Price Calendar page is always opened for one rate plan. Bulk Update writes to a ticked
+  list of room types; the room-type buttons above the grid only choose what is previewed.
+
+## Rate plan: Complimentary and House Use (2026-07-20)
+
+- `RatePlan.isComplimentary` and `isHouseUse` are **labels only**. Neither stops Night Audit
+  from posting the nightly charge; staff zero the rate by hand. Automatic zero posting needs a
+  new owner decision.
+
+## Allocation calculation mode (2026-07-20)
+
+- Per property (`Property.allocationCalculationMode`), set in Revenue setup:
+  - **Meal Plan level:** the reservation's meal plan is the only source of automatic
+    allocations. A rate plan's own package allocations never post.
+  - **Rate Plan level** (default): the rate plan's package allocations attach. The meal plan
+    is display only.
+- **Exclusive, never both.**
+- **Not retroactive:** switching affects only reservations created or edited afterwards. A
+  "refresh rate" tool for existing bookings is planned, not built.
+
+## Reservation booking: Look to Book (2026-07-21)
+
+- Flow order: Stay (dates, occupancy, booking source) → Room and Rate grid → Guest and details
+  → Allocations and add-ons → total.
+- **The grid replaces room-type and rate-plan dropdowns.** Rows are rate plans by priority,
+  columns are room types with rooms left. A sold-out cell is struck through. Clicking a cell
+  sets the active segment's room type and rate plan together.
+- **The quote must never disagree with what Night Audit posts:** the grid prices with the same
+  resolution chain (`GET /api/reservations/rate-availability`). One difference: an unpriced
+  night shows "No rate" instead of zero. Availability shown is the minimum across the stay's
+  nights.
+- **A new booking is always RESERVED.** There is no status field on the form; status changes
+  only through check-in, check-out, cancel and the other actions.
+- **Special requests** are chips from a dropdown list, stored in `ReservationSpecialRequest`
+  and validated on the server.
+
+## Booking form pages and the quote (2026-07-21)
+
+- Create and edit are pages (`/reservations/new`, `/reservations/[id]/edit`) sharing
+  `BookingForm`, with a sticky Booking Summary beside the form.
+- **`computeReservationQuote`** (`src/lib/reservation-quote-server.ts`,
+  `POST /api/reservations/quote`) is a dry run of the whole stay through the same chain Night
+  Audit posts with: derived-plan adjustment, Base plan fallback, Include-in-Rate carve-out
+  before tax, each charge code's own tax, flat Green Tax. It writes nothing. The proforma, fee
+  rules and the Booking API all reuse it.
+- Taxes are shown once per tax name for the whole stay; Green Tax is listed separately.
+- The allocation breakdown is shown night by night in price segments; a qualifying night with
+  no price is called out, not hidden in the total.
+
+## Reservation dates and occupancy (2026-07-21)
+
+- **Departure must be after arrival.** The date picker disables invalid days (`minDate`),
+  changing arrival past departure clears departure, and submit checks again.
+- **Base and maximum occupancy are different things.** Over base occupancy means an
+  extra-person charge. Over **maximum** occupancy is a capacity limit: the form shows a warning
+  and blocks until the user ticks "I understand and want to book this anyway". The tick resets
+  when occupants or room types change.
+
+## Split stays, room moves, accompanying guests, guest picker (2026-07-21)
+
+- **Split-stay segments must be back to back, with no gaps.** Each later segment's start is
+  locked to the previous segment's end. Enforced on the server too
+  (`assignmentsAreContiguous`).
+- **Scheduled room move:** when a split stay's segments use different rooms, the reservation is
+  flagged (`Reservation.hasScheduledRoomMove`), shown as a "Room Move" badge and listed under
+  "Room moves due today" on Front Desk. It is information only; the rooms are already on the
+  reservation. It is separate from the ad-hoc Move Room action.
+- **Accompanying guests are capped at adults + children − 1**, on the form and on the server.
+- **Guests are chosen in a search window with quick create** (`GuestPickerModal`): search by
+  name, email, phone or address; create a profile in place (first name required) without
+  leaving the booking.
+
+## Osta platform console (2026-07-21)
+
+- Osta is the enterprise that manages all enterprises; it is not a PMS itself. Its console is a
+  separate route tree, `/osta/…`, with its own layout and no property switcher. An Osta user
+  who is not in support mode is always sent to `/osta`.
+- **Property approval is a hard gate.** A new property is `PENDING` and unusable until Osta
+  approves it: `assertPropertyAccess()` rejects any property that is not `ACTIVE`. A rejected
+  property can be resubmitted. Osta support inside an approved grant is exempt.
+- Approve and reject are written to both activity trails, Osta's and the customer's.
+- Module licensing per enterprise was removed on 2026-07-31; see "SaaS licensing model".
+
+## Front Desk, housekeeping and maintenance rulings (2026-07-21)
+
+- **A deposit is a real pre-arrival concept.** It can be collected while the reservation is
+  `RESERVED`, shows on the reservation, and is on the folio at check-in. Payments are accepted
+  at any time during the stay.
+- **Inspected can gate arrivals:** a per-property setting; when on, checking a guest into a room
+  that is not Inspected warns or blocks.
+- **Out of Order is fields on the room** (`oooReason`, `expectedReturnDate`), with no history of
+  past periods. A maintenance ticket can set a room Out of Order and return it to Dirty when
+  resolved.
+- **The Tape Chart is the one maintained chart** (the drag-and-drop grid).
+- **Vacant rooms** on the dashboard = all unoccupied sellable rooms (not Out of Order or Out of
+  Service), with a "clean and ready" count beneath.
+
+## Business date and folios (2026-07-22)
+
+- **The business date is per property** (`Property.businessDate`): the operational "today" for
+  check-in and check-out, arrivals and departures, and every posting date. It moves forward only
+  when Night Audit runs. All date-only comparisons are UTC.
+- **Check-out is due or overdue** (business date on or after the departure date). Leaving
+  earlier is an explicit Early Check-Out.
+- **Charges can be posted only for a checked-in guest.** Deposits before arrival are payments
+  and are not affected. Walk-in and outlet folios are always billable.
+- **Negative amounts are allowed** on charges and payments (adjustments, refunds); zero is not.
+- The folio payee can be the attached travel agent or company, not only a guest.
+- A line's description fills from the charge code; `FolioLineItem.reference` is free text and
+  prints in the invoice's Reference column.
+- **Routing instructions** (`FolioRoutingRule`): standing rules per reservation that send chosen
+  charge codes to another folio window or another in-house room's folio. Night Audit and manual
+  posting both apply them; creating a rule also moves matching charges already posted. Manual
+  Move to Folio allows any open folio at the same property.
+- **Proforma = the full projected cost of the stay** (the quote). The Tax Invoice is what was
+  actually posted.
+
+## Deposit, cancellation and no-show fees (2026-07-22)
+
+- **Fees are collected through Deposits, typed by purpose** (`Payment.depositPurpose`: deposit,
+  pre-arrival fee, cancellation fee, no-show fee). They are never a way to post a charge before
+  check-in.
+- **Fee rules are per property** (`PropertyFeeRule`), computed from a basis: flat, percent,
+  first night or full stay (the last three use the quote). Cancellation and no-show rules carry
+  a charge code. Several rules per type are allowed since 2026-07-24.
+- **Cancelling:** with an active rule, the fee is posted and the cancellation proceeds whatever
+  the balance; the response says the fee, the deposit held, the refund due and the shortfall.
+  With no active rule the folio must be at zero to cancel.
+- **No-show at Night Audit:** the fee is posted to the no-show's folio. Nothing is refunded
+  automatically.
+
+## End of Day (Night Audit) (2026-07-22)
+
+- **End of Day is a resumable step wizard.** One `EodRun` per property and business date. The
+  business date is OPEN until its run is COMPLETED; a partial run resumes at the first
+  unfinished step (`src/lib/eod.ts`).
+- **Steps, in order:**
+  1. **Departures:** every in-house guest due out must be checked out or extended before
+     anything is posted.
+  2. **Cashier:** every open shift of the property's staff is closed.
+  3. **Post:** room, tax, packages and Green Tax; no-shows marked; the business date rolls.
+     Posting is guarded per business date, so it can never post twice.
+  4. **Registration:** Green Tax registration numbers are assigned.
+  5. **Reports:** the day's reports are frozen.
+  6. **Finalize:** everyone working in that property is signed out; the run is completed.
+- **Running End of Day again within 12 hours** of the last successful run needs a confirmation
+  and a reason, and is logged.
+- **The sign-out at Finalize follows the location**, not the user's scope (see 2026-07-28).
+- **Frozen reports** (`EodReport`, one per property, date and type): Trial Balance, Guest
+  Ledger, AR Ledger, Deposit Ledger, Cashier Summary, Manager Flash. Flow figures use the line's
+  business date; ledger positions are the folio state at close. Occupancy excludes pseudo room
+  types. A ledger or flash report for a closed date reads the snapshot; for an open date it is
+  computed live.
+- **Registration numbers** (`GuestRegistration`) are sequential per property and **reset each
+  calendar year**, in order of check-in date then check-in time. Pseudo room types are excluded.
+  This number is separate from the reservation's confirmation number.
+
+## Reports engine (2026-07-22)
+
+- A report is one `ReportDef` in `src/lib/reports/`; the engine builds the filter form, runs it
+  for the current property and business date, and renders PDF, Excel and CSV. See the Daily
+  Reports rework section of [DEV_LOG.md](DEV_LOG.md).
+- The tax split comes from stored columns (`serviceChargeAmount`, `taxAmount`, the Green Tax
+  line); nothing extra is stored at posting.
+- `Reservation.cancelledAt`, `cancellationReason`, `noShowAt` and
+  `HousekeepingTask.startedAt` exist for the cancellation and attendant reports.
+
+## Excursions (2026-07-22)
+
+Structure is in the Excursions section of [DEV_LOG.md](DEV_LOG.md). Rules:
+
+- The catalogue (types, rates, schedules) is gated by `CONTROLS`; `EXCURSIONS` means day-to-day
+  bookings only.
+- **Voiding a booking's charge needs `CASHIERING`.** Anyone who may cancel the booking can
+  cancel it; if they lack the cashiering right the charge stays, with a note for cashiering.
+- **The cutoff is a per-booking rule.** Cancelling a whole departure is manager-only
+  (`EXCURSIONS delete`) however close it is.
+- **A closed folio can never be voided or paid into.** A paid-and-closed walk-in booking can be
+  cancelled as a record, but its money is refunded by hand, and it cannot be moved to another
+  departure.
+- **Infants are a priced tier for excursions**, unlike allocations.
+
+## Billing rules (2026-07-24)
+
+- **Billing opens after check-in and freezes after check-out.** A correction after check-out is
+  done by reversing the check-out, never by editing a closed folio.
+- **Never delete a transaction.** Reversals and negative entries only.
+- **Interim Bill:** a read-only print of what is posted so far. Not numbered, no ledger change.
+- **Advance Bill:** posts upcoming nights in one go so the guest can settle early. The user
+  chooses how many nights, at most the remaining ones. It posts rate, extra occupancy,
+  allocations, Green Tax and uncharged transport, **dated the day of posting**.
+  `Reservation.advanceBilledThrough` stops Night Audit from posting those nights again.
+- **Revenue is recognised on the date a line is posted**, always.
+- **Early departure moves the departure date** to the business date. To charge the full stay on
+  an early departure, generate an Advance Bill first, then check out.
+- **Reverse check-out** is always allowed, with limits: a direct-bill folio only on the same
+  date as the check-out; guest payments on other dates too. It returns the reservation to In
+  House, reopens folios, restores the room and housekeeping state, and reverses the debtor
+  transfer and the commission with reversing entries.
+- **Reverse check-in** returns In House to Reserved, guarded so it cannot strand posted money.
+
+## Check-out settlement (2026-07-24)
+
+- **A guest can never check out with an open balance.** There is no write-off and no
+  proceed-anyway override.
+- **City Ledger needs an AR account.** If the travel agent or company on a City Ledger folio is
+  not a credit account, check-out is **blocked** until the account is created or the folio's
+  settlement method is changed.
+- **A guest-settled folio is settled one way or another.** If the guest will not pay, staff
+  post the balance to a **Service Recovery** payment method the property maintains.
+- **The settlement document at check-out is the Tax Invoice.**
+
+## Reservation states and fee rules (2026-07-24)
+
+- **Stored statuses:** RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED. **Due In and Due Out
+  are derived** from the stay dates and the business date (`src/lib/reservation-state.ts`):
+  Reserved (arrival ahead) → cancel only; Due In (arrival today) → check-in; In House → early
+  departure; Due Out (departure today) → check-out.
+- **Check-in is only on the arrival day.** A past arrival that never checked in is Night Audit's
+  no-show.
+- **Reinstating is bounded by date:** Cancelled → Reserved only while arrival is still ahead;
+  No-Show → Reserved only while the business date is within the stay. *Open:* a reinstated
+  no-show with a past arrival is not Due In, so it cannot be checked in; the owner has not
+  decided whether to move its arrival to today.
+- **Every no-show's charge is posted to a folio**; Night Audit creates one if needed.
+- **Fee rules are several per type, one chosen per reservation**
+  (`depositFeeRuleId`, `cancellationFeeRuleId`, `noShowFeeRuleId`). No selection means no fee. A
+  selected rule still applies if it is later made inactive; inactive only hides it from new
+  bookings.
+
+## Check-in wizard and registration card (2026-07-24)
+
+- Check-in is a wizard, opened from every check-in entry point:
+  1. **Room:** a room must be assigned (Out of Order and Out of Service are blocked, Dirty
+     warns).
+  2. **Identification:** per guest; confirms what is on file, flags an expired ID, allows quick
+     entry. A warning only, it can be skipped.
+  3. **Registration card:** print per guest and tick "signed and collected". Not blocking; shown
+     only when the card is enabled.
+  4. **Confirm:** summary, warnings and an optional payment.
+- The registration card is one per guest, pre-filled with what is known, with blank lines for
+  the rest, terms and two signatures.
+
+## Fast Post (2026-07-25)
+
+- "Point of Sale" is called **Fast Post**. Only the label changed: the module key is still `POS`
+  and the route `/dashboard/pos`.
+- It is a posting terminal with two flows: post an outlet charge to an in-house guest's room,
+  or make a walk-in bill.
+- **Outlet appointments do not exist.** Spa appointments are a separate system.
+- A walk-in bill offers Tax Invoice, Void Bill, Take Payment and Close (no proforma). **Void
+  Bill** needs a reason and marks every line void; nothing is deleted.
+- A closed walk-in bill can be reopened **only while the business date still equals its close
+  date** (`Folio.closedBusinessDate`).
+
+## Availability and stop sale (2026-07-26)
+
+- The Availability page is a grid of date by room type. Each column is the **night** of that
+  date, so a closure on a stay's departure date never blocks it.
+- **Stop sale blocks new bookings on a closed night**, for one room type or the whole property.
+  On edit only the nights a reservation newly sells are blocked. Since 2026-10-10 a user with
+  the right can override it: see "Revenue calendar and stop-sale override".
+- **Restrictions are Open or Closed only.** `AvailabilityRestriction`: a row means Closed, no
+  row means Open; a null room type is the whole property.
+- Module `AVAILABILITY`: `view` shows the grid, `update` sets Open or Closed.
+- **Group blocks on the grid count only when Definite.** The booking guard still counts
+  Tentative and Definite. "Group Blocks" shows outstanding holds (held minus picked up).
+- Available = capacity − rooms held by reservations − outstanding Definite block holds, from
+  `src/lib/availability.ts`. Oversold shows negative. Empty detail cells show 0.
+
+## Stationery (2026-07-27)
+
+- **Branding comes from the property:** name, logo, tax number, phone, email and address from
+  the property's General settings, the accent from `Property.bannerColor`, the font from
+  `Property.stationeryFont` (`resolveStationeryBrand`, `src/lib/stationery-brand.ts`). For a
+  walk-in bill made for an outlet, the outlet's identity wins.
+- Document tabs: Invoices (Proforma and Tax, differing only in the header line), Receipts,
+  Confirmation Letter, Registration Card, Account Statement. **Footer and terms are per
+  document.**
+- **One set of document components** (`src/components/print/stationery/`) renders both the real
+  print and the preview, so the preview cannot drift.
+- Stationery settings are in the Hub, in the property area.
+
+## Channel manager: inventory and overbooking authority, rule D-7 (2026-07-27)
+
+- **What is published outside the PMS is the actual free inventory. An overbooking allowance is
+  never included.** If a manual overbook has made the count negative, publish 0.
+- **Overbooking is a manual desk privilege only**, with its confirmation step. No outside
+  booking can trigger it, so a channel can never *cause* an overbook.
+- **Stop sale closes the room type at the channel**, it is not just availability 0.
+- **Group-block rooms not yet picked up are withheld until the block's cutoff date, then
+  released.** Pickup is refused after the cutoff, which is what makes releasing safe. **A block
+  with no cutoff date holds its rooms for its whole life**: no cutoff never means release now.
+- **An inbound OTA booking that no longer fits is accepted and flagged** as a channel overbook
+  for the desk. The guest already holds a confirmation; the desk must learn days ahead, not at
+  the door. It is an exception to resolve, never treated as a deliberate overbook.
+
+## End of Day sign-out follows the location (2026-07-28)
+
+- **Anyone with a session working in a property that has just rolled its date is signed out**,
+  whatever their scope, including the person who ran the audit. The location is
+  `AuthContext.sessionPropertyId`: a property-scope user's property, or an enterprise-scope
+  user's currently selected property. The same enterprise user with another property selected is
+  not affected.
+- The sign-out carries a reason (`EOD_ROLL`). `/api/session/eod-status` is the one route allowed
+  to answer through the lockout, so the browser can explain it: a banner while End of Day is in
+  progress, then a notice and a real sign-out when the date rolls.
+
+## Transaction-code numbering (2026-07-30)
+
+- **Group (AAA) → Subgroup (nnAA) → 4-digit code** whose leading digits match the subgroup
+  number. Groups: Accommodation 10RV; F&B 20-28RV and Meal Plans 29RV; Spa 30-39RV; Excursions
+  40-49RV; Transport 50RV; Other 60RV; Tax 70SC / 80TX / 85GT; Non-revenue 90NR / 95PY; System
+  99SY.
+- Payments carry codes too (9500-9510): every posting is linked to a code.
+
+## Spa and Excursions post through one outlet each (2026-07-30)
+
+- **Spa and Excursions each post through one outlet, shared by every property in the
+  enterprise** (`EnterpriseSettings.spaOutletId`, `excursionOutletId`). Posting across
+  properties is deliberate. Only the outlet link is enterprise-wide; operational Spa settings
+  stay per property.
+- **No outlet, no posting:** while the link is empty, a charge from that module is refused with
+  a clear message. Bookings can still be made.
+
+## Licensing (2026-07-31)
+
+- **No tier pricing.** The licence price is entered by hand per enterprise. Properties, room
+  types, rooms and channels are **caps**, not price inputs.
+- **Caps are allowances per property** (`PropertyLicenseAllowance`): blank is unlimited, 0 is not
+  allowed.
+- **Pseudo room types and their rooms never count** toward a cap and cannot be mapped to a
+  channel.
+- **Expiry is grace, then lockout.** Seven grace days by default: users sign in with a payment
+  warning; after grace, or on revoke, sign-in is blocked and live sessions end. Osta and support
+  sessions are exempt.
+- **Invoicing is in the app with payment marked by hand** (no gateway).
+- **There is no module gating per enterprise or per tier** (owner: "this is not controlled by
+  us"). Every module is licensed for every enterprise; what a customer's users see is the
+  customer's own role matrix. Osta's levers are the licence lifecycle and the caps.
+
+## Add-ons are sold to the enterprise (2026-08-02)
+
+- Sellable add-ons (Spa, Excursions, later Transportation) are enabled **per enterprise**
+  (`EnterpriseAddonAccess`) and then apply to every property in it. Only Osta switches them.
+- eRegistration must be reachable wherever the registration card is offered.
+
+## PostgreSQL (2026-08-02)
+
+- Development, test and production all run PostgreSQL 17. Local work needs
+  `docker compose -f docker-compose.dev.yml up -d`, which creates `ostastay` and
+  `ostastay_test`; the tests drop and rebuild `ostastay_test` on every run.
+- The migration history starts at one baseline, `prisma/migrations/00000000000000_init`.
+- **Hand-written SQL is not in the Prisma schema.** Two partial unique indexes
+  (`JobRun_one_running_per_job_enterprise`, `CashierShift_one_open_per_user_property`) are
+  concurrency guards written in raw SQL. Anyone squashing migrations again must carry them over.
+- **Every text search needs `mode: "insensitive"`**; Postgres `LIKE` is case-sensitive.
+- Pages that read the database declare `export const dynamic = "force-dynamic"`, or the build
+  tries to prerender them.
+- **A job must be safe to run repeatedly.** The job lock prevents overlapping runs, not a second
+  run after the first has finished.
+
+## Foreign keys are indexed (2026-08-03)
+
+- Postgres does not index a foreign key by itself. Every foreign key column has an index; add
+  one with every new relation.
+- **An index on a table that already holds real data must be created by hand with
+  `CREATE INDEX CONCURRENTLY`, outside the migration.** Prisma runs a migration in a
+  transaction, and a plain `CREATE INDEX` there locks the table.
+- Composite and covering indexes are added from real query plans, not guessed.
+
+## Closed reservations (2026-08-03)
+
+- **No strikethrough.** A subtle whole-row tint: red cancelled, yellow no-show, grey checked
+  out. The guest name and confirmation number stay legible.
+- **Cancelled or no-show: the only actions are Reinstate and Edit** (and viewing). No folio,
+  deposit, housekeeping request or confirmation letter.
+- **Checked out: "Reinstate" means reverse check-out, only on the day they checked out.** After
+  that day the stay is view-only, except that folios can be reprinted.
+- **A checked-out reservation can never be edited**, in the UI and in the API. The correction
+  path is reverse check-out first.
+- The gates are in `src/lib/reservation-state.ts`, shared by the list, the detail page and the
+  form.
+
+## Reservation delete is internal only (2026-08-03)
+
+- **There is no delete button anywhere.** A hotel cancels an unwanted booking, which keeps its
+  history.
+- `DELETE /api/reservations/[id]` exists for internal clean-up behind four gates, all required
+  (`src/lib/reservations/hard-delete-gate.ts`): Osta staff only; the server variable
+  `ALLOW_RESERVATION_HARD_DELETE=true` (unset in every normal deployment); the caller echoes the
+  exact confirmation number; nothing financial was ever posted and the stay is not live or
+  departed. The operator and the support grant are written to the activity log.
+
+## Folio: before arrival, documents and settlement (2026-08-03)
+
+- **Nothing is posted by hand before arrival.** Money taken before arrival is a **deposit**
+  against the reservation; it is already on the folio the guest will be billed from.
+- **Only a proforma exists before arrival.** A tax invoice and an interim bill are hidden and
+  refused by the API.
+- **A folio row is one day.** Grouping by code or by check compresses repetition inside a day,
+  never across days.
+- **Charges and payments are one ledger:** payments appear in the detail table on their own
+  date as negative figures. The proforma keeps real payments.
+- The masthead carries only the document number and date. Confirmation number, folio number,
+  room, meal plan and guests are in the Stay Summary block.
+- Print page margin is zero, with padding inside the document, so the browser's own header and
+  footer have nowhere to print.
+- **Settlement follows the payment.** There is no Direct / City Ledger switch. Each folio has a
+  **default payment method**. **Paying with a City Ledger payment method is what bills the stay
+  to an account.**
+- **A City Ledger payment is a transfer, not a receipt.** On the guest's bill it settles, so the
+  desk can check out. On the account's invoice it is ignored, because it is what created the
+  receivable (`computeReceivableBalance`, `src/lib/debtor-accounts.ts`).
+
+## Uppsolut brand (2026-08-08)
+
+- **The brand kit in `branding-guide/` outranks `DESIGN_PLAN.md`** where they disagree.
+- **The product is Uppsolut Stay.** "Uppsolut" alone is right for vendor-level surfaces: licence
+  invoices and the `/osta` console.
+- **Palette:** Crimson `#8B0000` is `--primary`. Neutrals are cool, never warm. Deep Maroon
+  `#580816` is the sidebar in both light and dark.
+- **Destructive is not the brand red.** In light mode it is deliberately brighter than Crimson
+  (`#C22F2F`); in dark mode it shifts to orange-red (`#FF7043`). Do not "correct" either toward
+  Crimson. If they still read alike, make destructive buttons outlined.
+- **The per-property accent is limited** to the thin banner bar, printed stationery,
+  eRegistration and the switcher's colour dots.
+- The logo is rendered as inline SVG (`src/components/brand/uppsolut-logo.tsx`); its odd
+  measurements are the kit's, do not tidy them. Favicons are baked from the real Inter Black "U".
+- `src/lib/brand.ts` holds the palette for places that cannot read a CSS variable (page
+  metadata, PDF and Excel renderers, email). The stationery default accent is Crimson.
+- JetBrains Mono is the mono face for labels and readouts. Number columns align with
+  `tabular-nums`.
+
+## Email: two senders (2026-08-08, 2026-08-10)
 
 | | Tenant SMTP | Platform SMTP |
 | --- | --- | --- |
 | Sends | Confirmation letters, eRegistration links, debtor statements | Enterprise handover credentials, channel-manager alerts |
 | From | The hotel's own domain | Uppsolut's (`noreply@mail.uppsolut.com`) |
-| Configured | By the tenant, in the Hub (enterprise area, Email) | By the operator, `PLATFORM_SMTP_*` env vars |
-
-- **A tenant's own SMTP always wins.** A tenant without one may use the platform sender only
-  as the billed, opt-in Uppsolut Mail Service (next section), and the substitution is never
-  silent.
-- Platform SMTP is env-only with no admin UI to change it: a new enterprise has no settings row
-  when its first admin must be emailed, and an endpoint able to rewrite the platform's sending
-  identity would be a standing route to sending mail as Uppsolut. The platform console shows it
-  read-only, with a test button.
-- Channel alerts go to Uppsolut ops (`PLATFORM_ALERT_EMAIL`) and fire only on the CONNECTED →
-  failed transition, never on "still failing". Since enterprises can connect their own Beds24
-  account (2026-10-14) the alert should reach them too: open in TODO.md.
-
-## 2026-08-10 — Uppsolut Mail Service: platform SMTP as a billed fallback (owner)
-
-Owner instruction, verbatim: *"this SMTP setup is for Osta (admin level) users only and not
-for the enterprises, those settings will still be on the controls that they have to setup
-and store within enterprise/property"*, and *"customers can opt to use our SMTP as a default
-incase they do not have an SMTP themselves which we will bill them seperately so the
-movement of all mails should be logged as well for billing purpose"*.
-
-This **reverses the "no fallback" line** in the 2026-08-08 entry above. That was a design
-judgement made without an owner ruling; the ruling now exists.
-
-**Precedence — the part that must not drift.** A tenant's OWN SMTP always wins when
-configured. The mail service is a fallback for enterprises that have none, never a takeover
-for one that has set up its own domain. Order: tenant SMTP → platform SMTP (if the add-on is
-granted) → the same `SmtpNotConfiguredError` as before. `resolveEnterpriseSender()` in
-`src/lib/mail-sender.ts` is the single place this is decided, and it is pinned by tests.
-
-**Granted by Osta, not self-served.** `EnterpriseAddonAccess` with the key `PLATFORM_EMAIL`
-— the same mechanism as Spa and Excursions, toggled on the Osta enterprise page. A tenant
-cannot switch on a service that generates an invoice; a commercial agreement comes first.
-Because it is a *service* and not a screen, it lives in `SERVICE_ADDONS`, deliberately NOT
-in `MODULES` — anything in MODULES gains a sidebar entry and a row in every role's
-permission matrix, which a relay the platform operates on the tenant's behalf should not.
-`ADDON_KEYS` (= MODULES + SERVICE_ADDONS) is what the add-ons API now validates against.
-
-**Never silent.** The tenant's own Controls → Reports → SMTP / SFTP test reports which
-sender was used and says plainly when it was Uppsolut's, so an enterprise on the service is
-not left looking at empty fields wondering why mail works.
-
-**Every send is logged — `EmailLog`.** One row per attempt, success or failure, written by
-`src/lib/mail-sender.ts`. This is the BILLING RECORD, not diagnostics: the invoice figure is
-a count of an enterprise's `PLATFORM` rows for the period. That is why `deliverSmtp()` in
-`mailer.ts` is documented as internal and nothing outside the sender module calls it — a
-send that skipped the log is revenue that silently disappears.
-
-- **Metadata only** (owner decision): sender, kind, recipient, from, subject, status,
-  provider message id. **No body** — bodies carry guest details and, for the handover email,
-  a plaintext temporary password, none of which should sit in a readable table forever to
-  serve a row count.
-- **FAILED rows are written and are NOT billable.** A rejected send is what an operator
-  needs to see, and must never be charged as delivered.
-- **Uppsolut's own mail is never billable to the tenant** even though it is `PLATFORM` and
-  tagged with their enterprise id — `enterprise-welcome` and `channel-alert` are excluded
-  from the billable count by kind.
-
-**It reports, it does not price.** `/api/osta/email-usage` and the Email usage panel on the
-Osta Controls page give counts per enterprise per period. No rate is applied anywhere:
-`LicenseInvoice` amounts are hand-set throughout this product ("owner decision: no
-formula"), and a rate rendered here would be a second pricing model competing with the real
-one.
----
-
-## 2026-09-06 — Operations Dashboard: brand palette, per-user layout, DASHBOARD module (owner)
-
-- **Fewer colours, and they are ours.** The dashboard opened in blue, amber and aubergine —
-  none of them brand colours. Categorical series now separate by LIGHTNESS inside the
-  Crimson family (`--series-1..4`), single-series charts are brand Crimson, and the KPI
-  strip shares one hairline instead of four. Semantic colour is untouched: room status,
-  work-order priority and balances keep red/amber/green, because there the colour is the
-  information. The five `--chart-*` tokens stay as they are for charts that genuinely need
-  five unrelated categories.
-- **The title greets the user** — "Welcome, &lt;full name&gt;" rather than "Operations
-  Dashboard". Where you are is already answered by the nav; who you are signed in as is
-  not, and on a shared front-desk terminal that is the more useful fact.
-- **Every user arranges their own dashboard**: show/hide any widget, set its width, group
-  widgets into pages (tabs), drag cards to reorder with the grid auto-fitting.
-- **Layouts are stored per user on the SERVER** (`UserDashboardLayout`), not in the
-  browser. A front desk has several terminals and staff move between them, so an
-  arrangement is expected to be there at the next machine.
-- **And per property** (2026-09-07): one person's two properties are two different jobs —
-  a city hotel with a busy debtors ledger and an island resort running excursions and a spa
-  do not want the same cards in the same order, and keying on the user alone made every
-  property inherit whichever arrangement was tidied last. A property with no arrangement of
-  its own gets the shipped default rather than borrowing another property's, because
-  copying a layout the user never chose for it would then leave the first drag ambiguous
-  about which property it was editing. Existing rows were fanned out to every property
-  their owner could reach, which is exactly what the old row meant.
-- **A new DASHBOARD property module.** `view` decides who lands on the dashboard at all
-  (it was previously the one ungated screen); `update` is the right to configure, per role,
-  which widgets that role sees (`RoleDashboardWidget`). Existing roles were granted view by
-  migration so nobody silently lost a page they already had.
-- **Widget curation is not access control, and the code says so in both places.** The real
-  gate stays the per-section module permission in `src/lib/dashboard/overview.ts` — a role
-  without REVENUE is never sent revenue figures. Blocking a widget removes a card from
-  that role's dashboard. A user with several roles is blocked only when EVERY role blocks
-  it, matching the union rule that governs access everywhere else in the app.
-
----
-
-## 2026-09-06 — Website API: a brand website per property (owner)
-
-Each property may run its own website — a "front" with the property's information and a
-simple booking page — fed by a public, key-authenticated API. Full decision record in
-[WEBSITE_API_PLAN.md](DEV_LOG.md) (W-1…W-11); the rulings that shape behaviour:
-
-- **Keys are made in the Hub, at enterprise level, and may cover one or more of the
-  enterprise's properties.** INTEGRATIONS-gated; no new module. A property not on the key
-  answers 404, never 403.
-- **Minimal guest information.** First name, email required; last name, phone, remarks
-  optional. Guest matched to an existing profile by email or created.
-- **Availability is live and follows D-7.** Actual inventory, group holds withheld until
-  cutoff, stop-sale shown as closed. **The website can never overbook** — unlike a channel
-  booking, nothing has been confirmed to the guest yet, so a stay that no longer fits is
-  refused (`SOLD_OUT`).
-- **The site sells exactly one Hub-chosen rate plan per property**, mirroring channel
-  conversion defaults: no plan → not bookable, never a silent fallback to Base. Unpriced
-  nights are refused, never confirmed at 0.
-- **The quote endpoint is the price.** Calendar figures are room rates only.
-- **No payment in v1.** Policies + the Hub's desk note carry the terms.
-- **Keys are shown once, hashed at rest, rotatable and revocable**, same as the webhook
-  token and eRegistration link.
-
----
-
-## 2026-09-07 — Revenue: "Rate Details" is now "Rate Seasons" (owner)
-
-- The Revenue Management tab formerly labelled **Rate Details** is now **Rate Seasons**.
-  Its `TabsValue` is unchanged (`seasonal-pricing`), so URLs and any saved state still
-  work; only the label and the prose that pointed at it moved (`room-type-manager.tsx`'s
-  Base Occupancy hint, the comment in `revenue/calendar/page.tsx`). Earlier entries in
-  this file still say "Rate Details" — they are dated records, read them as the same tab.
-- The panel inside it is titled **"Define a Rate Season"** (was "Bulk Seasonal Pricing
-  Tool") so the tab and the card agree on what the thing is called.
-- **Layout**: the form was a single `max-w-3xl` column that left most of a wide screen
-  empty. It is now a two-column grid — fields on the left, a **Review** panel on the
-  right (xl and up; it stacks underneath below that) restating rate plan, season, room
-  types, price, and **how many daily price rows the push will overwrite** before the
-  button is pressed. The submit button states what is still missing rather than sitting
-  dead and silent.
-- The two separate From/To date fields were replaced by the standard `DateRangePicker`
-  (per the date-picker standard in AGENTS.md), which also makes an inverted range
-  unenterable rather than rejected on submit.
-
----
-
-## 2026-09-23 — UI polish round: reports, dates, dropdowns, dashboard, scrollbars (owner)
-
-- **Reports get a Preview.** The Reports page has a **Preview** button that shows the
-  report on screen before anything is downloaded. Preview and PDF are the SAME layout
-  (`src/components/reports/report-document.tsx`): the PDF is the report print page
-  (`/e/[slug]/dashboard/reports/print?r=…`) printed by headless Chrome
-  (`generateReportPdf`), the same one-rendering-path approach stationery already uses.
-  The old pdf-lib renderer stays only as a fallback if Chrome is unavailable.
-- **Report layout follows the app theme**: paper ramp (`--print-*`) with a single Crimson
-  OS accent (`--print-accent`), hairline rules, no filled header bars. Reports no longer
-  read `EnterpriseSettings.invoiceBrandColor` — that is Osta's licence-invoice colour and
-  was printing operational reports in indigo.
-- **Date pickers: the "one day before" bug.** Cause: the calendar returns local midnight
-  and several callers serialised it with `toISOString()` (UTC), which at UTC+5 is the
-  previous day. Rule from now on: date-only values go through `src/lib/date-only.ts`
-  (`toDateKey` / `parseDateKey` / `todayKey`), never `toISOString().slice(0, 10)` on a
-  local Date. `DatePicker` and `DateRangePicker` normalise what they are given.
-- **Dropdowns**: no native `<select>` anywhere. `OptionSelect`
-  (`src/components/ui/option-select.tsx`) takes a flat options list and renders the
-  styled plain dropdown for short lists, or `SearchableSelect` above 8 options
-  (`searchable` forces either). `SearchableSelect` now matches its trigger's width and
-  supports arrow-key/Enter navigation.
-- **Dashboard starts empty.** A user's dashboard shows no tiles until they switch them on
-  in Customise dashboard; widgets shipped later also arrive switched off. Existing saved
-  layouts are untouched (they are the user's own choice).
-- **Scrollbars**: one thin, low-profile themed scrollbar app-wide (`globals.css`).
-- **Reports page layout (owner, same day):** no side list of every report. Two
-  searchable dropdowns — **Report group** → **Report** (with "All groups", the Report
-  list shows everything under group headings; picking a report sets its group). Once a
-  report is chosen, its parameters and the Preview / Extract (PDF, Excel, CSV) buttons
-  appear below; the preview spans the full page container.
-- Found while verifying: report date parameters now default to the property's
-  **business date** (they used the computer's calendar date); `SearchableSelect` hides
-  its search box for lists of 8 or fewer, app-wide (`searchable` prop overrides); a
-  selected calendar day no longer goes dark-on-dark under the pointer in dark mode.
-
-## Green Tax Report = MIRA information sheet (2026-09-23)
-
-Owner supplied MIRA's template (`GRTInfoSheet25.1`); the Green Tax Report now *is* that
-sheet and its Excel export is submitted as-is.
-- **Columns, in order:** Guest Registration No., Name of Guest (LAST FIRST MIDDLE,
-  upper-case), Category, Date of birth, Identification No. (primary document),
-  Nationality (country name, upper-case), Booking Method, Check-in Date/Time,
-  Check-out Date/Time. No amounts — the levy column is gone.
-- **Category:** 4 = under `greenTaxExemptAge` (2) at check-in, 2 = Maldivian
-  nationality, 3 = work-permit holder, 1 = everyone else — checked in that order.
-- **Work-permit holder** is a tick on the guest's identification document
-  (`ProfileDocument.isWorkPermit`); any ticked document makes the guest category 3.
-- **Booking Method** is a fixed MIRA list (Foreign tour operator, Local tour operator,
-  Direct booking, FIT, Online travel agent) set on COMPANY/TRAVEL_AGENT profiles
-  (`Profile.bookingMethod`). A reservation reports its travel agent's value; no agent =
-  FIT. An agent with no method set is left blank and flagged in the report note.
-- **Times:** actual check-in time (`checkedInAt`, property time zone), else the property's
-  standard check-in time; actual check-out date/time once checked out, else the booked
-  departure at the standard check-out time.
-- **Filed monthly by STAY date** (owner): the period selects every registered guest with
-  at least one night in it (arrival < period end, departure > period start). A stay-over
-  from the previous month keeps its earlier number, so a month's list may skip numbers.
-- **Sequence rule** (owner): per property, restarts at 1 every calendar year, assigned in
-  check-in date + time order, and must have **no gaps across the whole year**. A
-  "missing number" exception check is not wanted — arrival always assigns one.
-- **Excel:** `ReportDef.renderXlsx` lets a report replace the generic styled workbook;
-  `render/green-tax-xlsx.ts` writes the bare sheet (header row 1, template's number
-  formats — note the template itself formats Date of birth month-first).
-
-### Green Tax Reg No corrections in the Hub (2026-09-23, owner)
-
-- **Who gets a number:** every guest staying **12 hours or more** (exactly 12 counts) in a
-  real room. PM (pseudo) room guests never get one. Measured from the **actual check-in
-  time**; Controls › Taxes has a toggle to measure on the property's standard check-in →
-  check-out times instead (`EnterpriseSettings.greenTaxStayBasis` ACTUAL | STANDARD).
-  EOD can only see the *booked* departure, so a guest who leaves early is flagged later.
-- **No "missing number" check** — owner: arrival always assigns one.
-- **Corrections** live in the Hub (`/e/[slug]/hub/green-tax`, new Hub module
-  `GREEN_TAX`: view = see, update = correct/file). Removing a number, or closing a gap
-  (e.g. a registration lost with a deleted booking — GuestRegistration cascades), moves
-  every later number of the year down by one: the year's sequence never has a gap.
-  Reason required; logged in `GreenTaxCorrection` + the activity log.
-- **Filed months are frozen.** "Mark as filed" (`GreenTaxFiling`) is allowed only once the
-  business date has passed the month, in month order, and with nothing flagged or gapped
-  in the numbers it freezes. After that **no correction may move a number any guest of a
-  filed month carries** — owner: "never allow"; such fixes are handled outside the system
-  before submission. There is no un-file.
-- The EOD numbering step and every correction share one per-property advisory lock.
-
-### Missing Profile Information report (2026-09-23, owner)
-
-Reports › Financial › **Missing Profile Information** (`fin-green-tax-missing`) — what
-would make the MIRA Green Tax sheet incomplete for a "stayed between" period, grouped by
-severity: **High** — a guest who should carry a Reg No has none, or a number below the
-period's highest is skipped in its year; **Medium** — no identification no., date of
-birth or nationality; **Low** — the booking's Travel Agent/Company account (the one
-`Reservation.travelAgentId` link) has no Booking Method. Guests the sheet leaves out by
-rule (PM room, stay under 12 h) are not checked. Adds Travel Agent, Confirmation No and
-Room Type to the sheet's own columns.
-- **Primary wins:** with several identification documents, the one marked primary is the
-  one reported (else the earliest added) — on both this report and the MIRA sheet.
-  Nationality is a single profile field, so there is nothing to choose between.
-
-## 2026-09-23 — Tax-inclusive rounding: the base takes the residual cent
-
-A tax-inclusive posting (`Property.pricesIncludeTaxes = true`) must split into parts that
-add back to exactly the gross entered. `computeTaxLines` (`src/lib/tax-calc.ts`) used to
-round the backed-out base and each tax line independently, which could drift a cent:
-inclusive 215.00 on SC 10% + GST 17% came out 167.06 + 16.71 + 31.24 = 215.01.
-
-- **Rule:** each tax line (Service Charge, GST, every Custom Tax line) keeps its own
-  `round2` of its true amount; the **base** is `round2(gross) − Σ rounded lines`,
-  computed in integer cents. So base + lines == round2(input) always. 215.00 now posts
-  167.05 + 16.71 + 31.24.
-- **Why the base, not the last tax line:** tax lines stay the exact rounded percentage of
-  the true base, which is what gets declared; the base (our revenue) absorbs the cent. The
-  base moves by at most one cent against its own rounding on the default engine.
-- **Exclusive postings unchanged:** the entered amount is the base, taxes ride on top.
-- Applies everywhere `postCharge` resolves tax (desk excursions, spa, outlets, Night
-  Audit, Booking API quotes). Tests: `tests/business-rules/tax-calc.test.ts`.
-
-## 2026-09-23 — Setup moves to the Hub, separated by Enterprise and Property (owner)
-
-Owner, on the Controls and Stationaries pages: move them to the Hub "as there is we will be
-doing the actual setup of the properties", and make it clear "for which property the
-settings are shown", keeping "anything that is common — belongs to enterprise — separated
-from property level things". Build plan: [HUB_SETUP_PLAN.md](DEV_LOG.md).
-
-- **Enterprise (shared):** users, roles & permissions, integrations, support access,
-  Email/SFTP. **Everything else is per property**, explicitly including tax definitions,
-  charge codes *including groups and subgroups*, payment methods, dropdowns and stationery
-  ("each property to have their own stationary").
-- **No live sharing between properties.** What the owner meant by "shared configs" is a
-  **copy** option — copy selected settings from one property to another, to ease
-  onboarding. If an item already exists at the target: **warn and skip; no overwrite option**.
-- **Work location is one property or ALL — never a subset** ("no option to give 2 of 3").
-  Single-property users reach one property; enterprise users reach all. Same rule for
-  Booking API keys.
-- **Single-property admins may enter the Hub**, but see only their own property's settings;
-  everything enterprise is restricted from them entirely.
-- **Controls leaves the property dashboard outright** — "no need for additional things"
-  (no redirect or stub).
-- **Beds24: one connection per property** — supersedes the per-enterprise invite code in
-  "Beds24 topology" (2026-08-02). The single master account stays. **Uppsolut creates the
-  invite code and connects each property** from its own side; a property requests it.
-  Property admins can map rooms/rates, check rates and availability, and view bookings and
-  logs — not connect, disconnect or re-authorize. Logs are seen per property.
-- **Booking API**: per-property website and Excursions/Spa online settings move to the
-  property's setup.
-- **Green Tax** stays in the Hub (highly sensitive: Hub admins, or property admins with Hub
-  access), separated by property like everything else.
-- **Existing data** gets one copy per property when split (fine for now). **Charge codes
-  should vary by property** — a property without Spa/Excursions needs no such codes, and
-  descriptions should be the property's own ("Veyo Garden Restaurant", "Maaveyo Pool Bar").
-- **Hub Overview is for "Maintenance and Config"**: banners only when important setup is
-  missing (hidden when complete, one click to the fix), Green Tax only when there are
-  issues, channel manager active/inactive; background jobs only when something critical
-  fails. The current link cards are not wanted.
-- **Supersedes:** "Stationaries page" (2026-07-19) placement in the dashboard sidebar and its
-  enterprise-wide storage; "Beds24 topology" (2026-08-02) invite code per enterprise.
-- **Release:** shipped as **7.0.0** (owner: "make sure this is marked as version 7.0.0").
-  The owner then asked for all phases to be completed without further questions — the calls
-  made on their behalf are listed in HUB_SETUP_PLAN.md, "Decisions taken without asking".
-- **Beds24 is administered by Uppsolut from the Osta console** (owner, same day: "there is an
-  enterprise called 'osta' … the bed24 connection to be managed from there by us"). A
-  property's connection is created there, for that property, with its Beds24 property id.
-
-## 2026-09-23 — Night Audit controls page; moving the business date by hand (owner)
-
-- Each property gets a **Night Audit** page in its Hub Controls: the business date, which
-  Maldives levies are posted each night (Green Tax, GST, Service Charge — as switches), and
-  what Night Audit does to vacant rooms' status. The levies' **values** (rates, amounts,
-  Green Tax rules) stay under **Finance**. "Prices Include Taxes" moved to Finance and
-  "Require Inspected Room at Check-In" to Rooms & Inventory (Housekeeping).
-- **Business date may be changed by hand** from that page:
-  - **to any date** while the property has **no data at all** (freshly provisioned: no
-    reservations, folios, cashier shifts, audits, spa appointments or excursion bookings);
-  - otherwise **only forward**, and only when there are **no in-house guests**, **no
-    reservations due to arrive before the new date**, and **no financial records** for the
-    days skipped (folio postings on or after the current business date). Also required: no
-    open cashier shift, Night Audit not running, and no spa appointments or excursion
-    bookings on the skipped days (added so nothing is silently skipped).
-  - Checks run before the change is offered and again, under a lock, when it is made
-    (`src/lib/business-date-change.ts`). Property staff are signed out afterwards, as after
-    Night Audit. Needs Property Setup (CONTROLS) plus NIGHT_AUDIT update.
-- Released as **7.1.0**, with the Hub navigation review of the same day (sidebar "Controls" +
-  "Channel Manager", breadcrumbs, the Hub Account dialog).
-- **No-show handling and the scheduled audit** (owner, same round — added on request):
-  - *No-Shows* — when Night Audit marks a never-arrived reservation: at its arrival night's
-    audit (default, the original behaviour), **held one night** for a late arrival and marked
-    at the next audit, or **never automatically** (the front desk marks them). A switch says
-    whether the audit posts the reservation's No-Show fee. Held arrivals stay on the arrivals
-    list as Due In and can be checked in; the audit summary lists them.
-  - *Scheduled Night Audit* — on/off and a time in the property's own time zone. The
-    background jobs (`night-audit-scheduled`) run every End-of-Day step through the same code
-    as the screen; a time before noon runs after midnight (02:00 closes the previous day), from
-    noon on the day itself. It stops at the first step that needs a person (e.g. guests still
-    due out) and never catches up more than one day by itself — both fail the job and show on
-    the Hub Overview (plus a property banner when a scheduled audit is an hour overdue).
-- **Check out settled departures automatically** (owner, same round): a Night Audit setting,
-  off by default. When on, the departures step — from the Night Audit screen or on schedule —
-  first checks out every guest due out whose folios ALL net to zero, through the desk's own
-  check-out (`src/lib/reservations/check-out.ts`), and stops only for guests who owe money,
-  are owed a refund, or settle by City Ledger (that raises an invoice the desk should see).
-
-## 2026-09-25 — Nationalities from an international master list; Job Functions fixed (owner)
-
-- **Nationality is a master list, not something to set up.** Every enterprise and property
-  gets every country ready-made: **ISO 3166-1** codes (alpha-2 is what every nationality /
-  country field stores; alpha-3 is the passport / ICAO 9303 code), **Unicode CLDR** English
-  country names, an English nationality ("Maldivian"), and the **country-flag-icons** SVG
-  flag (`src/lib/countries.ts`). An enterprise may **rename** an entry or **add its own**
-  (e.g. XXA "Stateless") — its NATIONALITY rows, layered on top
-  (`src/lib/nationalities.ts`); Hub > Enterprise > Guest Lists > Nationalities. One picker
-  (`NationalitySelect`) serves every nationality and country field: flag, search by
-  nationality, country or either code; nationality fields list "Maldivian", country fields
-  (address, document issuing country) list "Maldives". The guest's eRegistration form uses the
-  standard list; a scanned passport's alpha-3 and any older free-text answer ("British") are
-  stored as the alpha-2 code.
-- **Job Functions are a fixed list** picked on the People form (src/lib/job-functions.ts) —
-  the Hub's editable Job Functions list is removed as redundant (owner: "seems like a
-  redundant feature — remove if so"). The field itself stays: Housekeeping and Maintenance
-  decide who appears in the housekeeping and maintenance assignment pickers. Custom posts are
-  no longer possible; the API accepts only a listed post.
-- The Hub's enterprise lists page is now **Guest Lists**. The list editor's example
-  placeholders ("e.g. M, F, VEG") were removed at the owner's request.
-- Released as **7.3.0** (owner), with the Night Audit additions of 2026-09-24/25 (no-show
-  handling, scheduled audit, automatic check-out of settled departures).
-
-
-## 2026-09-24 — Held nights, scheduled audit window, charge codes are the property's (owner)
-
-- **A late arrival's held night is charged at check-in.** Under no-show "hold one night" /
-  "front desk decides", a guest checking in after their arrival night's audit already ran is
-  charged each held night at the booked rate, through the audit's own posting
-  (`src/lib/night-audit/stay-night.ts`, `src/lib/reservations/held-nights.ts`), dated today's
-  business date — with Service Charge / GST but **no Green Tax** (a levy on nights stayed).
-  The arrival date is not changed. The check-in wizard shows the held nights; the desk may
-  **waive** them with a reason, which needs **Cashiering delete** (the void permission) and is
-  logged. Check-in without a decision is refused (the tape chart's quick check-in sends the
-  desk to the wizard).
-- **Scheduled Night Audit runs between 22:00 and 06:00** only (form and API). A stored time
-  outside the window is reported, never run. With no-shows marked at the first audit and a
-  time before midnight, the form warns that later arrivals that night become No-Shows. A
-  **scheduled** audit never closes an open cashier drawer — it stops at "Close cashiers" for a
-  person; Night Audit run from the screen still force-closes as before.
-- **Charge codes are the property's own.** A new property gets the canonical charge groups
-  (the report buckets) and **only the system codes** — accommodation 1000, cancellation and
-  no-show fees 1050/1060, the tax codes 7000/8000/8500, commission 9100, deposit 9200,
-  payments 9500–9504, internal adjustment 9901 — with the subgroups that hold them. Every
-  revenue code, and its numbering, is created by the property. The fuller chart (2001–2004,
-  meal plans, spa, transport...) was demo data: it is seeded only by the demo seed scripts
-  (`ensureChargeTree(..., { demo: true })`). **Creating an outlet no longer creates a subgroup
-  or codes** — it posts to the codes picked on its form (supersedes the 2026-07-30
-  "outlet-wise subgroups" provisioning for new outlets).
-- **Copy from another property is a plain copy.** Codes keep their numbers; nothing is
-  renumbered or invented. A number (or an outlet's own subgroup number) the target already
-  uses is skipped and reported, never linked to the target's existing code.
-
-## 2026-09-24 — Documentation portal split into areas; Configuration guide (owner)
-
-- `/docs` is split into areas, each with its own sidebar, pager and PDF: **`/docs/api`**
-  (the Booking API, was `/docs/api-integration`), **`/docs/configuration`** (onboarding and
-  setup) and **`/docs/operations`** (day-to-day user guides, to be filled in later). The old
-  `/docs/api-integration/*` and `/docs/guides/*` addresses **redirect permanently** (next.config.ts)
-  because they are already shared with developers.
-- The Configuration guide's reader is the **client's admin user**; the **property team** does
-  the configuration. It separates **Enterprise** setup from **Property** setup and walks a
-  newly provisioned property to its first reservation, in dependency order (General → Tax &
-  payments → Charge codes → Outlets → Rooms → Rates → Numbering → Night audit → Stationery,
-  then the add-ons and channels, then a go-live checklist).
-- Configuration docs are **public**, like the API docs (and so are covered by `docs:check`).
-- Pages carry **screenshots**: compact WebP, **main content only** — never the app's sidebar,
-  header or footer — or just the open dialog. Taken from the fictional *Coral Bay Hotels*
-  enterprise (`npm run docs:demo`, `npm run docs:shots`), never from a customer's data.
-- **One PDF per area** (`npm run docs:pdf [area]`). The Booking API PDF keeps its address.
-
-## 2026-09-24 — Property logo is uploaded, 3:2 (owner)
-
-- The Hub's **Logo URL** field is replaced by an **upload** (Hub › the property › General).
-  The browser crops to a fixed **3:2 landscape** frame (drag, zoom in to trim white space,
-  zoom out to fit a wide logo whole; outside the frame is dimmed; live previews of the app
-  header and a document header) and exports a **900 × 600 PNG** — transparency kept, PNG
-  rather than WebP because Outlook can't show WebP in emails. A large upload (up to 10 MB;
-  PNG/JPG/WebP/SVG) is compressed by that re-export; typical logos land at 30–150 KB.
-- Stored on the VPS under `storage/logos` (the persisted `/app/storage` volume — not
-  `public/`, which the standalone build doesn't serve for files added at runtime), served
-  publicly by `GET /api/logos/[file]` with a fresh name per upload, cached immutably.
-  `Property.logoUrl` holds that path; it is set only by the upload route
-  (`/api/properties/[id]/logo`). Existing external Logo URLs keep working until replaced.
-- Shown on: the portal header (on a **white tile**, so a dark or transparent logo reads on the
-  dark header), every stationery document and its emailed PDF, every report (preview and PDF
-  — reports had no logo before), emails and the Booking API (as an **absolute** URL built
-  from `APP_URL`), and the guest eRegistration page.
-
-## 2026-09-25 — Mobile polish: defaults taken for the plan's open questions (owner approved the plan)
-
-The owner approved `.agents/docs/MOBILE_PLAN.md` and asked for all phases to be completed without
-further questions, so the plan's recommended defaults apply (change any of them later):
-- **Desktop is the source of truth.** Every mobile change is phone/tablet-only (breakpoints or
-  `pointer-coarse:`) and each phase is checked with `npm run mobile:audit` (pixel diff at
-  1280/1440px against a baseline).
-- **Bottom navigation on phones** — dashboard only (not Hub/Osta): 4 slots chosen by the person's
-  permissions and job function, plus "More" (the full menu). `src/components/mobile-bottom-nav.tsx`.
-- **Dialogs are bottom sheets on phones** that close by button/backdrop (no swipe); the phone
-  pickers (SearchableSelect, date pickers) use a swipe-down drawer.
-- **Hub on phones:** quick-action pages are adapted (sessions, support access, key revoke, business
-  date, inbound bookings, people status); every other setup page shows a "best on a larger screen"
-  notice but stays readable.
-- **eRegistration dates** (guest-facing page): uses `@/components/ui/date-picker` like everywhere
-  else (owner, 2026-10-11 — reverses the earlier native-input exception; the DatePicker opens in a
-  drawer on phones and has year/month dropdowns).
-- **Phone numbers** (owner, 2026-10-11): every phone/mobile field uses `@/components/ui/phone-input`
-  (searchable country-code dropdown + number-only box, default Maldives +960). Storage is unchanged:
-  one string, "+960 7771234", so no migration; legacy values without a "+code" show whole in the number
-  box. Calling codes live in `src/lib/dial-codes.ts`. Fields that take "phone OR email" stay plain text.
-- **Split stays price per segment** (owner request, 2026-10-11): each segment carries its own room
-  type and rate plan (selectors on the segment card; the grid still fills the active segment). Every
-  night posts on the segment that covers it (`postStayNight`). A rate plan's linked allocations apply
-  only to the nights of the segments on that plan: `ReservationAllocation.appliesTo` holds the
-  windows (null = whole stay: single segment, meal-plan and manual allocations), and the quote,
-  Night Audit and the form preview share `ratePlanAllocationWindows` (`src/lib/allocations.ts`).
-  Room Move acts on the segment covering the business date and leaves later segments alone; reports
-  list every room / room type of a stay (`roomTypeNames`, `primaryRoom`); a negotiated rate plan is
-  enforced server-side (`negotiated-access.ts`).
-- **Profiles: delete only when fresh, otherwise deactivate** (owner, 2026-10-11): anything that points
-  at a profile (bookings as guest / travel agent / accompanying guest, folios and group blocks it
-  pays, registrations, eRegistration slots, negotiated rates, spa preferences - `src/lib/profile-links.ts`)
-  blocks deletion; `Profile.isActive` hides it from every picker and search (`/api/profiles` hides
-  inactive unless `includeInactive=1`, which Client Relations passes) and keeps all history. A guest with
-  a RESERVED / IN_HOUSE booking can't be deactivated.
-- **Group block Posting Master** (owner, 2026-10-11): each block has a PM reservation (`isPostingMaster`,
-  `GroupBlock.postingMasterReservationId`) in a pseudo "PM" room per block; its folio is the block's
-  master folio. Created at Definite (or by "Create master folio"), auto checked in with the first pickup,
-  skipped by Night Audit. It is not a pickup (no groupBlockId). See `src/lib/groups/posting-master.ts`.
-- **Front Desk / list views** (owner, 2026-10-11): Front Desk tabs run Arrivals, In-House, Room moves,
-  Departures; each row/card shows two buttons (Arrivals: Check in, Register; In-house and Room moves:
-  Traces, Folio; Departures: Check out, Folio) and a "..." menu for the rest. Client Relations is one card
-  per row with badges relevant to the profile type. VIP and "primary" markers are the solid
-  `GoldStar` / `StarToggle` (`src/components/ui/gold-star.tsx`), never the outlined icon.
-- **Risky actions on phones** (reverse check-in/out, stop sale, deletes) stay available behind a
-  "More" menu, last and in red, and keep their confirmations.
-- **Tablets (768–1023px)** use the desktop layout plus the touch-size bump.
-- **Housekeeping attendants** are not redirected; the bottom nav puts Housekeeping first for them.
-- One dashboard layout across devices (no separate phone layout for now).
-- The desktop dashboard header is meant to be sticky but isn't (`overflow-x-hidden` on `<main>`);
-  fixed below `md` first; **owner (2026-09-25): fix it on desktop too** — all three shells use
-  `overflow-x-clip`, so the header stays pinned while scrolling on every screen.
-
-**Owner confirmation (2026-09-25):** bottom nav on phones — yes; native date input on the guest
-eRegistration page — yes; risky actions behind "More" — yes. Also asked to fix every item the
-plan left open (MOBILE_PLAN §7 "Left open").
-
-
-## 2026-09-25 — Green Tax per guest; every guest gets a Registration No (owner)
-
-- **Registration numbers:** every guest on the booking gets one: the primary and every
-  accompanying/sharing guest, **including Green Tax-exempt guests** (infants,
-  Maldivians, permit holders). The arrival details on the sheet are the same for all of
-  them. Numbering already worked this way at arrival. **New:** a guest added to an in-house
-  stay after its arrival night (on the reservation or through eRegistration) was never
-  numbered. The next EOD now numbers them (`src/lib/guest-registration.ts`).
-- **Exemption (owner):** a guest pays no Green Tax when they are **under the exemption age
-  (default 2) at check-in**, **Maldivian**, or hold a **work permit**. The profile's "Green
-  Tax Exempt" box ticks itself for these, locked, with the reason. The manual tick still
-  exists for any other case.
-  - The automatic reasons are **worked out every time, never stored**
-    (`src/lib/green-tax-exemption.ts`). An infant who turns 2, or a corrected nationality,
-    is charged correctly without anyone re-ticking. The stored `Profile.greenTaxExempt`
-    is the manual tick only.
-  - Work permit = any identification document flagged "Work permit", the same test the
-    MIRA sheet uses for category 3. The owner confirmed on 2026-09-25 that this rule
-    stays, not primary-only.
-  - Maldivian nationality is read in any stored form (MV / MDV / Maldives / Maldivian),
-    shared with the sheet's category 2 (`isMaldivianNationality` in `countries.ts`).
-- **Posting is per person:** before this, the profile tick was stored but **never used**.
-  Green Tax was adults × rate + children × rate from the booking's head counts. It is now
-  the head counts **less the exempt named guests** (`greenTaxPax`). Rules:
-  - An exempt minor (under 18 by birth date) comes off children, anyone else off adults.
-    Either falls back to the other when its count is used up. Never below zero. The same
-    person named twice counts once.
-  - A named infant comes off only if the booking did not already count them in `infants`
-    (that bucket is untaxed already).
-  - Unnamed people on the booking pay.
-  - Other per-person charges (PER_PERSON_PER_NIGHT, allocations) keep the full head count.
-    Only Green Tax uses the reduced one (`PostingContext.greenTaxAdults/greenTaxChildren`).
-- The same basis feeds Night Audit, Advance Bill, the proforma, the daily breakdown, the fee
-  rules and the booking form's quote, so estimates match what posts. **Not** the website
-  Booking API's quote: no profile exists before the booking, so its quoted Green Tax
-  assumes everyone pays. Night Audit then posts per person.
-
-## 2026-09-25 — Reservations list defaults to business on the books (owner)
-
-- The Reservations & Stays list opens on **future active bookings only: status RESERVED**.
-  In-house guests, today's departures, checked-out, no-shows and cancellations are not in
-  the default list. In the owner's words, "business on the books".
-- **A specific search looks through every status** (owner, same day): cancelled,
-  checked-out, no-show, in-house. This replaces the 2026-08 rule that hid checked-out and
-  no-show bookings from a search. Picking a status in the filter narrows it to exactly that
-  status. Search results list the newest stays first.
-- **Keeping search cheap** (owner asked for it): trigram (`pg_trgm`) GIN indexes on every
-  searched column (guest first/last/company name, phone/email, confirmation no., channel
-  ref, room number) plus `(propertyId, checkInDate)`. Searches under 2 characters are
-  ignored, and the term is capped at 100. The page waits 350 ms after typing and cancels a
-  stale request when a newer one starts.
-- The status filter's default is labelled "On the books". A separate "Reserved" option would
-  duplicate it, so it was dropped.
-- The RESERVED default is the page's choice. `GET /api/reservations` with no `status` and
-  no search still returns everything but CHECKED_OUT/NO_SHOW. With a search, it returns
-  every status.
-
-## 2026-09-25 — Desktop polish: owner approved every recommendation in DESKTOP_PLAN.md (owner)
-
-Owner: "yes to all your recommendations … I also need the UI to be clean, so pay extra
-attention to not making the screens busy — it's fine if the user has to make extra clicks for
-non-important things."
-
-- **Clean over convenient (standing rule).** A screen shows what the job needs *now*; anything
-  secondary goes behind one click (More menu, collapsed section, tab, "Show details"). Extra clicks
-  for rare actions are acceptable; clutter is not. Applies to every future screen, not just this
-  pass. Concretely: one primary action per screen/section; ≤2 visible secondary actions, the rest in
-  More; destructive actions last in More, red, confirmed; empty sections are not rendered as cards
-  (show an "Add …" link instead); no explanatory paragraphs on the page — use `InfoHint`.
-- **Feedback:** success and ordinary errors are toasts (top-right, unchanged). A modal only for an
-  error that needs a decision, and it carries the action (e.g. "Open folio").
-- **Reservation detail two-column layout: APPROVED** after a sketch (same day). Main column = stay,
-  room, guest, requests; sticky right summary rail = status, dates, balance, the one next action
-  by state (Check in / Settle and check out / Open folio); header = 1–2 actions + More; empty
-  sections collapse into one "+ Add transport · deposit · trace" line. Owner: "hope this does not
-  affect mobile view much" → the two columns and rail apply from `lg:` up only; the phone layout
-  from MOBILE_PLAN Phase 2 (summary strip, MobileActions, collapsed sections) stays as it is.
-- **Naming — CORRECTED same day: names stay as they are** (owner: "names stay same"). Sidebar
-  labels are not renamed (Tape Chart, Client Relations, Fast Post, Night Audit … stay). Where a
-  page title differs from its sidebar label, the page title follows the sidebar label
-  (e.g. "Availability Matrix" page → "Tape Chart"), so sidebar = page title = browser tab.
-- **Command palette (Ctrl+K)** with page, action and guest/reservation/room search: yes.
-- **Toasts:** confirmed by the owner in a follow-up message.
-- **Folio:** confirmed — becomes a real page (`/folios/[id]`, linkable, opens in a tab); the dialog stays as a
-  quick view.
-- **Header:** property switcher in the header; "Operations ⇄ Setup" toggle; business date links to
-  Night Audit.
-- **Housekeeping board:** neutral cards with a status stripe + label (no fully tinted cards).
-- **Hub save model:** save-per-section with a "Saved" state everywhere; auto-save only for single
-  toggles.
-- **Order:** Phase 1 (flow & feedback) first, then shell, declutter, consistency, power features.
-- **Orphan `/dashboard/inventory`:** redirect to Housekeeping (took the plan's recommendation).
-
-## GST Report (2026-09-25)
-
-Owner asked for a GST-filing report: one line per invoice — Invoice Date (= departure date),
-Folio/Invoice No, Guest Name, Travel Agent, Agent TIN, Arrival, Departure, Invoice Total excl
-tax, Service Charge, GST, Green Tax, Total incl tax — ordered by invoice date then number,
-filtered on invoice date. Built as `fin-gst` in `src/lib/reports/defs/financial.ts` (replaced the
-earlier version, which missed routed Service Charge/GST lines entirely). Rules chosen while building
-it — **not yet confirmed by the owner**:
-- An invoice = a folio with posted (non-void) charges. A stay's folio is dated on the reservation's
-  departure date and only once CHECKED_OUT; a walk-in / non-stay folio on its `closedBusinessDate`,
-  only once closed. Every non-void line counts, whatever its posting date.
-- Invoice No is `Folio.taxInvoiceNumber`; a folio whose Tax Invoice was never printed has none, so
-  it shows `CONF / F1` and the report's note counts them.
-- Guest Name is the reservation's primary guest (not the folio payee); walk-ins use the payee or
-  walk-in name. Travel Agent/TIN come from the reservation's travel agent.
-- TIN is a new field, `Profile.tinNumber`, on Company/Travel Agent profiles (Finance & Billing).
-
-## 2026-09-25 — UI text standard: sentence case (owner: "have a standard — up to your recommendation")
-
-- **Sentence case for all UI text we write:** buttons, menu items, tabs, dialog and card titles,
-  field labels, table headers, toasts, empty states — "Add room type", "Save", "New rate plan",
-  "Close shift", "Guest details". Capital only on the first word and on proper nouns / codes
-  (Green Tax, MIRA, GST, BAR, Booking API, Hub, Night Audit when naming the module).
-- **Exception — navigation names stay as they are** (owner, same day: "names stay same"): sidebar
-  items and the page titles that equal them keep their current form ("Front Desk", "Tape Chart",
-  "Client Relations", "Fast Post", "Daily Reports"). They are the product's section names.
-- Verbs: "Add ‹noun›" opens a create dialog, "Create" confirms it, "Save" confirms an edit,
-  "Delete"/"Remove" destroy (always confirmed). Pending labels end in "…" ("Saving…").
-- No "successfully", no "!", no "Please" in UI copy.
-- Owner also approved (same day): move the Spa booking participant slots onto the form
-  standard, and turn the very wide dialogs into side sheets or pages.
-
-## 2026-09-26 — Folio check numbers and roll-up (owner)
-
-- Every posting gets a **check number** (`FolioLineItem.checkNo`): one property-wide running
-  number (Sequence Manager, like invoice numbers). A charge and the Service Charge / GST / levy
-  lines it generates share it. **Night Audit**: a stay-night's room rate + extra occupancy +
-  allocations + all their taxes share ONE check number.
-- The **folio screen rolls up** lines with the same check number **in the same folio** into one
-  line (expand to see the parts). Different folios never roll together, even with the same
-  number. Staff can **edit a line's check number**; lines that no longer share a number stop
-  rolling up.
-- **POS / Fast Post: each item separately** — an item rolls up with its own SC/GST only, not the
-  whole outlet check.
-- **Existing postings are backfilled** so old folios roll up the same way.
-- **Printing:** the print dialog's existing layout options (Detailed, Compact, By code, By date,
-  By check) stay; "By check" uses the new check number. Owner: make sure every option works.
-- Folio "Post charge": the charge code is picked by typing the code or its description
-  (searchable), full width.
-
-## 2026-10-04 — Transportation module (owner brief)
-
-Full plan and decision list: [TRANSPORTATION_PLAN.md](DEV_LOG.md) (T-1…T-14).
-Owner's brief, in short: per-property transfers linked to reservations (or a traveller with
-no stay), airport leg + onward leg, PICKUP/DROP_OFF, **shared departures (manifests)** as the
-core object; Hub configuration (types, locations, routes with default departure slots,
-providers + vessels, rates with charge code and tax, module settings); a daily board with an
-Airport rep view and a Dispatch view (mobile/tablet usable); "Needs attention" warnings that
-never block; billing **Night Audit driven, one posting per booking**, never auto-posting
-no-shows/cancellations, manual post/fee/waive, voids through the standard folio flow;
-Booking API + docs; version bump prepared, not finalized (owner confirms after testing).
-Decisions taken without asking (flagged in the final report, revisit if wrong):
-- Drop-off charges post at the audit of the guest's **last night**, stamped with the
-  departure date (the departure date's own audit runs after check-out closed the folio).
-- Permissions map onto the existing CRUD bits: view / create = bookings / update = manifests /
-  delete = billing overrides; configuration = Property Setup (CONTROLS); voids need Cashiering.
-- The older per-reservation Transport card is superseded where Transportation is on; booking
-  the same leg converts it without double charging.
-- Proposed version **8.5.0** (new feature, additive migration).
-
-Owner follow-up, same day (answers to the questions after the first build):
-- **Enabling = Osta add-on + property switch.** Transportation is an enterprise add-on toggled
-  in the Osta console like Excursions and Spa, AND each property keeps its Hub on/off switch.
-  Both must hold (TRANSPORTATION_PLAN T-1).
-- **The reservation's Transport section is "very simplistic"**: flight no., transport no. and
-  time — three fields only, for the pickup and the drop-off, no charge code or anything. Time =
-  the **flight time** (landing for the pickup, take-off for the drop-off).
-- **With the module enabled that section is read-only**, managed from Transportation only —
-  shown filled from the module's bookings, with the module's Transportation card (Add transfer)
-  kept under it (T-11).
-- **Drop-off charge on the guest's last night** — confirmed as built.
-
-## Revenue Calendar, Rate seasons steps, and stop-sale override (2026-10-10)
-
-App-owner direction for the Revenue module and stop sale.
-
-- **Revenue's first tab is a view-only Calendar** (replaces Manager Flash, whose component was
-  deleted). It opens on the property's Base Rate plan and first room type, with a rate plan and room
-  type filter. Daily price only; extra adult/child prices on hover. A night the plan has no price
-  of its own shows **NA** — the Base Rate fallback is not displayed (Night Audit still falls back
-  to it when posting). Rate plans > Calendar opens the same view **locked to that plan**
-  (`/revenue/calendar?ratePlanId=`, no switching).
-- **All price changes happen in Rate seasons.** Picking days on the calendar offers **Update
-  prices** (opens Rate seasons with plan, room type and dates filled in, and returns to the
-  calendar after the push) and **Stop sale**.
-- **Rate seasons is three locked steps** (plan -> season & price -> room types): a step opens
-  only after the previous is saved with its mandatory fields. Arriving from the calendar unlocks
-  all three.
-- **Stop sale is not per rate plan** — it closes a room type (or the whole property) for every
-  plan. Per-plan closure was not requested and would need a schema change.
-- **Stop sale restricts NEW sales, never existing bookings.** The website API and channel
-  manager always honour it (website: `STOP_SALE` 409; channel: `override: "blackout"`). Setting
-  or lifting a stop sale now **pushes to the channel manager immediately** (`pushPropertyNow`,
-  fire-and-forget; the scheduled sweep remains the safety net).
-- **Two independent desk overrides**: **Overbook** (`acknowledgeOverbook`) ignores physical
-  inventory; **Override Restriction** (`overrideStopSale`) ignores a stop sale and needs
-  **Availability update access** (the same right that sets a stop sale; Admin, Manager, Front Desk
-  and Reservations roles have it by default). If a night is both closed and sold out, the prompt
-  shows both warnings and needs both. The website and channel paths can never override (their
-  system context has no permissions). Supersedes the earlier "hard block, no override" rule
-  (2026-07-26) for desk users. `gateBookingConflicts` in `src/lib/restrictions.ts`.
-
-## Cashiering (2026-10-12, 8.8.3)
-
-- **Closing a shift is no longer a blind drop.** The Close shift window shows the payments taken by
-  method, how the expected cash is made up (opening float + cash received - cash refunded -
-  paid-outs +/- local-currency exchanges) and the expected closing cash, then asks for the counted
-  cash (with a live balanced / short / over line) and an "I confirm there is X in the drawer" tick
-  before it will close. The reconciliation after closing is unchanged. (Owner request; replaces
-  the earlier blind-drop wording.)
-- **Currency exchanges and paid-outs can be linked to an in-house guest** (Walk-in / Not linked is
-  the default). It is a link only: the guest's name and room show on the shift list and the
-  exchange receipt, nothing is posted to their folio. Only an in-house reservation at the same
-  property can be linked (`CurrencyExchange.reservationId`, `CashierPaidOut.reservationId`).
-
-## 2026-10-14 — Each enterprise connects its own Beds24 account (owner, 8.8.4)
-
-**Supersedes** "Beds24 topology — ONE master account" (2026-08-02) and "Beds24 is administered by
-Uppsolut" (2026-09-23) as the ONLY route. Owner: enterprises must be able to hold their own Beds24
-connection and set it up themselves; Uppsolut's own-account setup stays **for properties that opt
-for it**.
-
-- **Self-service (default).** A property admin with INTEGRATIONS create/update/delete at the
-  property connects (invite code + Beds24 property id), re-authorizes, corrects the Beds24 id,
-  mints/replaces the webhook URL, runs a deep resync, sets the rate-limit floor / poll window and
-  disconnects, all from `Hub › property › Channel Manager`. Routes: `POST /api/hub/connections`,
-  `PATCH|DELETE /api/hub/connections/[id]`, `.../[id]/webhook`, `.../[id]/resync`, authorised by
-  `src/lib/channels/hub-access.ts` (own enterprise; a PROPERTY-scoped user only their own property).
-  Both paths end in `createConnection()` (property + one-connection + licence cap checked BEFORE the
-  single-use invite code is spent).
-- **Managed by Uppsolut (opt-in).** The Osta console routes (`/api/osta/channels/**`) are unchanged:
-  Uppsolut connects the property through its own master account. The result looks the same in the
-  customer's Hub (already connected).
-- The API-credit pool is per Beds24 ACCOUNT, so for self-connected properties the pause threshold
-  protects the enterprise's own pool; the Osta console's "shared pool" card still only describes the
-  master account.
-- Not changed: one connection per property; mapping, sharing switch and defaults as before.
-- Docs: new guide `/docs/configuration/property/channel-manager-setup` (with screenshots).
-
-## 2026-11-07 — UX polish round 1 (owner, 8.8.6)
-
-Patch release 8.8.6 (first numbered 8.8.5, renumbered by the owner so the PRs merge as 8.8.6 → 8.9.0 → 8.9.1), no schema change, release notes written. Owner approved four first-glance items:
-
-- **Dashboard empty state.** The status ribbon no longer counts as a tile: a dashboard page showing
-  only the ribbon now shows "Nothing on this dashboard yet" with a **Customise dashboard** button
-  (opens the same settings panel as the header cog). Before, the page looked blank with no prompt.
-- **Check in with no room.** On Front Desk (table, card, phone) and the Reservations list the
-  button reads **Assign & check in** while the first stay segment has no room, with a hint. The
-  check-in wizard already forces a room first ("A room must be assigned…"), so no flow change.
-- **Incomplete-profile warning.** Already had a hover title; it now names what is missing
-  (nationality / date of birth / ID document) via `profileMissing` on the summary API's arrivals,
-  and carries an `aria-label`. `profileIncomplete` is kept (derived from it).
-- **Dashboard status chips** that link elsewhere (Night Audit, Cashier shifts) now end in a chevron
-  and have a hover hint. They were already links; the first suggestion missed that.
-
-**Round 1, second batch (same 8.8.6 PR, owner-approved items 5–8):**
-- **Tape Chart.** Cards show guest name + full confirmation number only (status stays in the
-  colour, legend and hover title). The pinned room column now sits above the cards (z-20 vs 10;
-  header 30) — cards used to paint over it when scrolling sideways. The grid scrolls both ways
-  inside the card (`max-h`), so the date row sticks too. Weekend tint = Sat/Sun, as on
-  Availability; today's column tinted + underlined.
-- **Reservations loading** already showed skeletons; the table's are now row-shaped. Actions
-  column 150→190px and column widths rebalanced so "Assign & check in" does not squeeze Stay.
-- **Housekeeping due-out** rooms: tinted card + filled "Due out" tag. Rooms are NOT re-sorted
-  (the board stays in room order); revisit if the desk wants due-outs first.
-- **Page toolbars: one primary + one secondary; if more than two actions, the secondary is a
-  "More" menu** (existing `ActionBar`). Applied to Reservations (New booking | More: Tape Chart,
-  Auto-Assign) and Housekeeping (Select | More: Task sheets, Refresh; while rooms are ticked:
-  Done + Select all). `useAutoAssign()` splits Auto-Assign's flow from its button. Other pages'
-  toolbars are not yet converted — see TODO.
-
-## 2026-11-07 — Keyboard-first front desk (owner, 8.9.0)
-
-Owner approved the "keyboard first front desk" idea after a design discussion; asked for quick keys
-**and** a cheat sheet that shows everything, documented for users, **existing functionality must not
-stop**, check-out allowed "as long as we are being cautious", and Reports / Close shift / Fast Post
-taken into account. Role-based landing page: **not wanted for now** (parked).
-
-- **One list, three readers.** `src/lib/shortcuts.ts` is THE shortcut list; the cheat sheet (`?`),
-  the key handlers and the Operations guide page (`/docs/operations/keyboard-shortcuts`) all read
-  it. `tests/business-rules/shortcuts.test.ts` fails if two shortcuts share a key, a "go to" target
-  is not a real sidebar page / has a different module, or a no-show / cancel / void key appears.
-- **Additive, never subtractive.** Single letters act only when nothing is focused or typed into,
-  no dialog **or alertdialog** is open, and no Ctrl/⌘/Alt is held (`canUseSingleKey`). Ctrl+K, `/` and
-  Ctrl+B are untouched. A per-device **Quick keys** switch (localStorage `quick-keys`, default on) turns
-  the letters off; `?` and Ctrl+K always work. Enter on a palette result still just opens it.
-- **Palette: Tab / → on a booking lists its actions** (`src/lib/palette-actions.ts`, pure and tested):
-  due-in → (Assign room &) check in, Folio; in-house → Folio, Post a charge, Move room, Check out;
-  always "Open the booking". Every action is a link into the screen that already does it, with its
-  own checks — Front Desk understands `?checkin=`, `?folio=`, `?move=`, `?checkout=`; Fast Post
-  understands `?reservation=&room=` (room searched, guest selected); Cashiering `?closeShift=1`
-  (opens the close-shift dialog if a shift is open; the count + confirmation still happen there).
-- **Check-out is always confirmed**, from the key (`O`) and from the palette: "Check out <guest>?" with
-  the room and any balance, then `handleCheckOut`'s own early-check-out / balance prompts apply. No
-  key for no-show, cancel or void.
-- **New palette actions:** Close shift, Fast Post, Run a report, Keyboard shortcuts.
-- **`g` then a letter** goes to a sidebar page (19 pages, module-gated like the sidebar); a small
-  "G then a letter" note shows while it waits (1.5 s). Front Desk list keys: J/K select, Enter open,
-  C check in, O check out, F folio, A assign room, M move room, 1–4 tabs (screen order: Arrivals,
-  In-House, Room moves, Departures), Esc clears.
-- Not done (see TODO): the same list keys on Reservations, Housekeeping and Tape Chart; verb-first
-  typing ("in williams"); per-user (server-side) storage of the Quick keys setting.
-
-## Osta console: a customer's people and activity are not Osta's to browse (2026-11-07)
-
-- Owner: "for Osta users no need to see activity and people for each enterprise as it's
-  classified." The Osta enterprise workspace (`/osta/enterprises/[id]`) therefore has **no
-  People tab and no Activity tab**, and the Ctrl+K search (`/api/osta/search`) does **not**
-  search a customer's users. Old `?tab=people` / `?tab=activity` links fall back to Overview.
-- Also removed for the same reason: the Overview setup step "First sign-in by the client"
-  (it read the customer's own LOGIN trail).
-- Same day, follow-up: the **user count** is not shown either (it was in the workspace header and
-  the directory preview). The workspace only checks *whether* a customer has any user, to offer
-  **Create initial user** and tick that setup step; the number is never displayed, and the
-  directory no longer loads it. Osta's **own** activity trail on the Today page is unaffected
-  (it is Osta staff's actions, not a customer's).
-- Do not add a customer user list, a customer activity feed, or user search back to the Osta
-  console without asking the owner first. Support-mode staff see a customer's data only inside
-  an approved support session, through the customer's own screens.
-
-## Osta console: an enterprise's own channel-manager connection is running / not running only (2026-11-07)
-
-- Owner: for channel manager, Osta does not need to see a connection's details or logs when the
-  enterprise set it up from its own end — only whether it is actively running. Full detail stays
-  for connections Uppsolut set up from the Osta console.
-- `ChannelConnection.managedBy`: `OSTA` (created from the Osta console, master Beds24 account) or
-  `ENTERPRISE` (created from the property's Hub, the customer's own account; also the default).
-  Migration `20261107210000_channel_connection_managed_by` back-fills `OSTA` for rows created before
-  2026-10-14 (when only Osta could connect) or whose creation the Osta route logged.
-- For an `ENTERPRISE` connection the Osta console gets, from the server: name, property,
-  enterprise, provider and `running` (status CONNECTED) — never `lastError`, health/refresh times,
-  rate-limit credits, webhook, poll settings or `ChannelSyncLog` rows. Wording is "Running" /
-  "Not running", never "Failing". It is not in Today's inbox or the sidebar's failing count, and
-  DB Health's channel statistics count only `OSTA` connections' logs.
-- Every `/api/osta/channels/connections/[id]*` route refuses an `ENTERPRISE` connection
-  (`assertOstaManaged`, 403): no check, resync, webhook, settings, re-authorize or delete from
-  Osta. The enterprise manages it from its Hub; Osta staff see it there only inside an approved
-  support session.
-
-## Osta Monitoring: DB Health redesigned, load history persisted (2026-11-08)
-
-- Owner asked for a Vercel-style monitoring page with a clear overview, an enterprise-filtered
-  view and an easier enterprise/property choice; approved "build it with rollups" over the design
-  (canvas screens 5–6). `/osta/db-health` now redirects to **`/osta/monitoring`**; the nav item is
-  "Monitoring".
-- **Load history is persisted, per minute** (`DbMetricRollup`, migration
-  `20261107220000_db_metric_rollup`), superseding the "deliberately not a persisted table" call
-  above. Write amplification is bounded: one row per (minute, enterprise, property) that had any
-  operations, written in one `createMany` per minute by `src/lib/db-rollups.ts`; nothing is written
-  while the server is idle (the flush timer is armed by the first event, not an interval). Kept
-  8 days, pruned hourly from the same flush. Each instance writes its own rows; readers SUM.
-- p95 is estimated from latency bands (5/10/25/50/100/250/500/1000 ms and slower), so the page
-  shows it as "≤ N ms", never a precise figure.
-- The SQL-level views (statement text, slowest statements, model names) stay in-memory and
-  this-server-only; the Database tab and the property scope say so.
-- The page never refreshes on a timer (house rule): it re-fetches when the browser tab comes back
-  into view after 30 s, or on Refresh.
-- Channel figures are Uppsolut-run connections only; an enterprise's own connection shows as
-  "Own account · running / not running" (DECISIONS 2026-11-07).
-
-
-## Osta console: Billing replaces Licensing, approvals and support access simplified (2026-11-08, owner)
-
-- **Billing** (`/osta/billing`) is a read-only finance overview: outstanding and overdue, collected
-  and invoiced this month, monthly recurring, "up next to invoice", and Invoices / Payments recorded /
-  By enterprise tables. **Issuing an invoice and recording a payment stay on the enterprise's Billing
-  tab** — the overview only links there. Licensing is no longer a sidebar page; `/osta/licensing`
-  redirects (to the enterprise's Billing tab when `?enterprise=` is given).
-- **Property Approvals** has no page of its own: approvals happen in Today's inbox and on each
-  enterprise's Properties tab. The pending count shows on Enterprises in the sidebar.
-- **Support Access** is a simple log: request access (enterprise + reason), see what is live and
-  until when, what is pending, and what ended (expired / denied / revoked).
-- **Spa, Excursions and Transportation stay enterprise-level** (confirmed again; see 2026-08-02).
-  The Osta property page only shows them read-only; Transportation also needs the property's own
-  Hub switch (T-1), shown there as "Off at this property".
-- The Osta property page shows setup and health only (rooms, room types, business date vs the date
-  at the property, Night Audit, last activity as a time and kind) — never guests or people
-  (2026-11-07 rule).
-
-## 2026-11-08 — Osta console on phones
-
-- The Osta console gets the phone **bottom nav** (Today, Enterprises, Billing, Channels + More,
-  which opens the sidebar) — this reverses MOBILE_PLAN Q1 ("dashboard only") for Osta. The Hub
-  still has none.
-- **No create button in the phone header** (owner): the + New menu is tablet/desktop only. On a
-  phone, creating goes through search (Ctrl+K palette actions) or the page's own button.
-- The notification bell opens a bottom sheet on phones, in every shell (tenant, Hub, Osta).
-- **Nothing scrolls sideways on a phone** (owner, 2026-11-08 — the PWA is officially released for
-  phones). Tables become cards, tab rows become full-width grids, segmented switches or a dropdown,
-  secondary filters go into a bottom sheet (`MobileFilterSheet`). Print documents (A4 reports such as
-  the permission matrix) are the only exception. Features stay the same; only the phone layout changes.
-
-## 2026-11-09 — Phone consistency pass (owner)
-
-- **Page header on phones = Housekeeping's**: title left, compact (h-9) buttons on the same row, main
-  action last, "More" keeps its label. Built into `PageHeader`; pages may not stretch header buttons
-  full width — shorten the label on phones instead ("New"). Pages whose header actions are filters
-  use `phoneActionsBelow` (Dashboard). The Dashboard title on phones is "Dashboard" (no welcome line).
-- **Tab rows on phones always fit, at most 4 per row** (1–4 one row; 5–6 three per row; 7–8 four):
-  built into `TabsList` for horizontal tabs.
-- Front Desk on phones: no counts strip above the tabs (the tabs carry the counts).
-- Folio on phones: sticky header with its own close; Post charge / Post payment pinned at the bottom,
-  each opening a bottom sheet (Fast Post pattern).
-- Icons: light-mode icon is Iconsax **Sun 2 Linear**; plain × for close; ‹ › ˅ ˄ are the plain chevrons
-  (mx-icons ArrowRight2/ArrowDown2 are circled — do not use them for chevrons).
-- A booking always has a room line (room type + rate); a room NUMBER is optional. UI that meets one
-  without a line sends the user to choose a room & rate first.
+| Configured | By the tenant, in the Hub (enterprise area, Email) | By the operator, `PLATFORM_SMTP_*` variables |
+
+- **Order of precedence:** the tenant's own SMTP, then the platform SMTP if the enterprise has
+  the Uppsolut Mail Service add-on, then "SMTP is not configured"
+  (`resolveEnterpriseSender`, `src/lib/mail-sender.ts`). **A tenant's own SMTP always wins.**
+- **The Uppsolut Mail Service is granted by Osta, never self-served** (`EnterpriseAddonAccess`
+  key `PLATFORM_EMAIL`). It is a service, so it is in `SERVICE_ADDONS`, not `MODULES`: no
+  sidebar entry and no row in the permission matrix.
+- **Never silent:** the tenant's SMTP test says which sender was used.
+- **Every send is logged in `EmailLog`, and that log is the billing record.** Nothing outside
+  the sender module may send mail directly. The log keeps metadata only, **never the body**.
+  Failed sends are logged and are not billable. Uppsolut's own mail (welcome, channel alert) is
+  never billable to the tenant.
+- **The usage screen counts, it does not price.** Licence invoice amounts are set by hand.
+- Platform SMTP is set by environment variables only, with no screen to change it.
+- Channel alerts go to Uppsolut ops (`PLATFORM_ALERT_EMAIL`), only on the change from connected
+  to failed.
+
+## Operations dashboard (2026-09-06)
+
+- **Few colours, and they are the brand's.** Series separate by lightness within Crimson.
+  Status colours (room status, priority, balances) keep red, amber and green, because there the
+  colour is the information.
+- The title greets the user by name.
+- **Each user arranges their own dashboard:** show or hide widgets, set widths, group into
+  pages, drag to reorder. **Layouts are stored on the server per user and per property**
+  (`UserDashboardLayout`). A property with no arrangement gets the default, never another
+  property's.
+- **A dashboard starts empty**; the user switches tiles on. Widgets shipped later arrive off.
+- Module `DASHBOARD`: `view` = who lands on the dashboard; `update` = configure which widgets
+  each role sees.
+- **Hiding a widget is not access control.** The gate is the module permission on each section's
+  data (`src/lib/dashboard/overview.ts`). A user with several roles loses a widget only when
+  every role blocks it.
+
+## Brand website and Booking API (2026-09-06)
+
+The rules are in the Website API section of [DEV_LOG.md](DEV_LOG.md). The owner's rulings:
+
+- Keys are made in the Hub. A key covers one property or all, never a subset.
+- **Minimal guest information:** first name and email required. The guest is matched to an
+  existing profile by email, or created.
+- **The website can never overbook**, and availability follows D-7.
+- **A site sells one rate plan chosen in the Hub.** No plan means not bookable; an unpriced
+  night is refused.
+- The quote is the price. No payment in v1.
+
+## Revenue: Rate Seasons (2026-09-07)
+
+- The tab is **Rate Seasons** and its panel is "Define a Rate Season". The form has a Review
+  panel that says how many daily prices the change will overwrite before it is applied.
+
+## Dates, dropdowns and scrollbars (2026-09-23)
+
+- **Date-only values go through `src/lib/date-only.ts`** (`toDateKey`, `parseDateKey`,
+  `todayKey`). Never `toISOString().slice(0, 10)` on a local date: at UTC+5 that is the previous
+  day.
+- **No native `<select>` anywhere.** `OptionSelect` renders a plain styled dropdown for short
+  lists and `SearchableSelect` above 8 options.
+- One thin themed scrollbar app-wide.
+- A report's date filters default to the property's **business date**.
+- Report preview and PDF are the same layout (`report-document.tsx`), printed by headless
+  Chrome; reports use the paper tokens with a single Crimson accent.
+
+## Green Tax report and registration numbers (2026-09-23)
+
+- **The Green Tax report is MIRA's information sheet**, and its Excel export is submitted as it
+  is. Columns in order: Guest Registration No., Name (LAST FIRST MIDDLE, upper case), Category,
+  Date of birth, Identification No. (the primary document), Nationality (country name, upper
+  case), Booking Method, Check-in date and time, Check-out date and time. No amounts.
+- **Category**, checked in this order: 4 = under the exemption age at check-in; 2 = Maldivian; 3
+  = work-permit holder (a tick on an identification document); 1 = everyone else.
+- **Booking Method** is MIRA's fixed list, set on company and travel agent profiles. A
+  reservation reports its travel agent's value; no agent means FIT.
+- **Times:** the actual check-in time, else the property's standard time; the actual check-out
+  once checked out, else the booked departure at the standard time.
+- **Filed monthly by stay date:** every registered guest with at least one night in the month.
+- **Who gets a number:** every guest staying **12 hours or more** in a real room, measured from
+  the actual check-in time (a setting can measure on standard times instead). Guests in pseudo
+  rooms never get one.
+- **The sequence** is per property, restarts at 1 each calendar year, follows check-in date and
+  time, and **must have no gaps across the year**. No "missing number" check is wanted.
+- **Corrections are in the Hub** (module `GREEN_TAX`: view = see, update = correct and file).
+  Removing a number moves every later number of the year down by one. A reason is required and
+  logged.
+- **A filed month is frozen.** Filing is allowed only after the month has passed, in month
+  order, with nothing flagged. After that no correction may move a number carried by a guest of
+  a filed month ("never allow"). There is no un-file.
+- The **Missing Profile Information** report lists what would make the sheet incomplete: High =
+  a guest who should have a number has none, or a number is skipped; Medium = no ID number, date
+  of birth or nationality; Low = the travel agent has no Booking Method.
+- With several identification documents, the primary one is reported.
+
+## Tax-inclusive rounding (2026-09-23)
+
+- A tax-inclusive amount must split into parts that add back to exactly the amount entered.
+  **Each tax line keeps its own rounded value; the base takes the remaining cent.** Example:
+  215.00 at service charge 10% and GST 17% posts 167.05 + 16.71 + 31.24.
+- Tax-exclusive postings are unchanged: the entered amount is the base.
+
+## Setup lives in the Hub, split by Enterprise and Property (2026-09-23)
+
+The structure is in the Hub setup section of [DEV_LOG.md](DEV_LOG.md). The owner's rulings:
+
+- **Enterprise (shared):** users, roles and permissions, integrations, support access, email and
+  SFTP. **Everything else is per property**, including tax, charge codes with their groups and
+  subgroups, payment methods, dropdowns and stationery.
+- **No live sharing between properties.** There is a **copy** option. If an item already exists
+  at the target: **warn and skip, never overwrite.**
+- **Work location is one property or ALL, never a subset.** The same for Booking API keys.
+- **A single-property admin may enter the Hub** but sees only their own property's settings and
+  nothing of the enterprise area.
+- **Setup is not in the property dashboard at all.**
+- **Charge codes vary by property**, with the property's own descriptions.
+- **The Hub Overview is for maintenance and configuration:** a banner only when important setup
+  is missing (one click to the fix), Green Tax only when there are issues, channel manager
+  status, background jobs only when something critical fails. No link cards.
+- Green Tax stays in the Hub, separated by property.
+
+## Night Audit settings and the business date (2026-09-23)
+
+- Each property has a Night Audit page in the Hub: the business date, which levies are posted
+  each night, and what happens to vacant rooms' status. Rates and amounts stay under Finance.
+- **The business date can be changed by hand:** to any date while the property has no data at
+  all; otherwise only forward, and only with no in-house guests, no arrivals due before the new
+  date, no financial records on the skipped days, no open cashier shift, no Night Audit running,
+  and no spa or excursion bookings on the skipped days. Staff are signed out afterwards. Needs
+  `CONTROLS` and `NIGHT_AUDIT update` (`src/lib/business-date-change.ts`).
+- **No-shows:** marked at the arrival night's audit (default), **held one night** for a late
+  arrival, or never automatically. A switch says whether the audit posts the no-show fee. A held
+  arrival stays Due In and can be checked in.
+- **Scheduled Night Audit:** on or off, and a time in the property's time zone. A time before
+  noon runs after midnight for the previous day. It stops at the first step that needs a person
+  and never catches up more than one day by itself; both show on the Hub Overview.
+- **Check out settled departures automatically** (off by default): guests due out whose folios
+  all net to zero are checked out; it stops for anyone who owes money, is owed a refund, or
+  settles by City Ledger.
+
+## Charge codes belong to the property; held nights; audit window (2026-09-24)
+
+- **Charge codes are the property's own.** A new property gets the canonical charge groups and
+  **only the system codes**: accommodation 1000, cancellation and no-show fees 1050 / 1060, tax
+  7000 / 8000 / 8500, commission 9100, deposit 9200, payments 9500-9504, internal adjustment
+  9901. Every revenue code and its numbering is created by the property. The fuller chart is
+  demo data only.
+- **Creating an outlet creates no subgroup or codes.** It posts to the codes picked on its form.
+- **Copy from another property is a plain copy.** Codes keep their numbers. A number the target
+  already uses is skipped and reported, never linked to the target's existing code.
+- **A late arrival's held night is charged at check-in.** Under "hold one night" or "front desk
+  decides", a guest checking in after their arrival night's audit is charged each held night at
+  the booked rate, dated today, with service charge and GST but **no Green Tax**. The arrival
+  date does not change. The desk may **waive** held nights with a reason; that needs
+  `CASHIERING delete` and is logged. Check-in without a decision is refused.
+- **A scheduled Night Audit runs only between 22:00 and 06:00.** A scheduled audit never closes
+  an open cashier drawer: it stops there for a person. An audit run from the screen still
+  closes drawers.
+
+## Nationalities and job functions (2026-09-25)
+
+- **Nationality is a master list, not setup.** Every country is ready-made: ISO 3166-1 alpha-2
+  is what every nationality and country field stores; alpha-3 is the passport code
+  (`src/lib/countries.ts`). An enterprise may rename an entry or add its own
+  (`src/lib/nationalities.ts`). One picker, `NationalitySelect`, serves every nationality and
+  country field.
+- **Job functions are a fixed list** (`src/lib/job-functions.ts`), picked on the People form.
+  Housekeeping and Maintenance decide who appears in the assignment pickers.
+- The Hub's enterprise lists page is "Guest Lists".
+
+## Documentation portal (2026-09-24)
+
+- `/docs` has areas, each with its own sidebar and PDF: `/docs/api`, `/docs/configuration`,
+  `/docs/operations` (and release notes). The old `/docs/api-integration/*` and
+  `/docs/guides/*` addresses redirect permanently, because developers already have them.
+- The Configuration guide is written for the **client's admin**; it separates Enterprise setup
+  from Property setup and walks a new property to its first reservation in dependency order.
+- **All docs are public** and covered by `docs:check`.
+- **Screenshots show the main content only**, never the app's sidebar, header or footer, and
+  come from the fictional Coral Bay Hotels enterprise, never a customer's data.
+
+## Property logo (2026-09-24)
+
+- The logo is **uploaded**, cropped in the browser to a fixed **3:2** frame and saved as a
+  900 × 600 **PNG** (not WebP: Outlook cannot show WebP in email).
+- Stored under `storage/logos` on the persisted volume and served by `GET /api/logos/[file]`.
+  `Property.logoUrl` is set only by the upload route.
+- Shown on the app header (on a white tile), every stationery document, every report, emails,
+  the Booking API (as an absolute URL) and the guest eRegistration page.
+
+## Phones: the defaults taken (2026-09-25, additions 2026-10-11)
+
+The rules are in the Mobile polish section of [DEV_LOG.md](DEV_LOG.md). Rulings on top:
+
+- **Bottom navigation on phones**, dashboard only: four slots chosen by permissions and job
+  function, plus "More".
+- Dialogs are bottom sheets that close by button or backdrop; pickers use a swipe-down drawer.
+- **Hub on phones:** quick actions are adapted (sessions, support access, key revoke, business
+  date, inbound bookings, people status); other setup pages show a "best on a larger screen"
+  notice but stay readable.
+- **Risky actions** (reverse check-in and check-out, stop sale, deletes) stay available behind
+  "More", last and red, with their confirmations.
+- Tablets (768-1023px) use the desktop layout with larger touch targets. One dashboard layout
+  across devices. The header stays pinned while scrolling on every screen.
+- **Dates on the guest eRegistration page** use the standard `DatePicker`.
+- **Phone numbers:** every phone field uses `@/components/ui/phone-input` (country code
+  dropdown, default Maldives +960). Stored as one string, "+960 7771234". Fields that take
+  "phone or email" stay plain text.
+
+## Split stays price per segment (2026-10-11)
+
+- Each segment carries its own room type and rate plan. Every night posts on the segment that
+  covers it (`postStayNight`).
+- A rate plan's linked allocations apply only to the nights of the segments on that plan
+  (`ReservationAllocation.appliesTo`; null means the whole stay).
+- Room Move acts on the segment covering the business date and leaves later segments alone.
+- A negotiated rate plan is enforced on the server (`negotiated-access.ts`).
+
+## Profiles: delete only when unused, otherwise deactivate (2026-10-11)
+
+- Anything that points at a profile blocks deletion (`src/lib/profile-links.ts`).
+  `Profile.isActive = false` hides it from every picker and search and keeps all history.
+- A guest with a RESERVED or IN_HOUSE booking cannot be deactivated.
+
+## Group block Posting Master (2026-10-11)
+
+- Each block has a Posting Master reservation (`isPostingMaster`) in a pseudo "PM" room; its
+  folio is the block's master folio. It is created when the block becomes Definite (or by
+  "Create master folio"), checked in automatically with the first pickup, and **skipped by
+  Night Audit**. It is not a pickup (`src/lib/groups/posting-master.ts`).
+
+## Front Desk and list views (2026-10-11)
+
+- Front Desk tabs: Arrivals, In-House, Room moves, Departures. Each row shows two buttons
+  (Arrivals: Check in, Register; In-House and Room moves: Traces, Folio; Departures: Check out,
+  Folio) and a "…" menu for the rest.
+- Client Relations is one card per row with badges for the profile type.
+- VIP and "primary" markers are the solid `GoldStar` / `StarToggle`, never the outlined icon.
+
+## Green Tax per guest; every guest gets a registration number (2026-09-25)
+
+- **Every guest on the booking gets a registration number**, the primary and every accompanying
+  guest, **including exempt guests**. A guest added to an in-house stay later is numbered at the
+  next End of Day.
+- **Exempt from Green Tax:** under the exemption age (default 2) at check-in, Maldivian, or a
+  work-permit holder (any identification document flagged "Work permit"). The profile's "Green
+  Tax Exempt" box ticks itself for these, locked, with the reason. A manual tick exists for any
+  other case.
+- **The automatic reasons are worked out every time, never stored**
+  (`src/lib/green-tax-exemption.ts`). `Profile.greenTaxExempt` is the manual tick only.
+- **Posting is per person:** the booking's head counts **less the exempt named guests**
+  (`greenTaxPax`). An exempt minor comes off children, anyone else off adults; each falls back
+  to the other when used up; never below zero. A named infant comes off only if the booking did
+  not already count them as an infant. **Unnamed people pay.**
+- Only Green Tax uses the reduced count. Other per-person charges keep the full head count.
+- The same basis feeds Night Audit, Advance Bill, the proforma, fee rules and the booking form's
+  quote. The Booking API's quote assumes everyone pays, because no profile exists yet.
+
+## Reservations list: business on the books (2026-09-25)
+
+- The list opens on **future active bookings only: status RESERVED** ("On the books").
+- **A search looks through every status.** Picking a status narrows it to that status. Results
+  list the newest stays first.
+- Search is kept cheap: trigram indexes on every searched column, terms under 2 characters are
+  ignored, 350 ms debounce, a newer request cancels a stale one.
+
+## Desktop standards (2026-09-25)
+
+The components are in the Desktop polish section of [DEV_LOG.md](DEV_LOG.md). Rulings:
+
+- **Clean over convenient (standing rule).** A screen shows what the job needs now; anything
+  secondary goes behind one click. One primary action per screen or section; at most two visible
+  secondary actions, the rest in More; destructive actions last, red, confirmed. Empty sections
+  are not drawn as cards (show an "Add …" link). No explanatory paragraphs on the page: use
+  `InfoHint`.
+- **Feedback is a toast**, top right. A modal only for an error that needs a decision, and it
+  carries the action.
+- **Reservation detail** is two columns from `lg` up: stay, room, guest and requests on the
+  left; a sticky rail with status, dates, balance and the one next action on the right. Phones
+  keep their own layout.
+- **Names stay as they are.** Sidebar labels are not renamed, and a page title equals its
+  sidebar label (sidebar = page title = browser tab).
+- The folio is a real page (`/folios/[id]`); the dialog stays as a quick view.
+- Header: property switcher, an Operations ⇄ Setup toggle, the business date links to Night
+  Audit.
+- Housekeeping cards are neutral with a status stripe and label, not fully tinted.
+- **Hub save model:** save per section with a "Saved" state; auto-save only for single toggles.
+- `/dashboard/inventory` redirects to Housekeeping.
+
+## Interface text: sentence case (2026-09-25)
+
+- **Sentence case for all interface text:** buttons, menus, tabs, titles, labels, table headers,
+  toasts, empty states. Capitals only on the first word and on proper nouns and codes (Green
+  Tax, MIRA, GST, Booking API, Hub, Night Audit as a module name).
+- **Exception:** navigation names and the page titles that equal them keep their form ("Front
+  Desk", "Tape Chart", "Client Relations", "Fast Post", "Daily Reports").
+- **Verbs:** "Add ‹noun›" opens a create dialog, "Create" confirms it, "Save" confirms an edit,
+  "Delete" or "Remove" destroy (always confirmed). Pending labels end in "…".
+- No "successfully", no "!", no "Please".
+- Very wide dialogs become side sheets or pages.
+
+## GST report (2026-09-25)
+
+- One line per invoice: invoice date (= departure date), folio or invoice number, guest, travel
+  agent, agent TIN, arrival, departure, total excluding tax, service charge, GST, Green Tax,
+  total including tax. Ordered and filtered by invoice date.
+- **Rules chosen while building, not yet confirmed by the owner:** an invoice is a folio with
+  posted charges, dated on the departure date once checked out (a walk-in folio on its close
+  date); a folio whose Tax Invoice was never printed shows its confirmation and folio number;
+  the guest is the reservation's primary guest.
+- `Profile.tinNumber` is on company and travel agent profiles.
+
+## Folio check numbers (2026-09-26)
+
+- **Every posting gets a check number** (`FolioLineItem.checkNo`), one running number per
+  property. A charge and the tax lines it generates share it. At Night Audit a stay-night's
+  room rate, extra occupancy, allocations and all their taxes share **one** number.
+- **The folio rolls up lines with the same check number in the same folio** into one line that
+  expands. Different folios never roll together. Staff can edit a line's check number.
+- **Fast Post: each item separately**, rolled up with its own service charge and GST only.
+- Printing keeps its layout options; "By check" uses the check number.
+- In "Post charge" the charge code is found by typing its code or description.
+
+## Transportation (2026-10-04)
+
+Decisions T-1 to T-14 are in the Transportation section of [DEV_LOG.md](DEV_LOG.md). The
+owner's rulings:
+
+- **Enabling needs both:** the enterprise add-on switched on by Osta, and the property's own
+  switch in the Hub.
+- **The reservation's Transport section is three fields per leg:** flight number, transport
+  number and the flight time (landing for the pickup, take-off for the drop-off). With the
+  module on, that section is read-only and filled from the module.
+- **A drop-off charge posts at the audit of the guest's last night**, dated the departure date.
+- Billing is driven by Night Audit, one posting per booking. No-shows and cancellations never
+  post automatically. "Needs attention" warnings never block.
+
+## Revenue calendar and stop-sale override (2026-10-10)
+
+- **Revenue's first tab is a view-only calendar**, opening on the Base plan and the first room
+  type. A night the plan has no price of its own shows **NA**; the Base fallback is not
+  displayed (Night Audit still uses it). From a rate plan the calendar opens locked to that
+  plan.
+- **All price changes happen in Rate Seasons.** Picking days on the calendar offers "Update
+  prices" (opens Rate Seasons pre-filled) and "Stop sale".
+- **Rate Seasons is three locked steps:** plan, season and price, room types. A step opens only
+  after the previous one is saved.
+- **Stop sale is not per rate plan.** It closes a room type or the whole property for every
+  plan.
+- **Stop sale restricts new sales, never existing bookings.** The Booking API and the channel
+  manager always honour it. Setting or lifting one pushes to the channel manager at once.
+- **Two separate desk overrides** (`gateBookingConflicts`, `src/lib/restrictions.ts`):
+  **Overbook** ignores physical inventory; **Override restriction** ignores a stop sale and
+  needs `AVAILABILITY update`. A night that is both closed and sold out needs both. The website
+  and channel paths can never override.
+
+## Cashiering (2026-10-12)
+
+- **Closing a shift is not a blind drop.** The window shows payments by method and how the
+  expected cash is made up, asks for the counted cash (balanced, short or over) and requires an
+  "I confirm there is X in the drawer" tick.
+- **A currency exchange or paid-out can be linked to an in-house guest.** It is a link only:
+  the name and room show on the shift list and the receipt; nothing is posted to the folio.
+
+## Each enterprise can connect its own Beds24 account (2026-10-14)
+
+- **Self-service is the default.** A property admin with `INTEGRATIONS` rights connects (invite
+  code and Beds24 property id), re-authorizes, corrects the id, replaces the webhook URL, runs a
+  deep resync and disconnects, from Hub › property › Channel Manager.
+- **Managed by Uppsolut is opt-in:** Uppsolut connects the property through its own account from
+  the Osta console.
+- **One connection per property**, either way. The licence cap and the one-connection rule are
+  checked before the single-use invite code is spent.
+- The API-credit pool belongs to the Beds24 account, so a self-connected property's pause
+  threshold protects the enterprise's own pool.
+
+## Front Desk and Tape Chart polish (2026-11-07)
+
+- A dashboard page showing only the status ribbon shows "Nothing on this dashboard yet" with a
+  Customise button.
+- **With no room on the first segment the button reads "Assign & check in".**
+- The incomplete-profile warning names what is missing (nationality, date of birth, ID).
+- Tape Chart cards show the guest name and the full confirmation number; status is the colour.
+  The room column stays above the cards; the weekend tint is Saturday and Sunday; today's column
+  is tinted and underlined.
+- Housekeeping due-out rooms are tinted with a "Due out" tag; the board stays in room order.
+- **Page toolbars: one primary and one secondary; with more than two actions, the secondary is
+  a "More" menu** (`ActionBar`).
+
+## Keyboard shortcuts (2026-11-07)
+
+- **`src/lib/shortcuts.ts` is the one shortcut list.** The cheat sheet (`?`), the key handlers
+  and the Operations guide all read it. A test fails if two shortcuts share a key or if a
+  no-show, cancel or void key appears.
+- **Additive, never subtractive.** A single letter acts only when nothing is focused or being
+  typed into, no dialog is open, and no Ctrl, ⌘ or Alt is held (`canUseSingleKey`). A per-device
+  "Quick keys" switch turns the letters off; `?` and Ctrl+K always work.
+- In the palette, Tab or → on a booking lists its actions. **Every action is a link into the
+  screen that already does it**, with that screen's own checks.
+- **Check-out is always confirmed**, from a key and from the palette. **There is no key for
+  no-show, cancel or void.**
+- `g` then a letter goes to a sidebar page. Front Desk list keys: J/K select, Enter open, C
+  check in, O check out, F folio, A assign room, M move room, 1-4 tabs, Esc clears.
+- A role-based landing page is not wanted for now.
+
+## Osta console: what Osta may see (2026-11-07, 2026-11-08)
+
+- **A customer's people and activity are not Osta's to browse** ("it's classified"). The
+  enterprise workspace has no People tab and no Activity tab, the search does not search a
+  customer's users, and the user count is not shown. Osta only checks *whether* a customer has
+  any user. **Do not add any of these back without asking the owner.** Support staff see a
+  customer's data only inside an approved support session, through the customer's own screens.
+- **An enterprise's own channel connection is "Running" or "Not running" only.**
+  `ChannelConnection.managedBy` is `OSTA` or `ENTERPRISE`. For an `ENTERPRISE` connection Osta
+  gets name, property, enterprise, provider and running; never errors, health times, credits,
+  webhook, settings or logs. Every Osta channel route refuses it (`assertOstaManaged`).
+- **Monitoring** (`/osta/monitoring`): load history is stored per minute (`DbMetricRollup`),
+  kept 8 days. p95 is shown as "≤ N ms" because it is estimated from bands. Statement-level
+  views are in memory and for this server only. Channel figures are Uppsolut-run connections
+  only.
+- **A page never refreshes on a timer** (house rule). It re-fetches when the browser tab comes
+  back into view after 30 seconds, or on Refresh.
+- **Billing** (`/osta/billing`) is a read-only overview. Issuing an invoice and recording a
+  payment stay on the enterprise's Billing tab. There is no Licensing page.
+- **Property approvals** happen in Today's inbox and on the enterprise's Properties tab.
+- **Support Access** is a simple log: request, live, pending, ended.
+- The Osta property page shows setup and health only, never guests or people.
+
+## Phones: nothing scrolls sideways (2026-11-08, 2026-11-09)
+
+- **Nothing scrolls sideways on a phone** (the app is released for phones). Tables become
+  cards; tab rows become full-width grids, segmented switches or a dropdown; secondary filters
+  go into a bottom sheet (`MobileFilterSheet`). A4 print documents are the only exception.
+  Features stay the same; only the layout changes.
+- The Osta console has the phone bottom nav (Today, Enterprises, Billing, Channels, More). The
+  Hub has none.
+- **No create button in the phone header.** Creating goes through search or the page's own
+  button.
+- The notification bell opens a bottom sheet on phones.
+- **Page header on phones:** title left, compact buttons on the same row, main action last. Do
+  not stretch header buttons full width; shorten the label ("New"). Built into `PageHeader`.
+- **Tab rows on phones always fit, at most four per row** (built into `TabsList`).
+- Front Desk on phones has no counts strip (the tabs carry the counts). The folio has a sticky
+  header and Post charge / Post payment pinned at the bottom, each opening a bottom sheet.
+- **Icons:** light mode is Iconsax Sun 2 Linear; a plain × closes; chevrons are the plain ones
+  (the circled ArrowRight2 / ArrowDown2 are not chevrons).
+- **A booking always has a room line** (room type and rate); a room *number* is optional.
