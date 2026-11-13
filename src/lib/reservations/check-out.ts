@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordCommissionAtCheckout } from "@/lib/commission-ledger";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { assertPropertyAccess, type AuthContext } from "@/lib/scope";
@@ -259,6 +260,10 @@ export async function checkOutReservation(ctx: AuthContext, id: string, opts: { 
     }
     throw txError;
   }
+
+  // The commission ledger (Agent Portal plan A-19): NETTED when it was just credited on the
+  // agent's invoice above, ACCRUED (payable to the agent) otherwise. Never fails the check-out.
+  await recordCommissionAtCheckout(id, commissionsPosted).catch((e) => console.error("[commission ledger]", e));
 
   const finalizedInvoices = reservation.folios.filter((f) => qualifiesForAccount(f)).length;
   const totalCommission = sumBy(commissionsPosted, (c) => c.amount);

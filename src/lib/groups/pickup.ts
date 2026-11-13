@@ -196,6 +196,9 @@ export async function pickupIntoBlock(ctx: AuthContext, blockId: string, input: 
     return fail(400, `${lock.names.join(" and ")} books on negotiated rates only: choose its negotiated rate plan.`, "RATE_NOT_ALLOWED");
   }
 
+  const sourceSettlement = group.sourceProfileId
+    ? (await prisma.profile.findUnique({ where: { upid: group.sourceProfileId }, select: { settlementMode: true } }))?.settlementMode ?? "AGENT_NET"
+    : null;
   const settings = await getPropertySettings(group.propertyId);
   const isTentative = input.status === "TENTATIVE";
   const optionDate = isTentative
@@ -282,6 +285,7 @@ export async function pickupIntoBlock(ctx: AuthContext, blockId: string, input: 
           optionDate,
           origin: input.origin ?? "GROUP_PICKUP",
           sourceProfileId: group.sourceProfileId,
+          settlementMode: sourceSettlement,
           isOverflow: roomType.isPseudo && roomType.code === "OVF",
           ...(input.agentUserId ? { agentUserId: input.agentUserId } : {}),
           ...(input.packageName ? { packageName: input.packageName.slice(0, 120) } : {}),

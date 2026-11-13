@@ -1498,6 +1498,10 @@ model Reservation {
   // The agent's reference for this booking (Agent Portal plan §9: unguessable, B-11 pattern;
   // never the sequential confirmation number alone) and how many times the agent has
   // generated its confirmation (each re-issue is a new version number).
+  // Who pays (Agent Portal plan A-18): AGENT_NET | AGENT_GROSS | GUEST_DIRECT, defaulted from
+  // the Source at booking. Decides whether commission is netted on the agent's invoice or
+  // accrued as payable to the agent (AgentCommission).
+  settlementMode           String?
   agentRef                 String?  @unique
   agentConfirmationVersion Int      @default(0)
   agentChangeRequests      AgentChangeRequest[]
@@ -4979,4 +4983,53 @@ model AgentIdempotency {
   createdAt      DateTime @default(now())
 
   @@unique([keyId, idempotencyKey])
+}
+
+// The commission ledger (Agent Portal plan A-19, Phase 7). One row per reservation and rate
+// plan at check-out: the base (room-charge amounts, without service charge and tax), the
+// rate, the amount (rounded half-up once), the settlement mode and the status:
+//   NETTED   — credited on the agent's City Ledger invoice (AGENT_NET), nothing owed
+//   ACCRUED  — payable to the agent (AGENT_GROSS, GUEST_DIRECT, or AGENT_NET not invoiced)
+//   APPROVED — checked by accounts, ready to pay
+//   PAID     — paid out (payoutId) or offset against the agent's invoices
+//   REVERSED — the check-out was reversed; a PAID row reversed becomes a negative ACCRUED row
+model AgentCommission {
+  id            String    @id @default(uuid())
+  propertyId    String
+  profileId     String
+  reservationId String
+  folioId       String?
+  ratePlanId    String?
+  baseAmount    Float
+  rate          Float
+  amount        Float
+  mode          String
+  status        String    @default("ACCRUED")
+  payoutId      String?
+  payout        AgentCommissionPayout? @relation(fields: [payoutId], references: [id])
+  businessDate  DateTime
+  note          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([propertyId, status])
+  @@index([profileId, status])
+  @@index([reservationId])
+}
+
+// A payout or offset of approved commission to one agent (Agent Portal plan A-19).
+model AgentCommissionPayout {
+  id              String   @id @default(uuid())
+  propertyId      String
+  profileId       String
+  total           Float
+  // BANK_TRANSFER | CASH | CHEQUE | OFFSET (against the agent's open invoices)
+  method          String
+  reference       String?
+  paidAt          DateTime
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  commissions     AgentCommission[]
+
+  @@index([propertyId, profileId])
 }

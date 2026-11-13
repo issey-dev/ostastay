@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { ListTable, type ListColumn } from "@/components/ui/list-table"
 import { FilterBar } from "@/components/ui/filter-bar"
 import { useUrlState } from "@/lib/use-url-state"
+import { CommissionsPanel } from "@/components/debtors/commissions-panel"
 
 type DebtorAccount = {
   upid: string
@@ -56,6 +57,8 @@ function DebtorsList() {
   // (?q=) 300 ms after the last keystroke so Back from an account keeps it. A URL change
   // that didn't come from typing (Back/Forward) flows back into the box.
   const [urlSearch, setUrlSearch] = useUrlState<string>("q", "")
+  // Accounts | Commissions (Agent Portal plan Phase 7).
+  const [tab, setTab] = useUrlState<"accounts" | "commissions">("tab", "accounts", ["accounts", "commissions"])
   const [search, setSearch] = useState(urlSearch)
   const lastWrittenSearch = useRef(urlSearch)
   useEffect(() => {
@@ -169,7 +172,23 @@ function DebtorsList() {
         }
       />
 
-      <div>
+      <div role="tablist" aria-label="Debtors" className="flex gap-1 border-b border-border">
+        {([["accounts", "Accounts"], ["commissions", "Commissions"]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "commissions" && propertyId && <CommissionsPanel propertyId={propertyId} />}
+
+      <div className={tab === "commissions" ? "hidden" : undefined}>
         <FilterBar
           className="mb-3"
           search={{ value: search, onChange: setSearch, placeholder: "Account name or AR number…" }}

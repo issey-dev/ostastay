@@ -228,12 +228,15 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
         },
       ];
 
+  let settlementMode: string | null = null;
   if (body.sourceProfileId) {
     const source = await prisma.profile.findUnique({ where: { upid: body.sourceProfileId } });
     if (!source || source.enterpriseId !== ctx.enterpriseId || source.profileType !== "SOURCE") {
       return fail(404, "Source profile not found");
     }
     if (!source.isActive) return fail(400, "That source profile is deactivated.");
+    // Who pays (A-18), defaulted from the Source.
+    settlementMode = source.settlementMode ?? "AGENT_NET";
   }
 
   // A negotiated rate plan is only for the agent / company / source it was set up for.
@@ -473,6 +476,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       primaryGuestId: body.primaryGuestId,
       travelAgentId: body.travelAgentId,
       sourceProfileId: body.sourceProfileId || null,
+      settlementMode,
       groupBlockId,
       // Attached-to-block reservations keep their own folio by default (the pickup
       // dialog is the explicit bill-to-master path).

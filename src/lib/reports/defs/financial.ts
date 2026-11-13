@@ -665,4 +665,123 @@ const gst: ReportDef = {
   },
 };
 
-export const FINANCIAL_REPORTS: ReportDef[] = [journal, cashierSummary, outletSales, folioTax, greenTax, greenTaxMissing, gst];
+// ─── Commission payable (Agent Portal plan A-19) ────────────────────────────
+const commissionPayable: ReportDef = {
+  key: "fin-commission",
+  module: "FINANCIAL",
+  name: "Commission",
+  description: "Commission earned by travel agents and sources at check-out in the range: netted on their invoices, owed, or paid.",
+  insights: {
+    kpis: [
+      { label: "Commission", agg: "sum", column: "amount" },
+      { label: "Base", agg: "sum", column: "base" },
+    ],
+    visuals: [
+      { type: "ranked", title: "By agent", by: "agent", value: "amount", format: "currency" },
+      { type: "donut", title: "Status", by: "status", centerLabel: "lines" },
+    ],
+  },
+  params: [{ key: "range", label: "Checked out between", type: "dateRange", required: true, defaultToday: true }],
+  async run(rc): Promise<ReportResult> {
+    const propertyId = await propertyOrThrow(rc);
+    const range = rc.params.range as { from: Date; to: Date };
+    const { gte, lt } = rangeBounds(range.from, range.to);
+    const rows = await prisma.agentCommission.findMany({ where: { propertyId, businessDate: { gte, lt } }, orderBy: { businessDate: "asc" } });
+    const profiles = await prisma.profile.findMany({ where: { upid: { in: [...new Set(rows.map((r) => r.profileId))] } }, select: { upid: true, companyName: true, firstName: true } });
+    const res = await prisma.reservation.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.reservationId))] } }, select: { id: true, confirmationNo: true } });
+    const name = (id: string) => { const p = profiles.find((x) => x.upid === id); return p?.companyName || p?.firstName || ""; };
+    return {
+      title: "Commission",
+      subtitle: `Checked out ${fmtDay(gte)} \u2013 ${fmtDay(new Date(lt.getTime() - 86_400_000))}`,
+      columns: [
+        { key: "date", label: "Date", width: 1, format: "date" },
+        { key: "agent", label: "Agent / source", width: 1.6 },
+        { key: "conf", label: "Booking", width: 1.1, link: { to: "reservation", idKey: "resId" } },
+        { key: "mode", label: "Who pays", width: 1.1 },
+        { key: "base", label: "Base", width: 0.9, format: "currency" },
+        { key: "rate", label: "%", width: 0.5, format: "number" },
+        { key: "amount", label: "Commission", width: 1, format: "currency" },
+        { key: "status", label: "Status", width: 0.9 },
+      ],
+      rows: rows.map((r) => ({
+        date: r.businessDate,
+        agent: name(r.profileId),
+        resId: r.reservationId,
+        conf: res.find((x) => x.id === r.reservationId)?.confirmationNo ?? "",
+        mode: r.mode === "AGENT_NET" ? "Agent, net" : r.mode === "AGENT_GROSS" ? "Agent, gross" : "Guest",
+        base: r.baseAmount,
+        rate: r.rate,
+        amount: r.amount,
+        status: r.status.charAt(0) + r.status.slice(1).toLowerCase(),
+      })),
+      totals: { base: round2(rows.reduce((s, r) => s + r.baseAmount, 0)), amount: round2(rows.reduce((s, r) => s + r.amount, 0)) },
+    };
+  },
+};
+
+// ─── Source production (Agent Portal plan §7 Reports) ───────────────────────
+const sourceProduction: ReportDef = {
+  key: "fin-source-production",
+  module: "FINANCIAL",
+  name: "Source Production",
+  description: "Room nights, room revenue and commission per source and travel agent, for stays in the range.",
+  insights: {
+    kpis: [
+      { label: "Room nights", agg: "sum", column: "nights" },
+      { label: "Room revenue", agg: "sum", column: "revenue" },
+    ],
+    visuals: [{ type: "ranked", title: "Room revenue by source", by: "source", value: "revenue", format: "currency" }],
+  },
+  params: [{ key: "range", label: "Staying between", type: "dateRange", required: true, defaultToday: true }],
+  async run(rc): Promise<ReportResult> {
+    const propertyId = await propertyOrThrow(rc);
+    const range = rc.params.range as { from: Date; to: Date };
+    const { gte, lt } = rangeBounds(range.from, range.to);
+    const res = await prisma.reservation.findMany({
+      where: { propertyId, checkInDate: { lt }, checkOutDate: { gt: gte }, status: { in: ["TENTATIVE", "RESERVED", "IN_HOUSE", "CHECKED_OUT"] }, OR: [{ sourceProfileId: { not: null } }, { travelAgentId: { not: null } }] },
+      select: {
+        id: true, status: true, checkInDate: true, checkOutDate: true, sourceProfileId: true, travelAgentId: true,
+        sourceProfile: { select: { companyName: true, firstName: true } },
+        travelAgent: { select: { companyName: true, firstName: true } },
+        folios: { select: { lineItems: { where: { isVoid: false, roomAssignmentId: { not: null } }, select: { amount: true } } } },
+      },
+    });
+    const commissions = await prisma.agentCommission.groupBy({ by: ["reservationId"], where: { reservationId: { in: res.map((r) => r.id) }, status: { not: "REVERSED" } }, _sum: { amount: true } });
+    const by = new Map<string, { source: string; bookings: number; tentative: number; nights: number; revenue: number; commission: number }>();
+    for (const r of res) {
+      const p = r.sourceProfile ?? r.travelAgent;
+      const key = r.sourceProfileId ?? r.travelAgentId ?? "";
+      const row = by.get(key) ?? { source: p?.companyName || p?.firstName || "", bookings: 0, tentative: 0, nights: 0, revenue: 0, commission: 0 };
+      row.bookings += 1;
+      if (r.status === "TENTATIVE") row.tentative += 1;
+      const from = Math.max(r.checkInDate.getTime(), gte.getTime());
+      const to = Math.min(r.checkOutDate.getTime(), lt.getTime());
+      row.nights += Math.max(0, Math.round((to - from) / 86_400_000));
+      row.revenue = round2(row.revenue + r.folios.flatMap((f) => f.lineItems).reduce((s, l) => s + l.amount, 0));
+      row.commission = round2(row.commission + (commissions.find((c) => c.reservationId === r.id)?._sum.amount ?? 0));
+      by.set(key, row);
+    }
+    const rows = [...by.values()].sort((a, b) => b.revenue - a.revenue);
+    return {
+      title: "Source Production",
+      subtitle: `Staying ${fmtDay(gte)} \u2013 ${fmtDay(new Date(lt.getTime() - 86_400_000))}`,
+      columns: [
+        { key: "source", label: "Source / agent", width: 1.8 },
+        { key: "bookings", label: "Bookings", width: 0.8, format: "number" },
+        { key: "tentative", label: "On option", width: 0.8, format: "number" },
+        { key: "nights", label: "Room nights", width: 0.9, format: "number" },
+        { key: "revenue", label: "Room revenue", width: 1.1, format: "currency" },
+        { key: "commission", label: "Commission", width: 1, format: "currency" },
+      ],
+      rows,
+      totals: {
+        bookings: rows.reduce((s, r) => s + r.bookings, 0),
+        nights: rows.reduce((s, r) => s + r.nights, 0),
+        revenue: round2(rows.reduce((s, r) => s + r.revenue, 0)),
+        commission: round2(rows.reduce((s, r) => s + r.commission, 0)),
+      },
+    };
+  },
+};
+
+export const FINANCIAL_REPORTS: ReportDef[] = [journal, cashierSummary, outletSales, folioTax, greenTax, greenTaxMissing, gst, commissionPayable, sourceProduction];
