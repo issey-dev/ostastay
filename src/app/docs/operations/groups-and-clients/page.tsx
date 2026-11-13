@@ -94,6 +94,19 @@ export default function GroupsAndClients() {
         <strong>Commission</strong> and <strong>Source Production</strong> reports summarise them.
       </p>
 
+      <H2>The block&apos;s travel agent, source and bill to</H2>
+      <p>
+        <strong>Edit block</strong> (and a new block) has three profile fields. <strong>Travel agent / company</strong> and{" "}
+        <strong>Source</strong> are carried by every reservation in the block: on the reservation they are filled in and locked,
+        marked <strong>from the group block</strong>. Change them on the block and the block&apos;s bookings that are tentative or
+        reserved follow; guests already in house keep theirs.
+      </p>
+      <p>
+        <strong>Bill to account</strong> is where the master bill settles when it is closed. It lists every travel agent, company
+        and source that is a credit account. If the block&apos;s travel agent or source is missing from the list, open its profile
+        and turn on <strong>Credit account</strong>.
+      </p>
+
       <H2>The Posting Master</H2>
       <p>
         Every block has a <strong>Posting Master</strong>: a reservation of its own, in a room that only exists for the block, whose

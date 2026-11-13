@@ -84,6 +84,7 @@
 - Split stays price per segment (2026-10-11)
 - Profiles: delete only when unused, otherwise deactivate (2026-10-11)
 - Group block Posting Master (2026-10-11)
+- Group block profiles and Bill to (2026-11-13)
 - Front Desk and list views (2026-10-11)
 - Green Tax per guest; every guest gets a registration number (2026-09-25)
 - Reservations list: business on the books (2026-09-25)
@@ -1075,6 +1076,16 @@ The rules are in the Mobile polish section of [DEV_LOG.md](DEV_LOG.md). Rulings 
   folio is the block's master folio. It is created when the block becomes Definite (or by
   "Create master folio"), checked in automatically with the first pickup, and **skipped by
   Night Audit**. It is not a pickup (`src/lib/groups/posting-master.ts`).
+
+## Group block profiles and Bill to (2026-11-13)
+
+- **A block carries a Travel Agent or Company and a Source**, like a reservation. Every
+  reservation in the block takes them and **cannot change them** while the block sets them (the
+  form locks them; the server overwrites them). A profile the block leaves empty stays free on
+  the reservation. Changing one on the block carries it to the live pickups (Tentative and
+  Reserved), not to in-house or departed ones (`src/lib/groups/block-profiles.ts`).
+- **Bill to may be any credit account**: Travel Agent, Company or Source. A profile is billable
+  only once "Credit account" is on; the block says so when an attached profile is not.
 
 ## Front Desk and list views (2026-10-11)
 

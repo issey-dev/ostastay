@@ -186,6 +186,17 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   const setField = <K extends Path<BookingFormValues>>(name: K, value: PathValue<BookingFormValues, K>) =>
     formCtl.setValue(name, value, { shouldValidate: true, shouldDirty: true })
 
+  // A reservation in a block takes the block's Travel Agent / Company and Source, locked
+  // (owner, 2026-11-13). The server enforces the same.
+  const block = groupBlocks.find((g) => g.id === form.groupBlockId)
+  const blockTa: string | null = block?.travelAgentId ?? null
+  const blockSource: string | null = block?.sourceProfileId ?? null
+  useEffect(() => {
+    if (blockTa && form.travelAgentId !== blockTa) setField("travelAgentId", blockTa)
+    if (blockSource && form.sourceProfileId !== blockSource) setField("sourceProfileId", blockSource)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockTa, blockSource, form.travelAgentId, form.sourceProfileId])
+
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0)
   const [guestPickerOpen, setGuestPickerOpen] = useState<null | "primary" | "accompanying">(null)
   const [gridData, setGridData] = useState<GridData | null>(null)
@@ -784,6 +795,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               <div className="grid content-start gap-2">
                 <Label className="flex items-center gap-2">
                   Travel agent / company (optional)
+                  {blockTa && <StatusBadge label="from the group block" tone="neutral" />}
                   {ratePlans.some(rp => rp.isNegotiated && form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)) && (
                     <StatusBadge label="unlocks negotiated rates" tone="warning" />
                   )}
@@ -791,8 +803,9 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 <SearchableSelect
                   value={form.travelAgentId}
                   onChange={(v) => setField("travelAgentId", v)}
+                  disabled={!!blockTa}
                   placeholder="Select travel agent..."
-                  onCreate={canCreateProfiles ? (text) => setQuickCreate({ type: "TRAVEL_AGENT", name: text, field: "travelAgentId" }) : undefined}
+                  onCreate={canCreateProfiles && !blockTa ? (text) => setQuickCreate({ type: "TRAVEL_AGENT", name: text, field: "travelAgentId" }) : undefined}
                   options={[
                     { value: "none", label: "Direct booking (none)" },
                     ...profiles.filter(p => p.profileType === 'TRAVEL_AGENT' || p.profileType === 'COMPANY').map(prof => ({
@@ -807,6 +820,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               <div className="grid content-start gap-2">
                 <Label className="flex items-center gap-2">
                   Source (optional)
+                  {blockSource && <StatusBadge label="from the group block" tone="neutral" />}
                   {ratePlans.some(rp => rp.isNegotiated && form.sourceProfileId !== "none" && rp.negotiatedForProfileIds?.includes(form.sourceProfileId)) && (
                     <StatusBadge label="unlocks negotiated rates" tone="warning" />
                   )}
@@ -814,8 +828,9 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 <SearchableSelect
                   value={form.sourceProfileId}
                   onChange={(v) => setField("sourceProfileId", v)}
+                  disabled={!!blockSource}
                   placeholder="Select source..."
-                  onCreate={canCreateProfiles ? (text) => setQuickCreate({ type: "SOURCE", name: text, field: "sourceProfileId" }) : undefined}
+                  onCreate={canCreateProfiles && !blockSource ? (text) => setQuickCreate({ type: "SOURCE", name: text, field: "sourceProfileId" }) : undefined}
                   options={[
                     { value: "none", label: "No source" },
                     ...profiles.filter(p => p.profileType === 'SOURCE' && p.isActive !== false).map(prof => ({

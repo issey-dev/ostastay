@@ -17,6 +17,17 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.10.0",
+    date: "2026-11-13",
+    highlights: "A group block now carries its travel agent or company and its source, and every booking in the block takes them.",
+    new: [
+      "Group blocks have Travel agent / company and Source fields. Every reservation in the block takes them, locked, and follows when they change on the block.",
+    ],
+    improved: [
+      "A block's bill to account can be a source as well as a travel agent or company, as long as it is a credit account. The block says when an attached profile isn't one yet.",
+    ],
+  },
+  {
     version: "9.9.0",
     date: "2026-11-13",
     highlights: "The agent portal is ready to go live, with a new guide for working with agents and a go-live checklist.",

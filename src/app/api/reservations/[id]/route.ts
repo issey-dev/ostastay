@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyBlockProfiles } from "@/lib/groups/block-profiles";
 import { sellLimitGate } from "@/lib/availability-sell-limit";
 import { figuresJson } from "@/lib/figures";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
@@ -161,6 +162,8 @@ export async function PUT(
 
     // Parse and validate the body
     const data = updateSchema.parse(body);
+    // A reservation in a block keeps the block's Travel Agent / Company and Source.
+    await applyBlockProfiles(data, existing.groupBlockId);
 
     if (new Date(data.checkOutDate) <= new Date(data.checkInDate)) {
       return NextResponse.json({ error: "Check-out date must be after check-in date" }, { status: 400 });

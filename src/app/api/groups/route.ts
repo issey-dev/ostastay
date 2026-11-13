@@ -99,6 +99,13 @@ export async function POST(request: Request) {
       }
     }
 
+    if (typeof body.travelAgentId === "string" && body.travelAgentId) {
+      const ta = await prisma.profile.findUnique({ where: { upid: body.travelAgentId } })
+      if (!ta || ta.enterpriseId !== ctx.enterpriseId || !["TRAVEL_AGENT", "COMPANY"].includes(ta.profileType)) {
+        return NextResponse.json({ error: "Travel agent or company profile not found" }, { status: 400 })
+      }
+    }
+
     const newGroup = await prisma.groupBlock.create({
       data: {
         propertyId,
@@ -112,6 +119,7 @@ export async function POST(request: Request) {
         payeeProfileId,
         // Blocks for Sources (Agent Portal plan Phase 4).
         sourceProfileId: typeof body.sourceProfileId === "string" && body.sourceProfileId ? body.sourceProfileId : null,
+        travelAgentId: typeof body.travelAgentId === "string" && body.travelAgentId ? body.travelAgentId : null,
         releaseDays: Number.isInteger(body.releaseDays) && body.releaseDays >= 0 ? body.releaseDays : null,
         elasticRooms: Number.isInteger(body.elasticRooms) && body.elasticRooms >= 0 ? body.elasticRooms : 0,
         elasticNightsBefore: Number.isInteger(body.elasticNightsBefore) && body.elasticNightsBefore >= 0 ? body.elasticNightsBefore : 0,

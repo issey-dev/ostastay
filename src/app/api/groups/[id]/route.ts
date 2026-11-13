@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { LIVE_PICKUP_WHERE } from "@/lib/groups/block-profiles"
 import { processDueCheckpoints } from "@/lib/groups/release"
 import { figuresJson } from "@/lib/figures"
 import { ensurePostingMaster, checkInPostingMaster, syncPostingMasterDates, cancelPostingMaster } from "@/lib/groups/posting-master"
@@ -43,6 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         },
         payeeProfile: { select: { upid: true, firstName: true, lastName: true, companyName: true } },
         sourceProfile: { select: { upid: true, firstName: true, companyName: true, markerIcon: true, markerColor: true } },
+        travelAgent: { select: { upid: true, firstName: true, lastName: true, companyName: true, profileType: true, isCreditAccount: true } },
         checkpoints: { orderBy: { date: "asc" } },
       }
     })
@@ -71,6 +73,8 @@ const updateSchema = z.object({
   payeeProfileId: z.string().nullable().optional(),
   // Blocks for Sources (Agent Portal plan A-12, Phase 4).
   sourceProfileId: z.string().nullable().optional(),
+  // The block's Travel Agent or Company, carried by its reservations (owner, 2026-11-13).
+  travelAgentId: z.string().nullable().optional(),
   releaseDays: z.number().int().min(0).max(365).nullable().optional(),
   elasticRooms: z.number().int().min(0).max(500).optional(),
   elasticNightsBefore: z.number().int().min(0).max(60).optional(),
@@ -147,6 +151,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: "Source profile not found" }, { status: 400 })
       }
     }
+    if (data.travelAgentId) {
+      const ta = await prisma.profile.findUnique({ where: { upid: data.travelAgentId } })
+      if (!ta || ta.enterpriseId !== ctx.enterpriseId || !["TRAVEL_AGENT", "COMPANY"].includes(ta.profileType)) {
+        return NextResponse.json({ error: "Travel agent or company profile not found" }, { status: 400 })
+      }
+    }
 
     // City-Ledger account: validate a credit account of this enterprise when set.
     if (data.payeeProfileId) {
@@ -178,6 +188,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(cleanedHolds ? { roomHolds: { deleteMany: {}, create: cleanedHolds } } : {}),
         ...(data.payeeProfileId !== undefined ? { payeeProfileId: data.payeeProfileId || null } : {}),
         ...(data.sourceProfileId !== undefined ? { sourceProfileId: data.sourceProfileId || null } : {}),
+        ...(data.travelAgentId !== undefined ? { travelAgentId: data.travelAgentId || null } : {}),
         ...(data.releaseDays !== undefined ? { releaseDays: data.releaseDays } : {}),
         ...(data.elasticRooms !== undefined ? { elasticRooms: data.elasticRooms } : {}),
         ...(data.elasticNightsBefore !== undefined ? { elasticNightsBefore: data.elasticNightsBefore } : {}),
@@ -195,10 +206,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     })
     // A pickup inherits the block's Source: keep live pickups in step when it changes.
     if (data.sourceProfileId !== undefined && data.sourceProfileId !== group.sourceProfileId) {
-      await prisma.reservation.updateMany({
-        where: { groupBlockId: id, isPostingMaster: false, status: { in: ["TENTATIVE", "RESERVED"] } },
-        data: { sourceProfileId: data.sourceProfileId || null },
-      })
+      await prisma.reservation.updateMany({ where: LIVE_PICKUP_WHERE(id), data: { sourceProfileId: data.sourceProfileId || null } })
+    }
+    // Same for the Travel Agent / Company. Clearing it on the block leaves the pickups' own.
+    if (data.travelAgentId && data.travelAgentId !== group.travelAgentId) {
+      await prisma.reservation.updateMany({ where: LIVE_PICKUP_WHERE(id), data: { travelAgentId: data.travelAgentId } })
     }
 
     // Going Definite creates the Posting Master reservation (same as the master folio by hand).

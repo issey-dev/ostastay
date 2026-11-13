@@ -27,6 +27,8 @@ const { parseMarkerRules, saveMarkerRules, getMarkerRules } = await import("@/li
 const profilesRoute = await import("@/app/api/profiles/route");
 const convertRoute = await import("@/app/api/profiles/[upid]/convert-to-source/route");
 const { serverToday } = await import("@/lib/business-date");
+const groupRoute = await import("@/app/api/groups/[id]/route");
+const { applyBlockProfiles } = await import("@/lib/groups/block-profiles");
 
 const DAY = 86_400_000;
 
@@ -126,6 +128,48 @@ describe("Source profiles on reservations", () => {
     expect(b.settlementMode).toBeNull();
     expect(b.markerColor).toBe("teal");
     expect(b.markerIcon).toBe("Briefcase");
+  });
+
+  // Owner, 2026-11-13: a block's Travel Agent / Company and Source are carried by its
+  // reservations and locked there; Bill to may be any credit account, a Source included.
+  it("a reservation in a block takes the block's profiles and cannot change them", async () => {
+    const ctx = await signIn();
+    const blockTa = await prisma.profile.create({ data: { enterpriseId, firstName: "BT", companyName: "Block TA", profileType: "TRAVEL_AGENT" } });
+    const other = await prisma.profile.create({ data: { enterpriseId, firstName: "OT", companyName: "Other TA", profileType: "TRAVEL_AGENT" } });
+    const src = await prisma.profile.create({ data: { enterpriseId, firstName: "BS", companyName: "Block Source", profileType: "SOURCE", isCreditAccount: true } });
+    const base = await prisma.ratePlan.findFirstOrThrow({ where: { propertyId, code: "BASE" } });
+    const block = await prisma.groupBlock.create({
+      data: { propertyId, code: `BP${stamp % 10000}`, name: "Profiles", startDate: at(10), endDate: at(14), status: "TENTATIVE", totalRoomsHeld: 2, travelAgentId: blockTa.upid, sourceProfileId: src.upid, roomHolds: { create: { roomTypeId, quantity: 2 } } },
+    });
+    const made = await createReservation(ctx, {
+      propertyId, primaryGuestId: guestUpid, checkInDate: at(10), checkOutDate: at(12), roomTypeId, ratePlanId: base.id, adults: 1,
+      groupBlockId: block.id, travelAgentId: other.upid, sourceProfileId: null,
+    });
+    expect(made.ok).toBe(true);
+    if (!made.ok) return;
+    const row = await prisma.reservation.findUniqueOrThrow({ where: { id: made.reservation.id } });
+    expect(row.travelAgentId).toBe(blockTa.upid);
+    expect(row.sourceProfileId).toBe(src.upid);
+
+    // An edit cannot change them while the block sets them.
+    const edit = await applyBlockProfiles({ travelAgentId: other.upid, sourceProfileId: null as string | null }, block.id);
+    expect(edit).toEqual({ travelAgentId: blockTa.upid, sourceProfileId: src.upid });
+
+    // The block can bill to its Source; a new Travel Agent on the block reaches the pickups.
+    const put = await groupRoute.PUT(
+      new Request("http://x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ payeeProfileId: src.upid, travelAgentId: other.upid }) }),
+      { params: Promise.resolve({ id: block.id }) }
+    );
+    expect(put.status).toBe(200);
+    expect((await prisma.groupBlock.findUniqueOrThrow({ where: { id: block.id } })).payeeProfileId).toBe(src.upid);
+    expect((await prisma.reservation.findUniqueOrThrow({ where: { id: row.id } })).travelAgentId).toBe(other.upid);
+
+    // A guest profile is refused as the block's travel agent.
+    const bad = await groupRoute.PUT(
+      new Request("http://x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ travelAgentId: guestUpid }) }),
+      { params: Promise.resolve({ id: block.id }) }
+    );
+    expect(bad.status).toBe(400);
   });
 
   it("a booking carries a Source beside its Travel Agent, and the Source unlocks negotiated rates", async () => {

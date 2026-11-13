@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { BlockProfileFields } from "@/components/groups/block-profile-fields"
 import { useProperty } from "@/components/providers/property-provider"
 import { useRouter, useParams } from "next/navigation"
 import { Save, ArrowLeft } from "@/components/icons"
@@ -30,15 +31,17 @@ export default function NewGroupBlock() {
     cutoffDate: "",
     status: "TENTATIVE",
     payeeProfileId: "none",
+    travelAgentId: "none",
+    sourceProfileId: "none",
   })
   const [roomHolds, setRoomHolds] = useState<RoomHold[]>([])
 
-  // Credit-account Travel Agent / Corporate profiles the master bill can settle to.
+  // Travel agents, companies and sources: the block's profiles and the Bill to accounts.
   useEffect(() => {
     if (!currentProperty) return
     fetch(`/api/profiles?enterpriseId=${currentProperty.enterpriseId}`)
       .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d)) setAccounts(d.filter((p: any) => p.isCreditAccount)) })
+      .then((d) => { if (Array.isArray(d)) setAccounts(d) })
       .catch(console.error)
   }, [currentProperty])
 
@@ -58,6 +61,8 @@ export default function NewGroupBlock() {
         body: JSON.stringify({
           ...formData,
           payeeProfileId: formData.payeeProfileId === "none" ? null : formData.payeeProfileId,
+          travelAgentId: formData.travelAgentId === "none" ? null : formData.travelAgentId,
+          sourceProfileId: formData.sourceProfileId === "none" ? null : formData.sourceProfileId,
           roomHolds: roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
           propertyId: currentProperty.id
         })
@@ -160,19 +165,11 @@ export default function NewGroupBlock() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Bill to account (City Ledger, optional)</Label>
-            <SearchableSelect
-              value={formData.payeeProfileId}
-              onChange={(v) => setFormData({ ...formData, payeeProfileId: v ?? "none" })}
-              placeholder="No account (bill direct)..."
-              options={[
-                { value: "none", label: "None (bill direct)" },
-                ...accounts.map((a) => ({ value: a.upid, label: a.companyName || `${a.firstName} ${a.lastName ?? ""}`.trim() })),
-              ]}
-            />
-            <p className="text-xs text-muted-foreground">The block&apos;s master bill settles to this debtor account when closed.</p>
-          </div>
+          <BlockProfileFields
+            profiles={accounts}
+            value={{ travelAgentId: formData.travelAgentId, sourceProfileId: formData.sourceProfileId, payeeProfileId: formData.payeeProfileId }}
+            onChange={(v) => setFormData({ ...formData, ...v })}
+          />
 
           <div className="space-y-2">
             <Label>Rooms to hold (by type)</Label>

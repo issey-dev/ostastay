@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { sellLimitGate } from "@/lib/availability-sell-limit";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
+import { applyBlockProfiles } from "@/lib/groups/block-profiles";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
@@ -146,6 +147,8 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
   if (!body.propertyId || !body.primaryGuestId || !body.checkInDate || !body.checkOutDate) {
     return fail(400, "Missing required fields");
   }
+  // A reservation in a block carries the block's Travel Agent / Company and Source.
+  body = await applyBlockProfiles({ ...body });
   if (new Date(body.checkOutDate) <= new Date(body.checkInDate)) {
     return fail(400, "Check-out date must be after check-in date");
   }

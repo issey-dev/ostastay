@@ -1094,6 +1094,7 @@ model Profile {
   foliosAsPayee            Folio[]                       @relation("PayeeProfile")
   groupBlocksAsPayee       GroupBlock[]                  @relation("GroupBlockPayee")
   groupBlocksAsSource      GroupBlock[]                  @relation("GroupBlockSource")
+  groupBlocksAsTravelAgent GroupBlock[]                  @relation("GroupBlockTravelAgent")
   agentUsers               AgentUser[]
   guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
@@ -2572,6 +2573,10 @@ model GroupBlock {
   // the approved slot (extra rooms per night, extra nights before/after); all 0 = hard edges.
   sourceProfileId        String?
   sourceProfile          Profile? @relation("GroupBlockSource", fields: [sourceProfileId], references: [upid])
+  // The block's Travel Agent or Company (owner, 2026-11-13). Like the Source, every reservation
+  // in the block carries it and cannot change it while it is set on the block.
+  travelAgentId          String?
+  travelAgent            Profile? @relation("GroupBlockTravelAgent", fields: [travelAgentId], references: [upid])
   origin                 String   @default("DESK")
   requestedByAgentUserId String?
   requestNote            String?

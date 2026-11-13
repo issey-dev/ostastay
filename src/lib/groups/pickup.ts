@@ -285,6 +285,7 @@ export async function pickupIntoBlock(ctx: AuthContext, blockId: string, input: 
           optionDate,
           origin: input.origin ?? "GROUP_PICKUP",
           sourceProfileId: group.sourceProfileId,
+          travelAgentId: group.travelAgentId,
           settlementMode: sourceSettlement,
           isOverflow: roomType.isPseudo && roomType.code === "OVF",
           ...(input.agentUserId ? { agentUserId: input.agentUserId } : {}),

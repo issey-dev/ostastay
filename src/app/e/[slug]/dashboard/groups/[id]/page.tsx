@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, use } from "react"
+import { BlockProfileFields } from "@/components/groups/block-profile-fields"
 import { SourceSlotPanel } from "@/components/groups/source-slot-panel"
 import { GroupBillingPanel } from "@/components/groups/group-billing-panel"
 import { useRouter } from "next/navigation"
@@ -45,14 +46,14 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
   const [loading, setLoading] = useState(true)
   const [isMasterFolioOpen, setIsMasterFolioOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; status: string; cutoffDate: string; roomHolds: RoomHold[]; payeeProfileId: string }>({ name: "", status: "TENTATIVE", cutoffDate: "", roomHolds: [], payeeProfileId: "none" })
+  const [editForm, setEditForm] = useState<{ name: string; status: string; cutoffDate: string; roomHolds: RoomHold[]; payeeProfileId: string; travelAgentId: string; sourceProfileId: string }>({ name: "", status: "TENTATIVE", cutoffDate: "", roomHolds: [], payeeProfileId: "none", travelAgentId: "none", sourceProfileId: "none" })
   const [accounts, setAccounts] = useState<any[]>([])
 
   useEffect(() => {
     if (!currentProperty) return
     fetch(`/api/profiles?enterpriseId=${currentProperty.enterpriseId}`)
       .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d)) setAccounts(d.filter((p: any) => p.isCreditAccount)) })
+      .then((d) => { if (Array.isArray(d)) setAccounts(d) })
       .catch(console.error)
   }, [currentProperty])
   const [saving, setSaving] = useState(false)
@@ -83,6 +84,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
       cutoffDate: group.cutoffDate ? group.cutoffDate.split("T")[0] : "",
       roomHolds: (group.roomHolds ?? []).map((h: any) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })),
       payeeProfileId: group.payeeProfileId || "none",
+      travelAgentId: group.travelAgentId || "none",
+      sourceProfileId: group.sourceProfileId || "none",
     })
     setEditError(null)
     setIsEditOpen(true)
@@ -103,6 +106,9 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           cutoffDate: editForm.cutoffDate || null,
           roomHolds: editForm.roomHolds.filter((h) => h.roomTypeId && h.quantity > 0),
           payeeProfileId: editForm.payeeProfileId === "none" ? null : editForm.payeeProfileId,
+          travelAgentId: editForm.travelAgentId === "none" ? null : editForm.travelAgentId,
+          // A slot request's Source is fixed by the request.
+          ...(group.status === "REQUESTED" ? {} : { sourceProfileId: editForm.sourceProfileId === "none" ? null : editForm.sourceProfileId }),
         }),
       })
       const data = await res.json()
@@ -469,19 +475,12 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
                 excludeGroupBlockId={group.id}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Bill to account (City Ledger)</Label>
-              <SearchableSelect
-                value={editForm.payeeProfileId}
-                onChange={(v) => setEditForm((p) => ({ ...p, payeeProfileId: v ?? "none" }))}
-                placeholder="No account (bill direct)..."
-                options={[
-                  { value: "none", label: "None (bill direct)" },
-                  ...accounts.map((a) => ({ value: a.upid, label: a.companyName || `${a.firstName} ${a.lastName ?? ""}`.trim() })),
-                ]}
-              />
-              <p className="text-[11px] text-muted-foreground">The master bill settles to this debtor account when closed.</p>
-            </div>
+            <BlockProfileFields
+              profiles={accounts}
+              value={{ travelAgentId: editForm.travelAgentId, sourceProfileId: editForm.sourceProfileId, payeeProfileId: editForm.payeeProfileId }}
+              onChange={(v) => setEditForm((p) => ({ ...p, ...v }))}
+              showSource={group.status !== "REQUESTED"}
+            />
             {editError && <p className="text-sm text-destructive">{editError}</p>}
           </div>
           <DialogFooter>
