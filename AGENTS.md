@@ -27,7 +27,7 @@ Everything is in `.agents/docs/`. The only markdown at the repository root is th
 
 | Plan | Status | Read it before touching |
 |---|---|---|
-| [`AGENT_PORTAL_PLAN.md`](.agents/docs/AGENT_PORTAL_PLAN.md) | Phases 0a to 5 built (9.0.1 to 9.5.0); 6 to 9 not started | Reservation status, Group Blocks, availability, commission, the Tape Chart, roles and permissions, `/api/agent/**` |
+| [`AGENT_PORTAL_PLAN.md`](.agents/docs/AGENT_PORTAL_PLAN.md) | Phases 0a to 6 built (9.0.1 to 9.6.0); 7 to 9 not started | Reservation status, Group Blocks, availability, commission, the Tape Chart, roles and permissions, `/api/agent/**` |
 | [`NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) | N0 to N3 built (8.10.0); N4 open | The header bell, any notification or toast-like feature, the web manifest, the service worker |
 | [`MARKETING_SITE_MIGRATION_PLAN.md`](.agents/docs/MARKETING_SITE_MIGRATION_PLAN.md) | Not started, on hold | `src/app/info` |
 

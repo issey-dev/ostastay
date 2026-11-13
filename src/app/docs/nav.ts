@@ -51,6 +51,7 @@ export const DOC_AREAS: DocArea[] = [
         title: "Agent portal",
         links: [
           { href: "/docs/api/agents", title: "Agent API", summary: "Sign agents in, availability on their negotiated rates, their slots, quotes." },
+          { href: "/docs/api/agents/bookings", title: "Slots and bookings", summary: "Request slots, book on option, confirmations, guest details, changes." },
         ],
       },
       {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Callout, CodeBlock, DocTitle, Endpoint, H2, H3, Pager, Table } from "../../components"
+import { CodeBlock, DocTitle, Endpoint, H2, H3, Pager, Table } from "../../components"
 
 export const metadata: Metadata = { title: "Agent API" }
 
@@ -116,7 +116,7 @@ export default function AgentApi() {
           [c("RATE_NOT_ALLOWED"), "The rate is not one of yours."],
         ]}
       />
-      <Callout title="Coming next">Slot requests, bookings, guest details and confirmations are on the next page once released.</Callout>
+      <p>Slot requests, bookings, guest details and confirmations: see <a href="/docs/api/agents/bookings">Slots and bookings</a>.</p>
       <Pager href="/docs/api/agents" />
     </>
   )

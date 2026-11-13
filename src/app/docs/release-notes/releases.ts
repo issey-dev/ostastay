@@ -17,6 +17,17 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.6.0",
+    date: "2026-11-13",
+    highlights: "Agents can now work end to end through the agent portal: request slots, book into them on option, ask you to confirm, fill in guest and flight details, and generate their own confirmation.",
+    new: [
+      "Through the agent portal, agents request slots, enter bookings in their approved slots (one at a time or as a rooming list), ask for confirmation with a payment reference, add accompanying guests, flights, the package name and special requests, and generate a confirmation PDF for their client, emailed to them.",
+      "Agents can cancel a booking still on option, with a reason. A confirmed booking can only be changed or cancelled by asking: the request shows at the top of the reservation to accept or decline.",
+      "New notifications: a slot request from an agent, an agent asking to confirm a booking, and an agent asking to change or cancel one.",
+      "Agents' own systems can receive webhooks when their bookings are accepted, confirmed, released or cancelled, and when a change request is decided.",
+    ],
+  },
+  {
     version: "9.5.0",
     date: "2026-11-13",
     highlights: "The agent portal can now sign agents in and show them live availability on their own negotiated rates, their slots and quotes. Sources get a details card and portal logins on their profile.",

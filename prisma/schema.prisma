@@ -1495,6 +1495,12 @@ model Reservation {
   packageName             String?
   agentReference          String?
   agentUserId             String?
+  // The agent's reference for this booking (Agent Portal plan §9: unguessable, B-11 pattern;
+  // never the sequential confirmation number alone) and how many times the agent has
+  // generated its confirmation (each re-issue is a new version number).
+  agentRef                 String?  @unique
+  agentConfirmationVersion Int      @default(0)
+  agentChangeRequests      AgentChangeRequest[]
 
   assignments                  RoomAssignment[]
   folios                       Folio[]
@@ -4936,4 +4942,41 @@ model AgentSession {
   createdAt   DateTime  @default(now())
 
   @@index([agentUserId])
+}
+
+// An agent's request to amend or cancel a CONFIRMED booking (Agent Portal plan A-15): the
+// agent can never change or cancel a confirmed booking directly; the hotel accepts or
+// declines. payload holds what was asked (dates, room type, guests, a note).
+model AgentChangeRequest {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  agentUserId   String
+  // AMEND | CANCEL
+  type          String
+  payload       Json
+  note          String?
+  // PENDING | ACCEPTED | DECLINED
+  status        String      @default("PENDING")
+  decisionNote  String?
+  decidedBy     String?
+  decidedAt     DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([reservationId])
+  @@index([status])
+}
+
+// Idempotent replays for Agent API writes: the same key + Idempotency-Key answers with the
+// same response; the same key used for a different body is a conflict.
+model AgentIdempotency {
+  id             String   @id @default(uuid())
+  keyId          String
+  idempotencyKey String
+  requestHash    String
+  status         Int
+  response       Json
+  createdAt      DateTime @default(now())
+
+  @@unique([keyId, idempotencyKey])
 }

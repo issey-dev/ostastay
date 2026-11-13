@@ -53,6 +53,25 @@ export const NOTIFICATION_TYPES = {
     severity: SEVERITY.URGENT,
     group: "Property",
   },
+  // Agent portal (Agent Portal plan §7 Notifications, Phase 6).
+  AGENT_SLOT_REQUESTED: {
+    label: "Slot request from an agent",
+    description: "A source asked for a slot (dates and rooms) through the agent portal. Sent to people who manage group blocks.",
+    severity: SEVERITY.ACTION,
+    group: "Bookings",
+  },
+  AGENT_CONFIRMATION_REQUESTED: {
+    label: "Agent asks to confirm a booking",
+    description: "An agent asked the hotel to confirm a tentative booking (usually after paying). Sent to people who manage reservations.",
+    severity: SEVERITY.ACTION,
+    group: "Bookings",
+  },
+  AGENT_CHANGE_REQUESTED: {
+    label: "Agent asks to change or cancel a booking",
+    description: "An agent asked to amend or cancel a booking. Sent to people who manage reservations.",
+    severity: SEVERITY.ACTION,
+    group: "Bookings",
+  },
   ACTIVITY_BOOKING_RECEIVED: {
     label: "Excursion or spa booking from the website",
     description: "A guest booked an excursion or spa treatment on the property's website. Sent to people who manage that service.",

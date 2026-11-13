@@ -64,6 +64,15 @@ export default function GroupsAndClients() {
         linked sources may start requesting slots; a source&rsquo;s early access days let it start sooner.
       </p>
 
+      <H3>What agents do in the portal, and what you see</H3>
+      <ul>
+        <li>A slot request appears under <strong>Group Blocks › Requests</strong> and in the bell.</li>
+        <li>Bookings agents enter in their slots appear as tentative pickups of that block, with the source&rsquo;s marker.</li>
+        <li>When an agent asks you to confirm a booking (often with a payment reference), the bell tells you and the booking&rsquo;s option panel shows the request. Confirm it there, or tick several on the block and choose <strong>Confirm selected</strong>.</li>
+        <li>Agents add guests, flights, the package name and special requests themselves. They can cancel a booking that is still on option (with a reason), but a confirmed one only by asking: the request shows at the top of the reservation, to <strong>Accept</strong> (then make the change as usual) or <strong>Decline</strong> with a reason they see.</li>
+        <li>Agents generate their own confirmation document for their client; the hotel never writes to the agent&rsquo;s client.</li>
+      </ul>
+
       <H2>The Posting Master</H2>
       <p>
         Every block has a <strong>Posting Master</strong>: a reservation of its own, in a room that only exists for the block, whose

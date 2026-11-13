@@ -4,6 +4,7 @@ import { toUtcMidnight } from "@/lib/business-date";
 import { findTypeAvailabilityConflicts } from "@/lib/availability";
 import { logActivity } from "@/lib/activity-log";
 import { requireCapability, type AuthContext } from "@/lib/scope";
+import { emitForReservation } from "@/lib/agent-api/events";
 
 // Tentative bookings and their option date — Agent Portal plan A-5, A-12, A-13, A-14, §5.2
 // (Phase 1, 9.1.0).
@@ -117,7 +118,10 @@ export async function expireDueOptions(opts: { propertyId?: string; enterpriseId
       });
       return true;
     });
-    if (done) released++;
+    if (done) {
+      released++;
+      await emitForReservation(r.id, "booking.released");
+    }
   }
   return released;
 }
@@ -198,6 +202,7 @@ export async function confirmTentative(ctx: AuthContext, id: string, note?: stri
     entityId: id,
     description: `Reservation ${r.confirmationNo}: tentative → confirmed${note ? ` (${note})` : ""}`,
   });
+  await emitForReservation(id, "booking.confirmed");
   return prisma.reservation.findUnique({ where: { id } });
 }
 
@@ -272,6 +277,7 @@ export async function releaseTentative(
     entityId: id,
     description: `Reservation ${r.confirmationNo}: tentative released${reason ? ` (${reason})` : ""}`,
   });
+  await emitForReservation(id, "booking.released");
   return prisma.reservation.findUnique({ where: { id } });
 }
 
