@@ -17,6 +17,24 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.5.0",
+    date: "2026-11-13",
+    highlights: "The agent portal can now sign agents in and show them live availability on their own negotiated rates, their slots and quotes. Sources get a details card and portal logins on their profile.",
+    new: [
+      "Agent portal logins on a Source profile: add a person's email and send them a link to set their password; reset or suspend them at any time. Deactivating a source suspends its logins.",
+      "Source details on a Source profile's overview: commission, who pays, early access, how bookings are confirmed, and its Tape Chart marker.",
+      "An Agent portal card in the Hub (property Reservations settings): switch the portal on, and set the option days, short option, when guest details are due, how many free rooms agents see, and the overflow cap.",
+      "The Booking API can issue keys with the Agent portal scope, for the agent portal's server.",
+    ],
+    improved: [
+      "Negotiated rates lock in: when a travel agent, company or source is linked to negotiated rates at a property, its bookings may use only those rates. Other rate plans are not offered and are refused if sent. The agent portal shows only the source's negotiated rates.",
+      "The Tape Chart marker for a source is chosen in a picker with an icon grid, the colours and a preview of the booking bar. The same picker is used for the Hub's booking marker rules.",
+    ],
+    fixed: [
+      "The Who pays field on a Source profile showed a code and was cut off; it now shows its label in full.",
+    ],
+  },
+  {
     version: "9.4.0",
     date: "2026-11-13",
     highlights: "Slots: a source asks for dates and rooms, you approve it as a tentative group block (or decline it), and its unsold rooms go back on sale by the rules you set.",

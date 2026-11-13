@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useState, use } from "react"
+import { SourceDetailsCard, PortalLoginsCard } from "@/components/profiles/source-details-card"
 import { SourceSlotsCard } from "@/components/profiles/source-slots-card"
 import { toast } from "@/lib/toast"
 import { useUrlState } from "@/lib/use-url-state"
@@ -466,6 +467,12 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
         {/* ---------------- OVERVIEW ---------------- */}
         <TabsContent value="overview" className="mt-4">
           <div className="flex flex-col gap-4">
+              {profile.profileType === "SOURCE" && (
+                <>
+                  <SourceDetailsCard profile={profile} editHref={editHref} />
+                  <PortalLoginsCard upid={upid} />
+                </>
+              )}
               <Section
                 id="personal-info"
                 icon={User}

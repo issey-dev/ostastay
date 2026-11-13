@@ -106,7 +106,6 @@ describe("capability defaults", () => {
 // Catalogued now, wired by the phase that builds the feature behind it (each phase removes
 // its keys from this set in the same commit). Empty once Phase 7 is in.
 const NOT_YET_WIRED = new Set<string>([
-  "profiles.portalLogins",
   "debtors.payCommission",
 ]);
 
@@ -118,6 +117,7 @@ const extraEnforcers: string[] = [
   "src/lib/reservations/overflow.ts",
   "src/lib/groups/slot-requests.ts",
   "src/app/api/profiles/[upid]/portal-logins/route.ts",
+  "src/lib/agent-api/auth.ts",
   "src/lib/commission-ledger.ts",
   "src/app/api/debtors/commissions/route.ts",
 ];

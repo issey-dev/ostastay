@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Callout, DocTitle, H2, Pager, Table } from "../../components"
+import { Callout, DocTitle, H2, Pager, Table, H3 } from "../../components"
 
 export const metadata: Metadata = { title: "Group blocks and Client Relations" }
 
@@ -16,6 +16,19 @@ export default function GroupsAndClients() {
         The list can be shown as a table or as cards (on a wide screen; phones always show cards). A card carries small badges for
         what is set on the block: the account it bills, the cutoff date (amber when it is close, red once passed), the rooms held for
         each room type, <strong>Overbooked</strong> when more rooms are picked up than held, and where its Posting Master is.
+      </p>
+
+      <H3>Source details and portal logins</H3>
+      <p>
+        A Source&rsquo;s Overview shows its <strong>Source details</strong> (commission, who pays, early access, how bookings are
+        confirmed, its Tape Chart marker) and its <strong>Agent portal logins</strong>: the people at that agency who can sign in to
+        the agent portal. <strong>Add login</strong> takes an email and gives you a link to send them; it lets them choose a password
+        and works once, within 7 days. <strong>Reset</strong> makes a new password link, <strong>Suspend</strong> signs the person
+        out everywhere until you reactivate them. Deactivating the Source suspends all its logins; its bookings stay.
+      </p>
+      <p>
+        A source linked to negotiated rates books <strong>only</strong> those rates, at the desk and in the portal: other rate plans
+        are not offered for its bookings, and the portal never shows the published rates.
       </p>
 
       <H2>Slots for sources</H2>

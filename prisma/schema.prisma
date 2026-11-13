@@ -1094,6 +1094,7 @@ model Profile {
   foliosAsPayee            Folio[]                       @relation("PayeeProfile")
   groupBlocksAsPayee       GroupBlock[]                  @relation("GroupBlockPayee")
   groupBlocksAsSource      GroupBlock[]                  @relation("GroupBlockSource")
+  agentUsers               AgentUser[]
   guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
@@ -2256,6 +2257,12 @@ model PropertySettings {
   shortOptionHours        Int @default(48)
   // Most overflow bookings accepted for one night (A-8); null = no cap.
   maxOverflowPerNight     Int?
+  // Agent portal (Agent Portal plan A-25, Phase 5): on or off for this property, how many
+  // free rooms an agent sees before "N+" (A-9), and how many days before arrival guest
+  // details are due (A-16).
+  agentPortalEnabled      Boolean @default(false)
+  agentAvailabilityCap    Int     @default(5)
+  guestDetailsDueDays     Int     @default(7)
 
   noShowTiming  String  @default("FIRST_AUDIT")
   // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.
@@ -4880,4 +4887,53 @@ model NotificationPreference {
   push   Boolean @default(true)
 
   @@unique([userId, type])
+}
+
+// ---------------------------------------------------------------------------
+// Agent portal logins (Agent Portal plan A-3, Phase 5). A login belongs to one SOURCE profile
+// and signs in THROUGH the Agent API — the portal stores no credentials. Deliberately not a
+// User: an agent must never satisfy requireSession(), and a staff session must never open
+// an /api/agent route. Invite and reset tokens are hashed, single-use and short-lived.
+// ---------------------------------------------------------------------------
+model AgentUser {
+  id                 String    @id @default(uuid())
+  enterpriseId       String
+  sourceProfileId    String
+  sourceProfile      Profile   @relation(fields: [sourceProfileId], references: [upid], onDelete: Cascade)
+  email              String
+  name               String
+  passwordHash       String?
+  // INVITED (no password yet) | ACTIVE | SUSPENDED
+  status             String    @default("INVITED")
+  inviteTokenHash    String?   @unique
+  inviteExpiresAt    DateTime?
+  resetTokenHash     String?   @unique
+  resetExpiresAt     DateTime?
+  failedLogins       Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  createdByUserId    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  sessions           AgentSession[]
+
+  @@unique([enterpriseId, email])
+  @@index([sourceProfileId])
+}
+
+// A signed-in agent. The token is bound to the key that issued it (a stolen token is useless
+// with another key) and is revocable. Stored hashed.
+model AgentSession {
+  id          String    @id @default(uuid())
+  tokenHash   String    @unique
+  agentUserId String
+  agentUser   AgentUser @relation(fields: [agentUserId], references: [id], onDelete: Cascade)
+  keyId       String
+  expiresAt   DateTime
+  lastSeenAt  DateTime  @default(now())
+  ip          String?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([agentUserId])
 }

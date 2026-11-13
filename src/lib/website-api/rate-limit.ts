@@ -20,13 +20,15 @@ import { prisma } from "@/lib/db";
 //  - export       per user/key    — report downloads (Transportation report). A CSV or PDF of
 //                                   a month of transfers is a heavy query; nobody needs ten
 //                                   a minute.
-export type RateBucket = "read" | "write" | "authFailure" | "export";
+export type RateBucket = "read" | "write" | "authFailure" | "export" | "agentLogin";
 
 export const RATE_LIMITS: Record<RateBucket, number> = {
   read: 120,
   write: 20,
   authFailure: 30,
   export: 10,
+  // Agent portal sign-in attempts, per account and per IP (Agent Portal plan §9).
+  agentLogin: 10,
 };
 
 const WINDOW_MS = 60_000;
