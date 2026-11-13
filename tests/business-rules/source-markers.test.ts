@@ -158,6 +158,36 @@ describe("Source profiles on reservations", () => {
     expect(bad.ok).toBe(false);
   });
 
+  it("lock-in: a party on negotiated rates may book only those (per property)", async () => {
+    const ctx = await signIn();
+    const base = await prisma.ratePlan.findFirstOrThrow({ where: { propertyId, code: "BASE" } });
+    const ta = await prisma.profile.create({ data: { enterpriseId, firstName: "Lock", companyName: "Lock TA", profileType: "TRAVEL_AGENT" } });
+    const free = await prisma.profile.create({ data: { enterpriseId, firstName: "Free", companyName: "Free TA", profileType: "TRAVEL_AGENT" } });
+    const neg = await prisma.ratePlan.create({ data: { propertyId, code: `LK${stamp % 1000}`, name: "Lock contract", isNegotiated: true } });
+    await prisma.ratePlanAgentAccess.create({ data: { ratePlanId: neg.id, upid: ta.upid } });
+    const book = (ratePlanId: string, extra: Record<string, unknown>, o: number) =>
+      createReservation(ctx, { propertyId, primaryGuestId: guestUpid, checkInDate: at(10 + o), checkOutDate: at(11 + o), roomTypeId, ratePlanId, adults: 1, ...extra });
+
+    const blocked = await book(base.id, { travelAgentId: ta.upid }, 0);
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.error).toMatch(/negotiated/);
+    expect((await book(neg.id, { travelAgentId: ta.upid }, 1)).ok).toBe(true);
+    // As a Source the same rule holds (a Source linked to the plan).
+    const src = await prisma.profile.create({ data: { enterpriseId, firstName: "LS", companyName: "Lock Source", profileType: "SOURCE" } });
+    await prisma.ratePlanAgentAccess.create({ data: { ratePlanId: neg.id, upid: src.upid } });
+    expect((await book(base.id, { sourceProfileId: src.upid }, 2)).ok).toBe(false);
+    // A party with no links books as before.
+    expect((await book(base.id, { travelAgentId: free.upid }, 3)).ok).toBe(true);
+
+    // A link at ANOTHER property does not lock this one.
+    const other = await prisma.property.create({
+      data: { enterpriseId, name: "Other", code: `OTH-${stamp}`, legalName: "O", defaultCurrency: "USD", timeZone: "UTC", checkInTime: "14:00", checkOutTime: "11:00", status: "ACTIVE", businessDate: serverToday() },
+    });
+    const away = await prisma.ratePlan.create({ data: { propertyId: other.id, code: "AWAY", name: "Away", isNegotiated: true } });
+    await prisma.ratePlanAgentAccess.create({ data: { ratePlanId: away.id, upid: free.upid } });
+    expect((await book(base.id, { travelAgentId: free.upid }, 4)).ok).toBe(true);
+  });
+
   it("a travel agent converts to a source", async () => {
     await signIn();
     const ta = await prisma.profile.create({ data: { enterpriseId, firstName: "Old", companyName: "Old TA", profileType: "TRAVEL_AGENT", commissionRate: 8 } });

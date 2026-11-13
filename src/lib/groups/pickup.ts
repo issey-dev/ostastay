@@ -10,6 +10,7 @@ import { sellLimitGate } from "@/lib/availability-sell-limit";
 import { lockKeys, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
 import { computeOptionDate } from "@/lib/reservations/options";
 import { toUtcMidnight } from "@/lib/business-date";
+import { negotiatedLock } from "@/lib/reservations/negotiated-access";
 
 // A pickup into a group block: one booking inside a block's held rooms. Shared by the desk
 // (POST /api/groups/[id]/pickup) and the Agent API, so every rule holds on both doors.
@@ -181,10 +182,19 @@ export async function pickupIntoBlock(ctx: AuthContext, blockId: string, input: 
     return fail(409, "That room is already booked for the selected dates");
   }
 
+  // A Source on negotiated rates books only those (DECISIONS, owner 2026-11-13): default to its
+  // best-priority linked plan here, and refuse any other plan.
+  const lock = await negotiatedLock([group.sourceProfileId], group.propertyId);
   const ratePlan = input.ratePlanId
     ? await prisma.ratePlan.findFirst({ where: { id: input.ratePlanId, propertyId: group.propertyId } })
-    : await prisma.ratePlan.findFirst({ where: { propertyId: group.propertyId }, orderBy: { priority: "asc" } });
+    : await prisma.ratePlan.findFirst({
+        where: { propertyId: group.propertyId, ...(lock ? { id: { in: [...lock.planIds] } } : {}) },
+        orderBy: { priority: "asc" },
+      });
   if (!ratePlan) return fail(400, input.ratePlanId ? "Rate plan does not belong to this property" : "No rate plan configured for this property");
+  if (lock && !lock.planIds.has(ratePlan.id)) {
+    return fail(400, `${lock.names.join(" and ")} books on negotiated rates only: choose its negotiated rate plan.`, "RATE_NOT_ALLOWED");
+  }
 
   const settings = await getPropertySettings(group.propertyId);
   const isTentative = input.status === "TENTATIVE";

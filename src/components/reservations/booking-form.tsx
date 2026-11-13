@@ -442,7 +442,12 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   const unlocks = (ids?: string[]) =>
     (form.travelAgentId !== "none" && !!ids?.includes(form.travelAgentId)) ||
     (form.sourceProfileId !== "none" && !!ids?.includes(form.sourceProfileId))
-  const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp => !rp.isNegotiated || unlocks(rp.negotiatedForProfileIds))
+  // Lock-in (DECISIONS, owner 2026-11-13): a party linked to negotiated plans here may use
+  // only those, so the other plans disappear from the grid and the plan pickers.
+  const lockedToNegotiated = ratePlans.some(rp => rp.isNegotiated && unlocks(rp.negotiatedForProfileIds))
+  const planAllowed = (rp: { isNegotiated?: boolean; negotiatedForProfileIds?: string[] }) =>
+    lockedToNegotiated ? !!rp.isNegotiated && unlocks(rp.negotiatedForProfileIds) : !rp.isNegotiated || unlocks(rp.negotiatedForProfileIds)
+  const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp => planAllowed(rp))
 
   // Occupancy beyond a room type's baseOccupancy is normal and just incurs an
   // extra-person charge if one is configured (shown as "Extra occupancy" in the
@@ -942,7 +947,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { ratePlanId: v }) }}
                           placeholder="Select rate plan"
                           options={ratePlans
-                            .filter(rp => rp.id === assignment.ratePlanId || !rp.isNegotiated || unlocks(rp.negotiatedForProfileIds))
+                            .filter(rp => rp.id === assignment.ratePlanId || planAllowed(rp))
                             .map(rp => ({ value: rp.id, label: `${rp.name} (${rp.code})` }))}
                         />
                       </div>

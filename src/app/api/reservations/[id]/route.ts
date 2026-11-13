@@ -187,6 +187,7 @@ export async function PUT(
       ratePlanIds: data.assignments.map((a) => a.ratePlanId),
       travelAgentId: data.travelAgentId,
       sourceProfileId: data.sourceProfileId,
+      propertyId: existing.propertyId,
       alreadyOnBooking: existing.assignments.map((a) => a.ratePlanId),
     });
     if (negotiated) return NextResponse.json({ error: negotiated }, { status: 400 });

@@ -242,6 +242,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       ratePlanIds: assignmentsInput.map((a) => a.ratePlanId),
       travelAgentId: body.travelAgentId,
       sourceProfileId: body.sourceProfileId,
+      propertyId: body.propertyId,
     });
     if (negotiated) return fail(400, negotiated);
   }
