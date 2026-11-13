@@ -226,7 +226,7 @@ describe("Agent API: slots and bookings (§1a end to end)", () => {
     const answers = await Promise.all([0, 1, 2, 3, 4, 5].map(one));
     const ok = answers.filter((r) => r.status === 201).length;
     expect(ok).toBe(2);
-    for (const r of answers.filter((r) => r.status !== 201)) expect(r.status).toBeLessThan(500);
+    for (const r of answers.filter((r) => r.status !== 201)) expect(r.status, JSON.stringify(await r.clone().json())).toBeLessThan(500);
     expect(await prisma.reservation.count({ where: { groupBlockId: block.id, status: { not: "CANCELLED" } } })).toBe(2);
   });
 

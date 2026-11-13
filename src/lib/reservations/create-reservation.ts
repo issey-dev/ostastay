@@ -466,6 +466,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       propertyId: body.propertyId,
       segments: bookingSegments,
       excludeGroupBlockId: groupBlockId ?? undefined,
+      db: tx,
     });
     if (now.length > 0 && !(body.acknowledgeOverbook && hasCapability(ctx, "reservations.overbook"))) {
       raced.conflicts = now;

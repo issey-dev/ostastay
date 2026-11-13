@@ -499,7 +499,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         new Request(`http://localhost/api/groups/${block.id}/pickup`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(pickupBody("2026-11-12", "2026-11-14")),
+          body: JSON.stringify(pickupBody("2026-11-11", "2026-11-13")),
         }),
         { params: Promise.resolve({ id: block.id }) }
       )
@@ -516,7 +516,7 @@ describe("Alpha hardening: availability, lifecycle, void, night-audit idempotenc
         new Request(`http://localhost/api/groups/${block.id}/pickup`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ...pickupBody("2026-11-12", "2026-11-14"), acknowledgeOverbook: true }),
+          body: JSON.stringify({ ...pickupBody("2026-11-11", "2026-11-13"), acknowledgeOverbook: true }),
         }),
         { params: Promise.resolve({ id: block.id }) }
       )
