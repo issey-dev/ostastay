@@ -537,6 +537,7 @@ model Property {
   availabilityRestrictions     AvailabilityRestriction[]
   // Sell limits (Agent Portal plan A-10): how far past capacity a night may be sold.
   availabilitySellLimits       AvailabilitySellLimit[]
+  bookingMarkers               BookingMarker[]
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles          Profile[]
@@ -1064,6 +1065,15 @@ model Profile {
   totalNights       Int        @default(0)
   totalRevenue      Float      @default(0.0)
   lastStayDate      DateTime?
+  // A SOURCE profile (Agent Portal plan Phase 3): how its bookings settle (AGENT_NET |
+  // AGENT_GROSS | GUEST_DIRECT, A-18), how many days earlier than the rate plan's sales
+  // window it may request slots (A-11), whether its bookings confirm without a desk check
+  // (A-13, hotel-controlled), and its own Tape Chart marker (A-22).
+  settlementMode    String?
+  earlyAccessDays   Int?
+  portalAutoConfirm Boolean    @default(false)
+  markerIcon        String?
+  markerColor       String?
 
   // Set once at creation from the active property context, never changed afterward —
   // a lightweight "first seen at" breadcrumb, not a scoping mechanism. The profile
@@ -1079,6 +1089,7 @@ model Profile {
   documents                ProfileDocument[]
   reservations             Reservation[]
   travelAgentReservations  Reservation[]                 @relation("TravelAgent")
+  sourceReservations       Reservation[]                 @relation("SourceProfile")
   accompanyingReservations AccompanyingGuest[]
   foliosAsPayee            Folio[]                       @relation("PayeeProfile")
   groupBlocksAsPayee       GroupBlock[]                  @relation("GroupBlockPayee")
@@ -1345,6 +1356,27 @@ model AvailabilitySellLimit {
   @@index([roomTypeId])
 }
 
+// A booking marker rule (Agent Portal plan A-22, Phase 3): when a booking matches `match`
+// (see MARKER_MATCHES in src/lib/booking-markers.ts), show `icon` in `colorToken` on the
+// Tape Chart and lists. Ordered; first match wins. A property with no rows uses the seeded
+// defaults (DEFAULT_MARKER_RULES), so it works with zero setup.
+model BookingMarker {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sortOrder  Int      @default(0)
+  label      String
+  match      String
+  matchValue String?
+  icon       String
+  colorToken String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([propertyId, sortOrder])
+}
+
 // ReservationStatus: TENTATIVE, RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
 model Reservation {
   id             String   @id @default(uuid())
@@ -1364,6 +1396,10 @@ model Reservation {
 
   travelAgentId String?
   travelAgent   Profile? @relation("TravelAgent", fields: [travelAgentId], references: [upid])
+  // Where the booking came from as a commercial party (Agent Portal plan A-21): a SOURCE
+  // profile, beside the Travel Agent; both can be set. A group pickup inherits its block's.
+  sourceProfileId String?
+  sourceProfile   Profile? @relation("SourceProfile", fields: [sourceProfileId], references: [upid])
 
   groupBlockId      String?
   groupBlock        GroupBlock? @relation(fields: [groupBlockId], references: [id])
@@ -1483,6 +1519,7 @@ model Reservation {
   @@index([primaryGuestId])
   @@index([propertyId])
   @@index([travelAgentId])
+  @@index([sourceProfileId])
   // The list is always one property ordered by arrival.
   @@index([propertyId, checkInDate])
   @@index([status, optionDate])

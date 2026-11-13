@@ -43,6 +43,8 @@ export type CreateReservationInput = {
   checkInDate: string | Date;
   checkOutDate: string | Date;
   travelAgentId?: string | null;
+  /** A SOURCE profile (Agent Portal plan A-21); may be set together with travelAgentId. */
+  sourceProfileId?: string | null;
   accompanyingGuestIds?: string[];
   specialRequestCodes?: unknown;
   assignments?: ReservationAssignmentInput[];
@@ -226,11 +228,20 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
         },
       ];
 
-  // A negotiated rate plan is only for the agent / company it was set up for.
+  if (body.sourceProfileId) {
+    const source = await prisma.profile.findUnique({ where: { upid: body.sourceProfileId } });
+    if (!source || source.enterpriseId !== ctx.enterpriseId || source.profileType !== "SOURCE") {
+      return fail(404, "Source profile not found");
+    }
+    if (!source.isActive) return fail(400, "That source profile is deactivated.");
+  }
+
+  // A negotiated rate plan is only for the agent / company / source it was set up for.
   {
     const negotiated = await negotiatedPlanError({
       ratePlanIds: assignmentsInput.map((a) => a.ratePlanId),
       travelAgentId: body.travelAgentId,
+      sourceProfileId: body.sourceProfileId,
     });
     if (negotiated) return fail(400, negotiated);
   }
@@ -460,6 +471,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       propertyId: body.propertyId,
       primaryGuestId: body.primaryGuestId,
       travelAgentId: body.travelAgentId,
+      sourceProfileId: body.sourceProfileId || null,
       groupBlockId,
       // Attached-to-block reservations keep their own folio by default (the pickup
       // dialog is the explicit bill-to-master path).

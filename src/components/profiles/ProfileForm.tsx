@@ -35,6 +35,8 @@ import { NegotiatedRatesManager } from "@/components/profiles/negotiated-rates-m
 import { InfoHint } from "@/components/ui/info-hint"
 import { PageHeader } from "@/components/ui/page-header"
 import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
+import { SETTLEMENT_MODES, SETTLEMENT_MODE_LABELS, MARKER_ICONS, MARKER_COLORS, MARKER_COLOR_KEYS } from "@/lib/booking-markers"
+import { MarkerIconView } from "@/components/reservations/booking-marker"
 import { MobileActionBar } from "@/components/ui/mobile"
 import { INPUT_EMAIL, INPUT_MONEY } from "@/lib/input-presets"
 
@@ -64,6 +66,12 @@ const profileFormSchema = z.object({
   arNumber: z.string().optional(),
   creditLimit: z.coerce.number().min(0).optional().nullable(),
   isCreditAccount: z.boolean().default(false),
+  // Source profiles (Agent Portal plan Phase 3).
+  settlementMode: z.string().optional(),
+  earlyAccessDays: z.coerce.number().int().min(0, "0 or more").max(365, "At most 365").optional().nullable(),
+  portalAutoConfirm: z.boolean().default(false),
+  markerIcon: z.string().optional(),
+  markerColor: z.string().optional(),
   // Create-mode-only convenience fields — an initial Communications/Address/
   // Identification row, submitted as arrays to POST. Once a profile exists, the real
   // multi-row managers (Communications/Address/Identification) take over.
@@ -75,7 +83,7 @@ const profileFormSchema = z.object({
   initialPostalCode: z.string().optional(),
   initialCountry: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.profileType === "COMPANY" || data.profileType === "TRAVEL_AGENT") {
+  if (data.profileType === "COMPANY" || data.profileType === "TRAVEL_AGENT" || data.profileType === "SOURCE") {
     if (!data.companyName || data.companyName.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -108,6 +116,7 @@ const PROFILE_TYPE_LABELS: Record<string, string> = {
   STAFF: "Staff",
   COMPANY: "Company",
   TRAVEL_AGENT: "Travel agent",
+  SOURCE: "Source",
 }
 
 export default function ProfileForm({ initialData, upid, defaultType = "GUEST", contextMode }: { initialData?: any, upid?: string, defaultType?: string, contextMode?: "debtor" }) {
@@ -149,6 +158,11 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
       arNumber: initialData?.arNumber || "",
       creditLimit: initialData?.creditLimit || null,
       isCreditAccount: initialData?.isCreditAccount ?? isDebtorContext,
+      settlementMode: initialData?.settlementMode || "",
+      earlyAccessDays: initialData?.earlyAccessDays ?? null,
+      portalAutoConfirm: initialData?.portalAutoConfirm ?? false,
+      markerIcon: initialData?.markerIcon || "",
+      markerColor: initialData?.markerColor || "",
       initialEmail: "",
       initialMobile: "",
       initialFullAddress: "",
@@ -165,7 +179,8 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
   useUnsavedGuard(form.formState.isDirty && !submitting && !saved)
 
   const profileType = form.watch("profileType")
-  const isB2B = profileType === "COMPANY" || profileType === "TRAVEL_AGENT"
+  const isB2B = profileType === "COMPANY" || profileType === "TRAVEL_AGENT" || profileType === "SOURCE"
+  const isSource = profileType === "SOURCE"
   const isIndividual = !isB2B // GUEST or STAFF — full Personal Information + Identification
 
   const dateOfBirth = form.watch("dateOfBirth")
@@ -692,6 +707,136 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                 profile to negotiated Rate Plans; the reservation form's rate-plan
                 selector then only offers those plans when this profile is the
                 booking's Travel Agent/Booking Source. See RatePlanAgentAccess. */}
+            {/* Section: Source settings (Agent Portal plan Phase 3): commission,
+                settlement, early access, automatic confirmation and the Tape Chart marker. */}
+            {(isSource || profileType === "TRAVEL_AGENT") && (
+              <Card id="source-settings">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg"><Percent className="h-4 w-4 text-muted-foreground" />
+                    {isSource ? "Source settings" : "Commission"}
+                  </CardTitle>
+                  {isSource && (
+                    <CardDescription>How bookings from this source are paid and shown. Its portal logins and slots are on the profile page.</CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="commissionRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1">
+                          Commission %
+                          <InfoHint label="Commission">Used when the booking&rsquo;s rate plan sets no commission of its own. Paid on the room rate without service charge and tax; extras earn none.</InfoHint>
+                        </FormLabel>
+                        <FormControl>
+                          <Input inputMode="decimal" placeholder="e.g. 10" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {isSource && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="settlementMode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Who pays</FormLabel>
+                            <Select value={field.value || "NONE"} onValueChange={(v) => field.onChange(v === "NONE" ? "" : v)}>
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="NONE">Not set (agent pays, net)</SelectItem>
+                                {SETTLEMENT_MODES.map((m) => <SelectItem key={m} value={m}>{SETTLEMENT_MODE_LABELS[m]}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="earlyAccessDays"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1">
+                              Early access (days)
+                              <InfoHint label="Early access">How many days before a rate plan&rsquo;s agent sales open this source may already request slots.</InfoHint>
+                            </FormLabel>
+                            <FormControl>
+                              <Input inputMode="numeric" placeholder="0" {...field} value={field.value ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="portalAutoConfirm"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-2 space-y-0 sm:col-span-2">
+                            <FormControl>
+                              <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                            <div>
+                              <FormLabel className="cursor-pointer text-sm">Bookings confirm automatically</FormLabel>
+                              <p className="text-xs text-muted-foreground">For a trusted contract agent whose bookings the hotel never checks. Off: every booking starts tentative and the desk confirms it.</p>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="markerIcon"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tape Chart icon</FormLabel>
+                            <Select value={field.value || "NONE"} onValueChange={(v) => field.onChange(v === "NONE" ? "" : v)}>
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Default" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="NONE">Default</SelectItem>
+                                {MARKER_ICONS.map((i) => <SelectItem key={i} value={i}><MarkerIconView name={i} className="mr-1.5 inline size-4" />{i}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="markerColor"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tape Chart colour</FormLabel>
+                            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Tape Chart colour">
+                              {MARKER_COLOR_KEYS.map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={field.value === c}
+                                  aria-label={MARKER_COLORS[c].label}
+                                  title={MARKER_COLORS[c].label}
+                                  onClick={() => field.onChange(field.value === c ? "" : c)}
+                                  className={`size-6 rounded-full ${MARKER_COLORS[c].dot} ring-offset-2 ring-offset-background ${field.value === c ? "ring-2 ring-foreground" : ""}`}
+                                />
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Empty: a free colour is picked when the profile is saved.</p>
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {isB2B && (
               <Card id="negotiated-rates">
                 <CardHeader>
@@ -771,6 +916,7 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                           {!isDebtorContext && <SelectItem value="GUEST">Guest</SelectItem>}
                           <SelectItem value="COMPANY">Company</SelectItem>
                           <SelectItem value="TRAVEL_AGENT">Travel agent</SelectItem>
+                          <SelectItem value="SOURCE">Source</SelectItem>
                           {!isDebtorContext && <SelectItem value="STAFF">Staff</SelectItem>}
                         </SelectContent>
                       </Select>

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check, ChevronsUpDown, Search } from "@/components/icons"
+import { Check, ChevronsUpDown, Plus, Search } from "@/components/icons"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -41,6 +41,13 @@ interface SearchableSelectProps {
   /** Force the search box on or off. Default: shown only above SEARCHABLE_THRESHOLD
    *  options — a search box over two or three choices is just clutter. */
   searchable?: boolean
+  /** "Search, and create if it is not there" (Agent Portal plan A-21a): when the search finds
+   *  no exact match, a last row "Create “typed text”" calls this with the text. The caller
+   *  opens its short create dialog and, once saved, sets the new value itself. Omit it (or
+   *  pass it only when the user may create) to hide the row. Forces the search box on. */
+  onCreate?: (text: string) => void
+  /** Label for the create row; default `Create “…”`. */
+  createLabel?: (text: string) => string
 }
 
 export function SearchableSelect({
@@ -54,8 +61,10 @@ export function SearchableSelect({
   disabled = false,
   required = false,
   searchable,
+  onCreate,
+  createLabel,
 }: SearchableSelectProps) {
-  const showSearch = searchable ?? options.length > SEARCHABLE_THRESHOLD
+  const showSearch = onCreate ? true : searchable ?? options.length > SEARCHABLE_THRESHOLD
   // Phones get the same list in a bottom drawer (full-width rows, 16px search, swipe down to
   // close) instead of a popover squeezed under the field. Desktop is unchanged.
   const isMobile = useIsMobile()
@@ -77,6 +86,10 @@ export function SearchableSelect({
   }, [options, search])
 
   const selectedOption = options.find((option) => option.value === value)
+  const createText = search.trim()
+  const canCreate =
+    !!onCreate && createText.length > 0 && !options.some((o) => o.label.trim().toLowerCase() === createText.toLowerCase())
+  const createIndex = canCreate ? filteredOptions.length : -1
 
   React.useEffect(() => {
     if (!open) return
@@ -89,10 +102,17 @@ export function SearchableSelect({
     setSearch("")
   }
 
+  const startCreate = () => {
+    const text = createText
+    setOpen(false)
+    setSearch("")
+    onCreate?.(text)
+  }
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault()
-      setActive((i) => Math.min(i + 1, filteredOptions.length - 1))
+      setActive((i) => Math.min(i + 1, filteredOptions.length - (canCreate ? 0 : 1)))
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
       setActive((i) => Math.max(i - 1, 0))
@@ -100,6 +120,7 @@ export function SearchableSelect({
       e.preventDefault()
       const option = filteredOptions[active]
       if (option) choose(option)
+      else if (canCreate && active === createIndex) startCreate()
     }
   }
 
@@ -176,7 +197,7 @@ export function SearchableSelect({
       onKeyDown={showSearch ? undefined : onKeyDown}
       className={cn("outline-none", isMobile ? "py-1" : "max-h-[300px] overflow-y-auto p-1")}
     >
-      {filteredOptions.length === 0 ? (
+      {filteredOptions.length === 0 && !canCreate ? (
         <div className="py-6 text-center text-sm text-muted-foreground">
           {emptyText}
         </div>
@@ -209,6 +230,23 @@ export function SearchableSelect({
             </div>
           </React.Fragment>
         ))
+      )}
+      {canCreate && (
+        <div
+          role="option"
+          aria-selected={false}
+          data-index={createIndex}
+          className={cn(
+            "relative mt-1 flex cursor-pointer select-none items-center gap-2 rounded-md border-t border-border py-1.5 pl-2 pr-2 text-sm font-medium text-primary outline-none pointer-coarse:min-h-11",
+            isMobile && "min-h-11 text-base",
+            active === createIndex && "bg-accent"
+          )}
+          onMouseMove={() => setActive(createIndex)}
+          onClick={startCreate}
+        >
+          <Plus className="h-4 w-4" />
+          <span className="truncate">{createLabel ? createLabel(createText) : `Create \u201c${createText}\u201d`}</span>
+        </div>
       )}
     </div>
   )

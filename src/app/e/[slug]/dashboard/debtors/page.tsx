@@ -29,7 +29,7 @@ function accountName(a: DebtorAccount): string {
   return a.companyName || [a.firstName, a.lastName].filter(Boolean).join(" ")
 }
 
-const accountType = (a: DebtorAccount) => (a.profileType === "TRAVEL_AGENT" ? "Travel agent" : "Company")
+const accountType = (a: DebtorAccount) => (a.profileType === "TRAVEL_AGENT" ? "Travel agent" : a.profileType === "SOURCE" ? "Source" : "Company")
 
 const money = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: "USD" })
 

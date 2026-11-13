@@ -70,7 +70,7 @@ export async function GET(request: Request) {
         id: r.id,
         confirmationNo: r.confirmationNo,
         guestName:
-          r.primaryGuest.profileType === "COMPANY" || r.primaryGuest.profileType === "TRAVEL_AGENT"
+          r.primaryGuest.profileType === "COMPANY" || (r.primaryGuest.profileType === "TRAVEL_AGENT" || r.primaryGuest.profileType === "SOURCE")
             ? r.primaryGuest.companyName
             : `${r.primaryGuest.firstName} ${r.primaryGuest.lastName ?? ""}`.trim(),
         roomNumber: r.assignments[0]?.room?.roomNumber ?? null,
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         confirmationNo: r.confirmationNo,
         checkInDate: r.checkInDate,
         guestName:
-          r.primaryGuest.profileType === "COMPANY" || r.primaryGuest.profileType === "TRAVEL_AGENT"
+          r.primaryGuest.profileType === "COMPANY" || (r.primaryGuest.profileType === "TRAVEL_AGENT" || r.primaryGuest.profileType === "SOURCE")
             ? r.primaryGuest.companyName
             : `${r.primaryGuest.firstName} ${r.primaryGuest.lastName ?? ""}`.trim(),
       })),

@@ -3,7 +3,7 @@
 import { GoldStar } from "@/components/ui/gold-star";
 import { useBusinessToday } from "@/hooks/use-business-today";
 import { toDateKey, parseDateKey } from "@/lib/date-only"
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
@@ -18,6 +18,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { statusSolidClasses, statusTone, type StatusTone } from "@/lib/status-tone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useUrlState } from "@/lib/use-url-state";
+import { DEFAULT_MARKER_RULES, MARKER_COLORS, resolveMarker, type MarkerFacts, type MarkerRule, type ResolvedMarker } from "@/lib/booking-markers";
+import { MarkerChip, MarkerLegend, TENTATIVE_HATCH_STYLE } from "@/components/reservations/booking-marker";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
 import { useDeviceTier } from "@/hooks/use-mobile";
 import { TapeChartMobileList } from "@/components/reservations/tape-chart-mobile-list";
@@ -43,6 +46,9 @@ export interface Reservation {
   status: string;
   primaryGuest: { firstName: string; lastName: string; vipLevel?: string | null };
   roomType: { code: string; name: string };
+  /** Booking markers (Agent Portal plan A-22): what the marker rules read. */
+  markerFacts?: MarkerFacts;
+  optionDate?: string | null;
 }
 
 // Desktop window choice (?days=7|14|30). Phones keep the fixed 14-day agenda.
@@ -77,6 +83,44 @@ export function TapeChartGrid() {
   const deviceTier = useDeviceTier();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  // Booking markers and the source/status filter (Agent Portal plan Phase 3).
+  const [markerRules, setMarkerRules] = useState<MarkerRule[]>(DEFAULT_MARKER_RULES);
+  const [markerFilter, setMarkerFilter] = useState<string>("all");
+  const markerOf = useMemo(() => {
+    const m = new Map<string, ResolvedMarker | null>();
+    for (const r of reservations) m.set(r.id, r.markerFacts ? resolveMarker(r.markerFacts, markerRules) : null);
+    return m;
+  }, [reservations, markerRules]);
+  const filterOptions = useMemo(() => {
+    const sources = new Map<string, string>();
+    for (const r of reservations) if (r.markerFacts?.source) sources.set(r.markerFacts.source.upid, r.markerFacts.source.name);
+    return [
+      { label: "All bookings", value: "all" },
+      { label: "Tentative", value: "status:TENTATIVE" },
+      { label: "Overflow", value: "overflow" },
+      { label: "Any source", value: "source:any" },
+      ...[...sources.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([upid, name]) => ({ label: name, value: `source:${upid}` })),
+    ];
+  }, [reservations]);
+  const matchesFilter = (r: Reservation) => {
+    if (markerFilter === "all") return true;
+    const f = r.markerFacts;
+    if (markerFilter === "status:TENTATIVE") return r.status === "TENTATIVE";
+    if (markerFilter === "overflow") return !!f?.isOverflow;
+    if (markerFilter === "source:any") return !!f?.source;
+    if (markerFilter.startsWith("source:")) return f?.source?.upid === markerFilter.slice(7);
+    return true;
+  };
+  // A bar: status keeps the fill; the marker adds an icon chip and a coloured right edge;
+  // a tentative booking is hatched; bars outside the filter fade (rooms stay readable).
+  const barExtras = (res: Reservation) => {
+    const marker = markerOf.get(res.id) ?? null;
+    return {
+      marker,
+      style: res.status === "TENTATIVE" ? TENTATIVE_HATCH_STYLE : undefined,
+      dim: !matchesFilter(res),
+    };
+  };
   const [startDate, setStartDate] = useState(startOfDay(new Date()));
   // Start at the property's business date, not the device's: before the night audit runs
   // (or on a property whose date isn't the calendar's) the device date showed the wrong
@@ -126,6 +170,7 @@ export function TapeChartGrid() {
       if (json.success) {
         setRooms(json.data.rooms);
         setReservations(json.data.reservations);
+        if (Array.isArray(json.data.markerRules)) setMarkerRules(json.data.markerRules);
       }
     } catch (error) {
       console.error("Failed to load tape chart", error);
@@ -518,7 +563,9 @@ export function TapeChartGrid() {
     return acc;
   }, {} as Record<string, Room[]>);
 
-  const unassignedReservations = reservations.filter(r => !r.roomId);
+  // Overflow bookings (partner hotel) get their own row beside Unassigned (A-8).
+  const unassignedReservations = reservations.filter(r => !r.roomId && !r.markerFacts?.isOverflow);
+  const overflowReservations = reservations.filter(r => !!r.markerFacts?.isOverflow);
 
   // Weekend columns (Sat/Sun, as on Availability) get a visible tint and the business date a
   // primary one, so the eye can find "today" and the weekend without reading the numbers.
@@ -585,7 +632,17 @@ export function TapeChartGrid() {
           <span aria-hidden className="h-3 w-3 border border-warning/40 bg-warning-muted" />
           Unassigned
         </li>
+        <li className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="h-3 w-3 border border-border/60 bg-muted" style={TENTATIVE_HATCH_STYLE} />
+          Tentative
+        </li>
       </ul>
+      <div className="w-44">
+        <SearchableSelect value={markerFilter} onChange={setMarkerFilter} placeholder="All bookings" options={filterOptions} />
+      </div>
+      <div className="basis-full">
+        <MarkerLegend markers={[...markerOf.values()].filter((m): m is ResolvedMarker => !!m)} />
+      </div>
     </div>
 
     {/* Scrolls both ways inside the card so the date row and the room column stay pinned.
@@ -621,8 +678,8 @@ export function TapeChartGrid() {
             <span className="font-bold text-warning text-xs">Unassigned</span>
             <span className="text-[10px] text-warning/80">{unassignedReservations.length} Bookings</span>
           </div>
-          <div 
-            className="flex-1 grid relative p-1" 
+          <div
+            className="flex-1 grid relative p-1"
             style={{ gridTemplateColumns: colTemplate }}
             onDragOver={(e) => handleDragOver(e, null)}
             onDrop={(e) => handleDrop(e, null)}
@@ -631,25 +688,64 @@ export function TapeChartGrid() {
             {columns.map((_, i) => (
               <div key={`unassigned-grid-${i}`} className="border-r border-dashed border-border h-14" style={{ gridColumn: i + 1 }} />
             ))}
-            
+
             {/* Unassigned Blocks */}
             {unassignedReservations.map(res => {
               const style = getBlockStyle(res.checkInDate, res.checkOutDate);
               if (style.gridColumnEnd <= 1 || style.gridColumnStart > daysToShow) return null;
-              
+
+              const ex = barExtras(res);
               return (
-                <div 
-                  key={res.id} 
+                <div
+                  key={res.id}
                   onClick={() => setSelectedReservation(res)}
                   draggable={canDrag(res)}
                   onDragStart={(e) => handleDragStart(e, res.id)}
                   onDragEnd={handleDragEnd}
-                  title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}`}
-                  className={`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`}
-                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
+                  title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}${ex.marker ? ` · ${ex.marker.label}` : ""}`}
+                  className={cn(`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`, ex.dim && "opacity-30")}
+                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`, ...ex.style }}
                 >
-                  <span className="font-bold text-xs leading-tight truncate">{res.primaryGuest.lastName}</span>
-                  <span className="text-[10px] font-medium text-muted-foreground truncate">{res.roomType.code}</span>
+                  {ex.marker && <span aria-hidden className={cn("absolute inset-y-0 right-0 w-[3px]", MARKER_COLORS[ex.marker.color].dot)} />}
+                  <span className="flex min-w-0 items-center gap-1 font-bold text-xs leading-tight">
+                    {ex.marker && <MarkerChip marker={ex.marker} />}
+                    <span className="truncate">{res.primaryGuest.lastName}</span>
+                  </span>
+                  <span className="text-[10px] font-medium text-muted-foreground truncate">{res.markerFacts?.isOverflow ? "Partner hotel" : res.roomType.code}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {overflowReservations.length > 0 && (
+        <div className="flex border-b border-border bg-muted/40">
+          <div className="w-32 shrink-0 border-r border-border p-2 bg-muted z-20 sticky left-0 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+            <span className="font-bold text-foreground text-xs">Overflow</span>
+            <span className="text-[10px] text-muted-foreground">{overflowReservations.length} at partner hotels</span>
+          </div>
+          <div className="flex-1 grid relative p-1" style={{ gridTemplateColumns: colTemplate }}>
+            {columns.map((_, i) => (
+              <div key={`overflow-grid-${i}`} className="border-r border-dashed border-border h-14" style={{ gridColumn: i + 1 }} />
+            ))}
+            {overflowReservations.map(res => {
+              const style = getBlockStyle(res.checkInDate, res.checkOutDate);
+              if (style.gridColumnEnd <= 1 || style.gridColumnStart > daysToShow) return null;
+              const ex = barExtras(res);
+              return (
+                <div
+                  key={res.id}
+                  onClick={() => setSelectedReservation(res)}
+                  title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · Overflow · ${res.confirmationNo}`}
+                  className={cn(`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground z-10 ${barClasses(res.status)}`, ex.dim && "opacity-30")}
+                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`, ...ex.style }}
+                >
+                  <span className="flex min-w-0 items-center gap-1 font-bold text-xs leading-tight">
+                    {ex.marker && <MarkerChip marker={ex.marker} />}
+                    <span className="truncate">{res.primaryGuest.lastName}</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-muted-foreground truncate">#{res.confirmationNo}</span>
                 </div>
               );
             })}
@@ -699,19 +795,24 @@ export function TapeChartGrid() {
                   {roomReservations.map(res => {
                     const style = getBlockStyle(res.checkInDate, res.checkOutDate);
                     if (style.gridColumnEnd <= 1 || style.gridColumnStart > daysToShow) return null;
-                    
+
+                    const ex = barExtras(res);
                     return (
-                      <div 
-                        key={res.id} 
+                      <div
+                        key={res.id}
                         onClick={() => setSelectedReservation(res)}
                         draggable={canDrag(res)}
                         onDragStart={(e) => handleDragStart(e, res.id)}
                         onDragEnd={handleDragEnd}
-                        title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}`}
-                        className={`absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`}
-                        style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
+                        title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}${ex.marker ? ` · ${ex.marker.label}` : ""}${res.status === "TENTATIVE" && res.optionDate ? ` · option until ${format(new Date(res.optionDate), "d MMM")}` : ""}`}
+                        className={cn(`absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`, ex.dim && "opacity-30")}
+                        style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`, ...ex.style }}
                       >
-                        <span className="font-bold text-xs leading-tight truncate">{res.primaryGuest.lastName}</span>
+                        {ex.marker && <span aria-hidden className={cn("absolute inset-y-0 right-0 w-[3px]", MARKER_COLORS[ex.marker.color].dot)} />}
+                        <span className="flex min-w-0 items-center gap-1 font-bold text-xs leading-tight">
+                          {ex.marker && <MarkerChip marker={ex.marker} />}
+                          <span className="truncate">{res.primaryGuest.lastName}</span>
+                        </span>
                         <span className="mt-1 text-[10px] font-mono text-muted-foreground truncate">#{res.confirmationNo}</span>
                       </div>
                     );
@@ -722,7 +823,7 @@ export function TapeChartGrid() {
           })}
         </div>
       ))}
-      
+
     </div>
       {isLoading && (
          <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-[var(--z-modal)] flex items-center justify-center">

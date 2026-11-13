@@ -50,7 +50,7 @@ type FrontDeskTab = (typeof FRONT_DESK_TABS)[number]
 
 // ── Shared row helpers ───────────────────────────────────────────────────────
 const guestDisplayName = (g: any) =>
-  g?.profileType === "COMPANY" || g?.profileType === "TRAVEL_AGENT"
+  g?.profileType === "COMPANY" || (g?.profileType === "TRAVEL_AGENT" || g?.profileType === "SOURCE")
     ? g?.companyName ?? ""
     : `${g?.firstName ?? ""} ${g?.lastName ?? ""}`.trim()
 

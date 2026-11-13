@@ -17,6 +17,21 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.3.0",
+    date: "2026-11-13",
+    highlights: "Sources: a new profile type for the agents and partners who send you bookings, with their own commission, payment terms and Tape Chart marker. Bookings show where they came from at a glance.",
+    new: [
+      "Source profiles in Client Relations (a new Sources tab): commission, who pays, early access days, automatic confirmation and the source's own Tape Chart icon and colour. A travel agent can be converted to a source from its profile.",
+      "A Source field on the booking, beside Travel agent / company; a booking can carry both, and either one unlocks the negotiated rate plans linked to it.",
+      "Create a profile without leaving the booking: when a travel agent or source is not found, choose Create at the bottom of the list, fill in a short form, and it is selected.",
+      "Booking markers on the Tape Chart: an icon and coloured edge show the source, tentative bookings (also hatched), Overflow, groups, website and channel bookings. A legend lists what is on screen and a filter picks out one source, tentative bookings or Overflow. Overflow bookings have their own row.",
+      "Booking markers are set per property in the Hub under Reservations: an ordered list of rules with an icon and colour each. It works out of the box with sensible defaults.",
+    ],
+    improved: [
+      "The reservations list shows each booking's source.",
+    ],
+  },
+  {
     version: "9.2.0",
     date: "2026-11-13",
     highlights: "Sell limits cap how far the desk may overbook on a night, guests can be placed at a partner hotel when the house is full, and the Availability grid shows what is on option.",

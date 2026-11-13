@@ -52,6 +52,29 @@ export default function GroupsAndClients() {
       />
       <p>Click a card to open the profile. The <strong>…</strong> menu edits it. A sort (recently updated, name, most visits) and <strong>Export CSV</strong> sit above the list and apply to the profiles shown.</p>
 
+      <H2>Sources</H2>
+      <p>
+        A <strong>Source</strong> is a profile type for a commercial partner that sends you bookings, such as a travel agency you
+        work with closely. It can do everything a Travel Agent profile can (negotiated rates, a credit account) and adds:
+      </p>
+      <ul>
+        <li><strong>Commission %</strong>, used when the booking&rsquo;s rate plan sets none of its own.</li>
+        <li><strong>Who pays</strong>: the agent net of commission, the agent in full, or the guest at the hotel.</li>
+        <li><strong>Early access (days)</strong>: how much earlier than everyone else it may request slots.</li>
+        <li><strong>Bookings confirm automatically</strong>: for a trusted contract agent the hotel never checks. Off by default.</li>
+        <li>Its own <strong>Tape Chart icon and colour</strong>, so its bookings are recognisable at a glance. A new Source is given a colour no other Source uses.</li>
+      </ul>
+      <p>
+        Find Sources under the <strong>Sources</strong> tab of Client Relations. A Travel Agent profile can be turned into one with{" "}
+        <strong>More › Convert to source</strong>; everything it holds stays.
+      </p>
+      <p>
+        On a booking, the <strong>Source</strong> field sits beside <strong>Travel agent / company</strong>; a booking can carry both.
+        A negotiated rate plan is offered when either of them is linked to it. If the agent or source you type is not there yet,
+        choose <strong>Create &ldquo;…&rdquo;</strong> at the bottom of the list: a short form saves it and selects it without leaving
+        the booking.
+      </p>
+
       <H2>Deleting or deactivating a profile</H2>
       <p>
         Only a brand-new profile can be <strong>deleted</strong>. As soon as anything is linked to it (a booking as guest, travel agent

@@ -53,6 +53,7 @@ const ALLOW: Record<string, string> = {
   "session/current-property/route.ts": "switches the user's own working property (checked against scope)",
   "session/eod-status/route.ts": "the user's own session state",
   "session/idle-check/route.ts": "the user's own session state",
+  "session/permissions/route.ts": "the user's own effective permissions, for hiding UI only",
   "support-access/enter/[id]/route.ts": "Osta-internal users only (ctx.isInternal) with an approved grant",
   "support-access/exit/route.ts": "leaves the caller's own support session",
 };

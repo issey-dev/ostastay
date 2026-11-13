@@ -21,6 +21,9 @@ export enum ProfileType {
   GUEST = "GUEST",
   COMPANY = "COMPANY",
   TRAVEL_AGENT = "TRAVEL_AGENT",
+  // A booking source (Agent Portal plan, Phase 3): an entity profile like a Travel Agent,
+  // with its own commission, settlement, marker and agent portal logins.
+  SOURCE = "SOURCE",
   STAFF = "STAFF"
 }
 

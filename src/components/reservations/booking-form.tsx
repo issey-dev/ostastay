@@ -33,6 +33,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { allocationStayTotal, ratePlanAllocationWindows, type AllocationLike, type DateWindow } from "@/lib/allocations"
 import { GuestPickerModal, type GuestProfile } from "@/components/reservations/guest-picker-modal"
+import { QuickProfileDialog, type QuickProfileType } from "@/components/profiles/quick-profile-dialog"
+import { usePermissions } from "@/hooks/use-permissions"
 import { bookingFormSchema, emptyBookingValues, emptySegment, type BookingFormValues, type SegmentValues } from "@/components/reservations/booking-form-schema"
 import { LookToBookGrid, type GridData } from "@/components/reservations/look-to-book-grid"
 import { LookToBookCards } from "@/components/reservations/look-to-book-cards"
@@ -55,6 +57,7 @@ type ReservationDetail = {
   mealPlan: string
   primaryGuestId: string
   travelAgentId: string | null
+  sourceProfileId?: string | null
   groupBlockId: string | null
   depositFeeRuleId: string | null
   cancellationFeeRuleId: string | null
@@ -144,6 +147,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   const [existingConfirmationNo, setExistingConfirmationNo] = useState<string | null>(null)
 
   const [profiles, setProfiles] = useState<any[]>([])
+  // "Create “…”" in the profile pickers (Agent Portal plan A-21a).
+  const { can } = usePermissions()
+  const canCreateProfiles = can("PROFILES", "create")
+  const [quickCreate, setQuickCreate] = useState<null | { type: QuickProfileType; name: string; field: "travelAgentId" | "sourceProfileId" }>(null)
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -235,6 +242,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           remarks: res.remarks || "",
           mealPlan: res.mealPlan || "NONE",
           travelAgentId: res.travelAgentId || "none",
+          sourceProfileId: res.sourceProfileId || "none",
           groupBlockId: res.groupBlockId || "none",
           depositFeeRuleId: res.depositFeeRuleId || "none",
           cancellationFeeRuleId: res.cancellationFeeRuleId || "none",
@@ -431,10 +439,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     updateAssignment(i, { roomTypeId, ratePlanId, roomId: "none" })
   }
 
-  const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp =>
-    !rp.isNegotiated ||
-    (form.travelAgentId !== "none" && rp.negotiatedForProfileIds.includes(form.travelAgentId))
-  )
+  const unlocks = (ids?: string[]) =>
+    (form.travelAgentId !== "none" && !!ids?.includes(form.travelAgentId)) ||
+    (form.sourceProfileId !== "none" && !!ids?.includes(form.sourceProfileId))
+  const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp => !rp.isNegotiated || unlocks(rp.negotiatedForProfileIds))
 
   // Occupancy beyond a room type's baseOccupancy is normal and just incurs an
   // extra-person charge if one is configured (shown as "Extra occupancy" in the
@@ -518,6 +526,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
         checkInDate: minDate.toISOString(),
         checkOutDate: maxDate.toISOString(),
         travelAgentId: values.travelAgentId === "none" ? null : values.travelAgentId,
+        sourceProfileId: values.sourceProfileId === "none" ? null : values.sourceProfileId,
         groupBlockId: values.groupBlockId === "none" ? null : values.groupBlockId,
         depositFeeRuleId: values.depositFeeRuleId === "none" ? null : values.depositFeeRuleId,
         cancellationFeeRuleId: values.cancellationFeeRuleId === "none" ? null : values.cancellationFeeRuleId,
@@ -769,7 +778,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               </div>
               <div className="grid content-start gap-2">
                 <Label className="flex items-center gap-2">
-                  Booking source / travel agent (optional)
+                  Travel agent / company (optional)
                   {ratePlans.some(rp => rp.isNegotiated && form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)) && (
                     <StatusBadge label="unlocks negotiated rates" tone="warning" />
                   )}
@@ -778,6 +787,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   value={form.travelAgentId}
                   onChange={(v) => setField("travelAgentId", v)}
                   placeholder="Select travel agent..."
+                  onCreate={canCreateProfiles ? (text) => setQuickCreate({ type: "TRAVEL_AGENT", name: text, field: "travelAgentId" }) : undefined}
                   options={[
                     { value: "none", label: "Direct booking (none)" },
                     ...profiles.filter(p => p.profileType === 'TRAVEL_AGENT' || p.profileType === 'COMPANY').map(prof => ({
@@ -787,6 +797,39 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   ]}
                 />
               </div>
+              {/* Source (Agent Portal plan A-21): who the booking came from as a commercial
+                  party, beside the Travel Agent; both can be set. */}
+              <div className="grid content-start gap-2">
+                <Label className="flex items-center gap-2">
+                  Source (optional)
+                  {ratePlans.some(rp => rp.isNegotiated && form.sourceProfileId !== "none" && rp.negotiatedForProfileIds?.includes(form.sourceProfileId)) && (
+                    <StatusBadge label="unlocks negotiated rates" tone="warning" />
+                  )}
+                </Label>
+                <SearchableSelect
+                  value={form.sourceProfileId}
+                  onChange={(v) => setField("sourceProfileId", v)}
+                  placeholder="Select source..."
+                  onCreate={canCreateProfiles ? (text) => setQuickCreate({ type: "SOURCE", name: text, field: "sourceProfileId" }) : undefined}
+                  options={[
+                    { value: "none", label: "No source" },
+                    ...profiles.filter(p => p.profileType === 'SOURCE' && p.isActive !== false).map(prof => ({
+                      value: prof.upid,
+                      label: prof.companyName || `${prof.firstName} ${prof.lastName ?? ""}`.trim()
+                    }))
+                  ]}
+                />
+              </div>
+              <QuickProfileDialog
+                open={!!quickCreate}
+                type={quickCreate?.type ?? "SOURCE"}
+                initialName={quickCreate?.name ?? ""}
+                onClose={() => setQuickCreate(null)}
+                onCreated={(p) => {
+                  setProfiles(prev => [...prev, p])
+                  if (quickCreate) setField(quickCreate.field, p.upid)
+                }}
+              />
               {phoneFolded("group", form.groupBlockId !== "none") && (
                 <PhoneReveal label="Part of a group block?" onClick={() => showOnPhone("group")} />
               )}
@@ -899,7 +942,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { ratePlanId: v }) }}
                           placeholder="Select rate plan"
                           options={ratePlans
-                            .filter(rp => rp.id === assignment.ratePlanId || !rp.isNegotiated || (form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)))
+                            .filter(rp => rp.id === assignment.ratePlanId || !rp.isNegotiated || unlocks(rp.negotiatedForProfileIds))
                             .map(rp => ({ value: rp.id, label: `${rp.name} (${rp.code})` }))}
                         />
                       </div>
@@ -1157,7 +1200,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     {form.accompanyingGuestIds.map(gid => {
                       const prof = profiles.find(p => p.upid === gid)
                       if (!prof) return null;
-                      const name = prof.profileType === 'COMPANY' || prof.profileType === 'TRAVEL_AGENT'
+                      const name = prof.profileType === 'COMPANY' || (prof.profileType === 'TRAVEL_AGENT' || prof.profileType === 'SOURCE')
                         ? prof.companyName
                         : `${prof.firstName} ${prof.lastName || ''}`.trim();
                       return (

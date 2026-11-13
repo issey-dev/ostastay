@@ -94,6 +94,8 @@ export async function GET(request: Request) {
       include: {
         primaryGuest: true,
         travelAgent: true,
+        // The booking's Source and its marker (Agent Portal plan Phase 3).
+        sourceProfile: { select: { upid: true, companyName: true, firstName: true, markerIcon: true, markerColor: true } },
         accompanyingGuests: { include: { profile: true } },
         assignments: {
           include: {

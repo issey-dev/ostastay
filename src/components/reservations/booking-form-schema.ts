@@ -42,6 +42,8 @@ export const bookingFormSchema = z
     remarks: z.string(),
     mealPlan: z.string(),
     travelAgentId: z.string(),
+    // The booking's Source profile (Agent Portal plan A-21), beside the Travel Agent.
+    sourceProfileId: z.string(),
     // Optional group block to attach this reservation to ("none" = standalone). The API
     // validates the stay fits the block's dates and held room types.
     groupBlockId: z.string(),
@@ -104,6 +106,7 @@ export const emptyBookingValues = (): BookingFormValues => ({
   remarks: "",
   mealPlan: "NONE",
   travelAgentId: "none",
+  sourceProfileId: "none",
   groupBlockId: "none",
   depositFeeRuleId: "none",
   cancellationFeeRuleId: "none",

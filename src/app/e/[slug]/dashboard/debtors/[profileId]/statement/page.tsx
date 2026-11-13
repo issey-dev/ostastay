@@ -111,7 +111,7 @@ export default function DebtorStatementPage({ params }: { params: Promise<{ prof
       <StatementDocument
         brand={brand}
         meta={meta}
-        account={{ name: accountName, lines: [profile.profileType === "TRAVEL_AGENT" ? "Travel Agent" : "Company"] }}
+        account={{ name: accountName, lines: [profile.profileType === "TRAVEL_AGENT" ? "Travel Agent" : profile.profileType === "SOURCE" ? "Source" : "Company"] }}
         aging={agingRow}
         rows={invoiceRows}
         totals={[

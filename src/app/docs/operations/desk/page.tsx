@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Callout, DocTitle, H2, Pager, Table } from "../../components"
+import { Callout, DocTitle, H2, Pager, Table, H3 } from "../../components"
 
 export const metadata: Metadata = { title: "Front Desk, Reservations and Tape Chart" }
 
@@ -128,6 +128,15 @@ export default function DeskGuide() {
         <li>Click an empty day in a room to start a booking for that room and date.</li>
         <li>Click a bar to see the booking and its actions.</li>
       </ul>
+
+      <H3>Markers</H3>
+      <p>
+        A bar&rsquo;s colour is still its status. On top, a small <strong>icon</strong> and a coloured edge on the right say where the
+        booking came from or what needs attention: a Source&rsquo;s own icon and colour, a clock for a tentative booking (whose bar is
+        also hatched), a building for Overflow, and so on. The legend under the toolbar lists the markers on screen, and the filter
+        next to it fades every booking except tentative ones, Overflow, one Source or all Sources. Overflow bookings have their own
+        row under Unassigned. The rules are set per property in the Hub (Reservations › Booking markers).
+      </p>
 
       <H2>Moving a guest on the Tape Chart</H2>
       <ul>

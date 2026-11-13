@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sourceFieldsFromBody, defaultSourceColor } from "@/lib/source-profile";
 import { profileLinks } from "@/lib/profile-links";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
@@ -73,9 +74,15 @@ export async function PUT(
     // Attachments, and Notes are all managed via their own dedicated per-row CRUD
     // endpoints now, never a destructive replace-all from the main profile PUT.
     // originPropertyId is likewise untouched here: set once at creation, immutable.
+    const sourceFields = sourceFieldsFromBody(body);
+    if (body.profileType === "SOURCE" && existing.profileType !== "SOURCE" && !existing.markerColor && !sourceFields.markerColor) {
+      sourceFields.markerColor = await defaultSourceColor(ctx.enterpriseId);
+      sourceFields.markerIcon = sourceFields.markerIcon ?? "Briefcase";
+    }
     const updatedProfile = await prisma.profile.update({
       where: { upid },
       data: {
+        ...sourceFields,
         profileType: body.profileType as ProfileType,
         title: body.title,
         firstName: body.firstName || "",

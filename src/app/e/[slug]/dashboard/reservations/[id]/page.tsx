@@ -78,7 +78,7 @@ const folioBalance = (folio: any) => {
   return { charges, payments, balance: charges - payments }
 }
 
-const isEntity = (g: any) => g?.profileType === "COMPANY" || g?.profileType === "TRAVEL_AGENT"
+const isEntity = (g: any) => g?.profileType === "COMPANY" || (g?.profileType === "TRAVEL_AGENT" || g?.profileType === "SOURCE")
 const profileName = (g: any) => (isEntity(g) ? g?.companyName : `${g?.firstName ?? ""} ${g?.lastName ?? ""}`.trim())
 const isVip = (g: any) => g?.classification === "VIP" || !!g?.vipLevel
 

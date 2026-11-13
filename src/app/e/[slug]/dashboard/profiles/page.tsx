@@ -72,6 +72,7 @@ const PROFILE_TYPE_LABELS: Record<string, string> = {
   GUEST: "Guest",
   COMPANY: "Company",
   TRAVEL_AGENT: "Travel agent",
+  SOURCE: "Source",
   STAFF: "Staff",
 }
 
@@ -85,6 +86,8 @@ const PHONE_TABS = [
   { value: "GUEST", label: "Guests", icon: Users },
   { value: "COMPANY", label: "Corporate accounts", icon: Building2 },
   { value: "TRAVEL_AGENT", label: "Travel agents", icon: Briefcase },
+  // Booking sources: agents with portal logins and slots (Agent Portal plan Phase 3).
+  { value: "SOURCE", label: "Sources", icon: Briefcase },
   { value: "STAFF", label: "Staff", icon: UserCog },
 ] as const
 
@@ -98,7 +101,7 @@ function ProfilesDashboard() {
   const [total, setTotal] = useState<number | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [activeTab, setActiveTab] = useUrlState<string>("tab", "GUEST", ["GUEST", "COMPANY", "TRAVEL_AGENT", "STAFF"])
+  const [activeTab, setActiveTab] = useUrlState<string>("tab", "GUEST", ["GUEST", "COMPANY", "TRAVEL_AGENT", "SOURCE", "STAFF"])
 
   // Search lives in the URL (?q=) so Back from a profile keeps it. The box is local state
   // for instant typing; the URL (and so the fetch) follows 300 ms after the last keystroke,
@@ -224,8 +227,8 @@ function ProfilesDashboard() {
       add("visits", <StatusBadge label={stays === 0 ? "No stays yet" : `${stays} ${stays === 1 ? "visit" : "visits"}`} tone={stays > 0 ? "info" : "neutral"} />)
       if (p.vipLevel) add("vip", <StatusBadge label={label("VIP_LEVEL", p.vipLevel) ?? p.vipLevel} tone="warning" />)
       nationalityBadge()
-    } else if (p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT") {
-      if (p.profileType === "TRAVEL_AGENT" && p.commissionRate != null) add("comm", <StatusBadge label={`${p.commissionRate}% commission`} tone="info" />)
+    } else if (p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT" || p.profileType === "SOURCE") {
+      if ((p.profileType === "TRAVEL_AGENT" || p.profileType === "SOURCE") && p.commissionRate != null) add("comm", <StatusBadge label={`${p.commissionRate}% commission`} tone="info" />)
       if (p.profileType === "TRAVEL_AGENT" && p.iataNumber) add("iata", <StatusBadge label={`IATA ${p.iataNumber}`} tone="neutral" />)
       if (p.isCreditAccount) add("credit", <StatusBadge label={p.arNumber ? `Credit account ${p.arNumber}` : "Credit account"} tone="success" />)
       if (stays > 0) add("bookings", <StatusBadge label={`${stays} ${stays === 1 ? "booking" : "bookings"}`} tone="neutral" />)
@@ -400,7 +403,7 @@ function ProfilesDashboard() {
                       {p.profileType === "GUEST" && p.vipLevel && <span title="VIP" className="shrink-0"><GoldStar className="h-3.5 w-3.5" /></span>}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {(p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT") && [p.firstName, p.lastName].filter(Boolean).join(" ") && (
+                      {(p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT" || p.profileType === "SOURCE") && [p.firstName, p.lastName].filter(Boolean).join(" ") && (
                         <span>{[p.firstName, p.lastName].filter(Boolean).join(" ")} · </span>
                       )}
                       {email ?? <span className="italic">No email</span>}

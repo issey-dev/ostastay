@@ -112,6 +112,7 @@ const updateSchema = z.object({
   mealPlan: z.string().optional(),
   remarks: z.string().optional().nullable(),
   travelAgentId: z.string().optional().nullable(),
+  sourceProfileId: z.string().optional().nullable(),
   // Optional group-block association (null = detach). Validated against block dates + held types.
   groupBlockId: z.string().optional().nullable(),
   // Per-reservation fee-rule selections (PropertyFeeRule ids, one per type). Null clears.
@@ -185,6 +186,7 @@ export async function PUT(
     const negotiated = await negotiatedPlanError({
       ratePlanIds: data.assignments.map((a) => a.ratePlanId),
       travelAgentId: data.travelAgentId,
+      sourceProfileId: data.sourceProfileId,
       alreadyOnBooking: existing.assignments.map((a) => a.ratePlanId),
     });
     if (negotiated) return NextResponse.json({ error: negotiated }, { status: 400 });
@@ -197,6 +199,12 @@ export async function PUT(
       const travelAgent = await prisma.profile.findUnique({ where: { upid: data.travelAgentId } });
       if (!travelAgent || travelAgent.enterpriseId !== ctx.enterpriseId) {
         return NextResponse.json({ error: "Travel agent profile not found" }, { status: 404 });
+      }
+    }
+    if (data.sourceProfileId) {
+      const source = await prisma.profile.findUnique({ where: { upid: data.sourceProfileId } });
+      if (!source || source.enterpriseId !== ctx.enterpriseId || source.profileType !== "SOURCE") {
+        return NextResponse.json({ error: "Source profile not found" }, { status: 404 });
       }
     }
     if (data.accompanyingGuestIds && data.accompanyingGuestIds.length > 0) {
@@ -369,6 +377,7 @@ export async function PUT(
         mealPlan: data.mealPlan,
         ...(data.remarks !== undefined && { remarks: data.remarks }),
         travelAgentId: data.travelAgentId,
+        ...(data.sourceProfileId !== undefined && { sourceProfileId: data.sourceProfileId || null }),
         ...(data.groupBlockId !== undefined && { groupBlockId: data.groupBlockId || null }),
         ...(data.depositFeeRuleId !== undefined && { depositFeeRuleId: data.depositFeeRuleId || null }),
         ...(data.cancellationFeeRuleId !== undefined && { cancellationFeeRuleId: data.cancellationFeeRuleId || null }),

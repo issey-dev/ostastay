@@ -12,6 +12,8 @@ import { prisma } from "@/lib/db"
 export async function negotiatedPlanError(params: {
   ratePlanIds: string[]
   travelAgentId: string | null | undefined
+  /** The booking's Source (Agent Portal plan A-21): a plan linked to either party is allowed. */
+  sourceProfileId?: string | null
   alreadyOnBooking?: string[]
 }): Promise<string | null> {
   const ids = [...new Set(params.ratePlanIds)].filter((id) => !params.alreadyOnBooking?.includes(id))
@@ -21,7 +23,8 @@ export async function negotiatedPlanError(params: {
     select: { name: true, agentAccess: { select: { upid: true } } },
   })
   for (const plan of plans) {
-    if (!params.travelAgentId || !plan.agentAccess.some((a) => a.upid === params.travelAgentId)) {
+    const parties = [params.travelAgentId, params.sourceProfileId].filter(Boolean)
+    if (parties.length === 0 || !plan.agentAccess.some((a) => parties.includes(a.upid))) {
       return `The rate plan ${plan.name} is negotiated: it can only be booked through the travel agent or company it was set up for.`
     }
   }

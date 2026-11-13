@@ -130,7 +130,7 @@ export default function DebtorAccountDetailPage({ params }: { params: Promise<{ 
           title={
             <span className="flex flex-wrap items-center gap-2">
               {accountName}
-              <Badge variant="outline">{profile.profileType === "TRAVEL_AGENT" ? "Travel agent" : "Company"}</Badge>
+              <Badge variant="outline">{profile.profileType === "TRAVEL_AGENT" ? "Travel agent" : profile.profileType === "SOURCE" ? "Source" : "Company"}</Badge>
             </span>
           }
           description={

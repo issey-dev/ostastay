@@ -988,4 +988,5 @@ Nothing blocks Phase 0a. To settle along the way:
 | 0b. Capabilities, Suppress rates, roles screen | Built, 9.0.2 (2026-11-12). `src/lib/capabilities.ts`, `src/lib/figures.ts`, `role-access-editor.tsx` |
 | 1. Booking status flow | Built, 9.1.0 (2026-11-13). `src/lib/reservations/options.ts`, `option-expiry` job, advisory lock in `createReservation`. Not yet: tentative shown separately in the dashboard forecast and reports, confirmation letter wording ("Option") |
 | 2. Sell limit, overflow, forecast | Built, 9.2.0 (2026-11-13). `src/lib/availability-sell-limit.ts`, `src/lib/reservations/overflow.ts` (OVF pseudo type), grid lines On option / Allotted / Sell limit / Overflow, reports res-overflow and res-options |
-| 3 – 9 | Not started |
+| 3. Source profiles and markers | Built, 9.3.0 (2026-11-13). `SOURCE` profile type + fields, `Reservation.sourceProfileId`, `src/lib/booking-markers.ts` (rules, palette, resolution), Hub editor, Tape Chart markers/hatching/legend/filter/Overflow row, `onCreate` on `SearchableSelect` + `QuickProfileDialog`, convert TA to Source. Front Desk shows no marker yet |
+| 4 – 9 | Not started |
