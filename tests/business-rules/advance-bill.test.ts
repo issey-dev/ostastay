@@ -16,6 +16,7 @@ const { SYSTEM_ROLE_DEFS, ensureRoles } = await import("../../prisma/rbac-seed-d
 
 const advanceBillRoute = await import("@/app/api/reservations/[id]/advance-bill/route");
 const nightAuditRunRoute = await import("@/app/api/night-audit/run/route");
+const reverseRoute = await import("@/app/api/reservations/[id]/advance-bill/reverse/route");
 const { ensureChargeTree } = await import("@/lib/posting/ensure-charge-tree");
 const { customChargeCode, chargeCode, subgroupId, ensureChart } = await import("../helpers/charge-codes");
 const { setPropertySettings } = await import("../helpers/property-settings");
@@ -198,5 +199,31 @@ describe("Advance Bill: generates post all defined taxes", () => {
     expect(all.length).toBeGreaterThan(1);
     expect(new Set(all.map((l) => l.checkNo)).size).toBe(1);
     expect(all[0].checkNo).toMatch(/^[0-9]+$/);
+  });
+});
+
+// Agent Portal plan Phase 8 (9.8.0): an Advance Folio made by mistake is reversed the same
+// business day — its lines voided (never deleted), advanceBilledThrough restored.
+describe("Advance Folio: same-day reversal", () => {
+  it("voids exactly the advance lines and restores the billed-through date", async () => {
+    const { reservationId, folioId, adminId } = await setup();
+    expect((await advanceBill(adminId, reservationId, { nights: 2 })).status).toBe(200);
+    const before = await prisma.folioLineItem.count({ where: { folioId, isVoid: false } });
+    expect(before).toBeGreaterThan(0);
+    const res = await asUser(adminId, () =>
+      reverseRoute.POST(new Request("http://localhost/x", { method: "POST" }), { params: Promise.resolve({ id: reservationId }) })
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).voided).toBe(before);
+    expect(await prisma.folioLineItem.count({ where: { folioId, isVoid: false } })).toBe(0);
+    expect(await prisma.folioLineItem.count({ where: { folioId } })).toBe(before);
+    const r = await prisma.reservation.findUniqueOrThrow({ where: { id: reservationId } });
+    expect(r.advanceBilledThrough).toBeNull();
+    expect(r.advanceFolioCheckNo).toBeNull();
+    // Nothing left to reverse.
+    const again = await asUser(adminId, () =>
+      reverseRoute.POST(new Request("http://localhost/x", { method: "POST" }), { params: Promise.resolve({ id: reservationId }) })
+    );
+    expect(again.status).toBe(400);
   });
 });

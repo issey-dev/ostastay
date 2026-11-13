@@ -14,6 +14,7 @@ import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { ListTable, type ListColumn } from "@/components/ui/list-table"
 import { FilterBar } from "@/components/ui/filter-bar"
 import { useUrlState } from "@/lib/use-url-state"
+import { SlotRequestsPanel } from "@/components/groups/slot-requests-panel"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FirstLoadFade } from "@/components/dashboard/motion-kit"
@@ -125,6 +126,8 @@ function GroupsList() {
   // (?q=) 300 ms after the last keystroke so Back from a group keeps it. A URL change
   // that didn't come from typing (Back/Forward) flows back into the box.
   const [urlSearch, setUrlSearch] = useUrlState<string>("q", "")
+  // Blocks | Requests (Agent Portal plan Phase 4): slot requests from Sources wait here.
+  const [tab, setTab] = useUrlState<"blocks" | "requests">("tab", "blocks", ["blocks", "requests"])
   const [search, setSearch] = useState(urlSearch)
   const lastWrittenSearch = useRef(urlSearch)
   useEffect(() => {
@@ -170,9 +173,11 @@ function GroupsList() {
   }, [currentProperty])
 
   const term = search.trim().toLowerCase()
+  const blocks = useMemo(() => groups.filter((g) => g.status !== "REQUESTED" && g.status !== "DECLINED"), [groups])
+  const pendingRequests = groups.filter((g) => g.status === "REQUESTED").length
   const shown = useMemo(
-    () => (term ? groups.filter((g) => g.name?.toLowerCase().includes(term) || g.code?.toLowerCase().includes(term)) : groups),
-    [groups, term]
+    () => (term ? blocks.filter((g) => g.name?.toLowerCase().includes(term) || g.code?.toLowerCase().includes(term)) : blocks),
+    [blocks, term]
   )
 
   const groupUrl = (g: Group) => `/e/${slug}/dashboard/groups/${g.id}`
@@ -257,7 +262,27 @@ function GroupsList() {
         }
       />
 
-      <div>
+      <div role="tablist" aria-label="Group blocks" className="flex gap-1 border-b border-border">
+        {([
+          ["blocks", "Blocks"],
+          ["requests", pendingRequests ? `Requests (${pendingRequests})` : "Requests"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "requests" && currentProperty && <SlotRequestsPanel propertyId={currentProperty.id} />}
+
+      <div className={tab === "requests" ? "hidden" : undefined}>
         <FilterBar
           className="mb-3"
           search={{ value: search, onChange: setSearch, placeholder: "Group name or code…" }}

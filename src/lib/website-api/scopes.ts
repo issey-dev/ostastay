@@ -21,12 +21,16 @@ import type { ResolvedWebsiteKey } from "@/lib/website-api/resolve-key";
 // server-to-server only
 // (a key with browser origins is refused it), and answered only while the property has
 // Transportation switched on.
-export const API_SCOPES = ["ROOMS", "EXCURSIONS", "SPA", "TRANSPORT"] as const;
+// AGENT (Agent Portal plan A-3, Phase 5): the agent portal (or an agent's own system) — the
+// /api/agent/v1 surface. Every call there ALSO needs a signed-in agent (an AgentSession), so
+// the key identifies the installation, never a person. Server-to-server only, like TRANSPORT.
+// Not an add-on (owner, 2026-11-11): offered to every enterprise.
+export const API_SCOPES = ["ROOMS", "EXCURSIONS", "SPA", "TRANSPORT", "AGENT"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 export type ActivityModule = "EXCURSIONS" | "SPA";
 export const ACTIVITY_MODULES: readonly ActivityModule[] = ["EXCURSIONS", "SPA"];
 
-export const SCOPE_LABELS: Record<ApiScope, string> = { ROOMS: "Rooms", EXCURSIONS: "Excursions", SPA: "Spa", TRANSPORT: "Transportation" };
+export const SCOPE_LABELS: Record<ApiScope, string> = { ROOMS: "Rooms", EXCURSIONS: "Excursions", SPA: "Spa", TRANSPORT: "Transportation", AGENT: "Agent portal" };
 
 /** Thrown by a route when the key lacks the scope it needs; websiteRoute answers 403. */
 export class ScopeError extends Error {

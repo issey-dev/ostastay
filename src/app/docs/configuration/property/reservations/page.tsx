@@ -52,6 +52,23 @@ export default function Reservations() {
         </p>
       </Callout>
 
+      <H2>Agent portal</H2>
+      <p>
+        Switch the agent portal on for this property and set the rules for tentative bookings: how many days before arrival an
+        option runs to, how long a late booking&rsquo;s option is, when guest details are due, how many free rooms agents see
+        before the number becomes &ldquo;N+&rdquo; (their own slots are always exact), and how many overflow bookings you accept
+        a night. Turning the portal off stops it at once; bookings already made stay. The portal also needs an API key with the{" "}
+        <strong>Agent portal</strong> scope (Enterprise › Booking API).
+      </p>
+
+      <H2>Booking markers</H2>
+      <p>
+        How bookings are marked on the Tape Chart and in the lists. Each rule says when it applies (a source, a tentative booking,
+        overflow, a group, the brand website, a channel, a VIP) and which icon and colour to show; choose them in the picker, which
+        previews the booking bar. The first rule a booking matches wins. A source with its own icon and colour on its profile
+        shows that instead. <strong>Defaults</strong> restores the starting set.
+      </p>
+
       <H2>Sequences</H2>
       <Where path="Hub › Controls › Sequences" who="Property Setup" />
       <p>The running numbers behind your documents. Each shows the <strong>last number issued</strong>; the next document gets the one after.</p>

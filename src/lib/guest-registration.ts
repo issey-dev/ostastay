@@ -53,6 +53,8 @@ export async function assignRegistrationNumbers(
         { checkInDate: { lt: bizDate }, guestRegistrations: { some: {} } },
       ],
       assignments: { some: { roomType: { isPseudo: false } } },
+      // Overflow guests are registered by the partner hotel, not here (A-8).
+      isOverflow: false,
     },
     include: {
       accompanyingGuests: { orderBy: { createdAt: "asc" } },

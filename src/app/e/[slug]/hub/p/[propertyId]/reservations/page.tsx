@@ -6,6 +6,8 @@ import { HubSetupNotice } from "@/components/hub/hub-setup-notice"
 import { ControlsCard } from "@/components/controls/controls-card"
 import { BookingNumberFormatForm } from "@/components/hub/booking-number-format-form"
 import { DropdownsManager, RESERVATION_LOV_CATEGORIES } from "@/components/settings/dropdowns-manager"
+import { BookingMarkersEditor } from "@/components/hub/booking-markers-editor"
+import { AgentPortalSettingsForm } from "@/components/hub/agent-portal-settings-form"
 
 export default async function HubPropertyReservationsPage({ params }: { params: Promise<{ slug: string; propertyId: string }> }) {
   const { property, item, canEdit } = await propertyPage(params, "reservations")
@@ -36,6 +38,18 @@ export default async function HubPropertyReservationsPage({ params }: { params: 
         )}
       >
         <DropdownsManager categories={RESERVATION_LOV_CATEGORIES} propertyId={property.id} />
+      </ControlsCard>
+      <ControlsCard
+        title="Agent portal"
+        description="Whether sources can work with this property through the agent portal, and the rules for tentative bookings and what agents see."
+      >
+        <AgentPortalSettingsForm propertyId={property.id} canEdit={canEdit("update")} />
+      </ControlsCard>
+      <ControlsCard
+        title="Booking markers"
+        description="How bookings are marked on the Tape Chart and in the lists: the first rule a booking matches decides its icon and colour. A source with its own icon and colour (on its profile) shows that instead."
+      >
+        <BookingMarkersEditor propertyId={property.id} canEdit={canEdit("update")} />
       </ControlsCard>
     </div>
   )

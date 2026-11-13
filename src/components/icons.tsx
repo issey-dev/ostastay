@@ -110,6 +110,14 @@ import {
   UserTickOutline,
   UserOutline,
   Wallet2Outline,
+  GlobalOutline,
+  Link1Outline,
+  HeartOutline,
+  Crown1Outline,
+  AwardOutline,
+  GiftOutline,
+  Flag2Outline,
+  TagOutline,
 } from "mx-icons"
 import { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench, X as LucideXBase } from "lucide-react"
 
@@ -281,5 +289,14 @@ export const XIcon = LucideX
 
 // No faithful outline equivalent in the runtime bundle — kept as lucide. (Menu: the phone
 // bottom bar's "More"; mx-icons' HamburgerMenuOutline is in its types but not its bundle.)
+// Booking markers (Agent Portal plan A-22): the curated set a property picks from.
+export const Globe = outline(GlobalOutline)
+export const Link2 = outline(Link1Outline)
+export const Heart = outline(HeartOutline)
+export const Crown = outline(Crown1Outline)
+export const Award = outline(AwardOutline)
+export const Gift = outline(GiftOutline)
+export const Flag = outline(Flag2Outline)
+export const Tag = outline(TagOutline)
 export { BedDouble, DoorOpen, Menu, Pin, PinOff, Utensils, UtensilsCrossed, Wrench }
 

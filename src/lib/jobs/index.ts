@@ -18,6 +18,8 @@ import { isIdleExpired, revokeSession } from "@/lib/session-store";
 import type { Job } from "@/lib/jobs/runner";
 import { processDueWebhooks } from "@/lib/website-api/webhooks";
 import { expireStaleSpaHolds } from "@/lib/spa-booking";
+import { expireDueOptions } from "@/lib/reservations/options";
+import { processDueCheckpoints } from "@/lib/groups/release";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
 // /api/jobs/run iterates this list.
@@ -396,6 +398,35 @@ const notificationAlertsJob: Job = {
   },
 };
 
+/**
+ * Release tentative bookings whose option has run out (Agent Portal plan A-14). The same
+ * release is applied lazily on read (expireOptionsSoon), so this job stopping never leaves
+ * expired options holding rooms. Each booking is claimed with a conditional update, so it
+ * is safe to run on several replicas and alongside a desk confirmation.
+ */
+export const optionExpiryJob: Job = {
+  name: "option-expiry",
+  description: "Release tentative bookings whose option date has passed",
+  run: async (enterpriseId) => {
+    const released = await expireDueOptions({ enterpriseId });
+    return { itemsProcessed: released, summary: `${released} tentative booking${released === 1 ? "" : "s"} released` };
+  },
+};
+
+/**
+ * Group block quota checkpoints (Agent Portal plan A-12): a missed checkpoint shrinks the
+ * hold to what is booked. Each checkpoint is claimed once, so replicas and retries are safe.
+ */
+export const groupBlockReleaseJob: Job = {
+  name: "group-block-release",
+  description: "Release unsold rooms from group blocks that missed a quota checkpoint",
+  run: async (enterpriseId) => {
+    const r = await processDueCheckpoints({ enterpriseId });
+    const released = r.reduce((s, x) => s + x.releasedRooms, 0);
+    return { itemsProcessed: r.length, summary: `${r.length} checkpoint(s) checked, ${released} room(s) released` };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
@@ -407,6 +438,8 @@ export const JOBS: readonly Job[] = [
   bookingApiHoldSweepJob,
   nightAuditScheduleJob,
   notificationAlertsJob,
+  optionExpiryJob,
+  groupBlockReleaseJob,
 ];
 
 export function findJob(name: string): Job | undefined {

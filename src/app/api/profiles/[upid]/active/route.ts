@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { suspendLoginsOfSource } from "@/lib/agent-api/auth";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
@@ -38,6 +39,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ upi
       data: { isActive: body.isActive, deactivatedAt: body.isActive ? null : new Date() },
       select: { upid: true, isActive: true },
     });
+    // A deactivated Source's portal logins are suspended and signed out (Agent Portal plan §9).
+    // Reactivating does not reactivate them: staff do that per person.
+    if (!body.isActive && profile.profileType === "SOURCE") await suspendLoginsOfSource(upid);
     await logActivity({
       ctx,
       module: "PROFILES",

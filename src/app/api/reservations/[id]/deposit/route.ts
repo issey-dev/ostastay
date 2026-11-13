@@ -53,7 +53,8 @@ export async function POST(
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    if (reservation.status !== "RESERVED") {
+    // A deposit is money in with no revenue (Agent Portal plan A-23): also on option.
+    if (reservation.status !== "RESERVED" && reservation.status !== "TENTATIVE") {
       return NextResponse.json(
         { error: "Deposits can only be collected before arrival — for an in-house guest, post a payment on the folio instead" },
         { status: 400 }

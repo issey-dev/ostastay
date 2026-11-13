@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { applyBlockProfiles } from "@/lib/groups/block-profiles";
+import { sellLimitGate } from "@/lib/availability-sell-limit";
+import { figuresJson } from "@/lib/figures";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
-import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, hasPermission, assertPropertyAccess, toErrorResponse, hasCapability } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
@@ -81,7 +84,7 @@ export async function GET(
     }
     await assertPropertyAccess(ctx, reservation.propertyId);
 
-    return NextResponse.json(reservation);
+    return figuresJson(ctx, reservation);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
@@ -110,6 +113,7 @@ const updateSchema = z.object({
   mealPlan: z.string().optional(),
   remarks: z.string().optional().nullable(),
   travelAgentId: z.string().optional().nullable(),
+  sourceProfileId: z.string().optional().nullable(),
   // Optional group-block association (null = detach). Validated against block dates + held types.
   groupBlockId: z.string().optional().nullable(),
   // Per-reservation fee-rule selections (PropertyFeeRule ids, one per type). Null clears.
@@ -158,6 +162,8 @@ export async function PUT(
 
     // Parse and validate the body
     const data = updateSchema.parse(body);
+    // A reservation in a block keeps the block's Travel Agent / Company and Source.
+    await applyBlockProfiles(data, existing.groupBlockId);
 
     if (new Date(data.checkOutDate) <= new Date(data.checkInDate)) {
       return NextResponse.json({ error: "Check-out date must be after check-in date" }, { status: 400 });
@@ -183,6 +189,8 @@ export async function PUT(
     const negotiated = await negotiatedPlanError({
       ratePlanIds: data.assignments.map((a) => a.ratePlanId),
       travelAgentId: data.travelAgentId,
+      sourceProfileId: data.sourceProfileId,
+      propertyId: existing.propertyId,
       alreadyOnBooking: existing.assignments.map((a) => a.ratePlanId),
     });
     if (negotiated) return NextResponse.json({ error: negotiated }, { status: 400 });
@@ -195,6 +203,12 @@ export async function PUT(
       const travelAgent = await prisma.profile.findUnique({ where: { upid: data.travelAgentId } });
       if (!travelAgent || travelAgent.enterpriseId !== ctx.enterpriseId) {
         return NextResponse.json({ error: "Travel agent profile not found" }, { status: 404 });
+      }
+    }
+    if (data.sourceProfileId) {
+      const source = await prisma.profile.findUnique({ where: { upid: data.sourceProfileId } });
+      if (!source || source.enterpriseId !== ctx.enterpriseId || source.profileType !== "SOURCE") {
+        return NextResponse.json({ error: "Source profile not found" }, { status: 404 });
       }
     }
     if (data.accompanyingGuestIds && data.accompanyingGuestIds.length > 0) {
@@ -291,7 +305,8 @@ export async function PUT(
       availability: availabilityConflicts,
       overrideStopSale: flags.overrideStopSale,
       acknowledgeOverbook: flags.acknowledgeOverbook,
-      canOverrideStopSale: hasPermission(ctx, "AVAILABILITY", "update"),
+      canOverrideStopSale: hasCapability(ctx, "reservations.overrideStopSale"),
+      canOverbook: hasCapability(ctx, "reservations.overbook"),
     });
     if (gate) {
       return NextResponse.json(
@@ -304,6 +319,14 @@ export async function PUT(
         },
         { status: 409 }
       );
+    }
+    if (availabilityConflicts.length > 0) {
+      const limitError = await sellLimitGate(ctx, {
+        propertyId: existing.propertyId,
+        segments: editSegments,
+        excludeReservationId: id,
+      });
+      if (limitError) return NextResponse.json({ error: limitError, code: "SELL_LIMIT" }, { status: 409 });
     }
 
     // Group-block association (optional): a reservation attached to a block must fit its
@@ -358,6 +381,7 @@ export async function PUT(
         mealPlan: data.mealPlan,
         ...(data.remarks !== undefined && { remarks: data.remarks }),
         travelAgentId: data.travelAgentId,
+        ...(data.sourceProfileId !== undefined && { sourceProfileId: data.sourceProfileId || null }),
         ...(data.groupBlockId !== undefined && { groupBlockId: data.groupBlockId || null }),
         ...(data.depositFeeRuleId !== undefined && { depositFeeRuleId: data.depositFeeRuleId || null }),
         ...(data.cancellationFeeRuleId !== undefined && { cancellationFeeRuleId: data.cancellationFeeRuleId || null }),

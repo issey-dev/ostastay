@@ -17,6 +17,180 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.10.0",
+    date: "2026-11-13",
+    highlights: "A group block now carries its travel agent or company and its source, and every booking in the block takes them.",
+    new: [
+      "Group blocks have Travel agent / company and Source fields. Every reservation in the block takes them, locked, and follows when they change on the block.",
+    ],
+    improved: [
+      "A block's bill to account can be a source as well as a travel agent or company, as long as it is a credit account. The block says when an attached profile isn't one yet.",
+    ],
+  },
+  {
+    version: "9.9.0",
+    date: "2026-11-13",
+    highlights: "The agent portal is ready to go live, with a new guide for working with agents and a go-live checklist.",
+    new: [
+      "A new operations guide, Working with agents: portal logins, slot requests, confirming agent bookings, change requests and commission, with a go-live checklist.",
+    ],
+    improved: [
+      "Agent bookings that race for the last rooms of a slot can never overbook it.",
+      "Uppsolut's platform monitoring shows agent portal activity and flags locked agent logins and change requests waiting more than a day.",
+    ],
+  },
+  {
+    version: "9.8.0",
+    date: "2026-11-13",
+    highlights: "Groups can be billed as a whole: one statement PDF, an Advance Folio for every guest in house, and a rooming list imported in one go.",
+    new: [
+      "A group's statement (master folio, every guest's folio and the total) can be downloaded as one PDF or emailed from the group.",
+      "Advance Folio for the whole group: posts every in-house guest's remaining nights in one step, each to the folio it bills to.",
+      "Import a rooming list into a group: each line is checked like a single pickup, and lines that can't be added are listed.",
+      "An Advance Folio posted by mistake can be reversed on the same business date.",
+    ],
+    improved: [
+      "Advance Bill is now called Advance Folio. For a group guest billed to the master, it posts to the master folio.",
+      "A deposit can be collected on a tentative booking.",
+    ],
+  },
+  {
+    version: "9.7.0",
+    date: "2026-11-13",
+    highlights: "Commission for agents and sources is recorded on every check-out, whoever pays, and can be approved and paid out from Debtors.",
+    new: [
+      "Every booking records who pays: the agent net of commission, the agent in full, or the guest at the hotel, taken from the source.",
+      "At check-out, commission is worked out on the room rate without service charge and tax, rounded once, and recorded: netted on the agent's invoice, or owed to the agent.",
+      "Debtors has a Commissions tab: what each agent is owed, approve lines, and record a payout or an offset against their invoices.",
+      "New reports: Commission, and Source Production (bookings, room nights, room revenue and commission per source).",
+      "Agents can see their statement (invoices, commission, balance) and their commission lines in the agent portal.",
+    ],
+    improved: [
+      "Reversing a check-out also reverses its commission; commission already paid becomes a negative line for the next payout.",
+    ],
+  },
+  {
+    version: "9.6.0",
+    date: "2026-11-13",
+    highlights: "Agents can now work end to end through the agent portal: request slots, book into them on option, ask you to confirm, fill in guest and flight details, and generate their own confirmation.",
+    new: [
+      "Through the agent portal, agents request slots, enter bookings in their approved slots (one at a time or as a rooming list), ask for confirmation with a payment reference, add accompanying guests, flights, the package name and special requests, and generate a confirmation PDF for their client, emailed to them.",
+      "Agents can cancel a booking still on option, with a reason. A confirmed booking can only be changed or cancelled by asking: the request shows at the top of the reservation to accept or decline.",
+      "New notifications: a slot request from an agent, an agent asking to confirm a booking, and an agent asking to change or cancel one.",
+      "Agents' own systems can receive webhooks when their bookings are accepted, confirmed, released or cancelled, and when a change request is decided.",
+    ],
+  },
+  {
+    version: "9.5.0",
+    date: "2026-11-13",
+    highlights: "The agent portal can now sign agents in and show them live availability on their own negotiated rates, their slots and quotes. Sources get a details card and portal logins on their profile.",
+    new: [
+      "Agent portal logins on a Source profile: add a person's email and send them a link to set their password; reset or suspend them at any time. Deactivating a source suspends its logins.",
+      "Source details on a Source profile's overview: commission, who pays, early access, how bookings are confirmed, and its Tape Chart marker.",
+      "An Agent portal card in the Hub (property Reservations settings): switch the portal on, and set the option days, short option, when guest details are due, how many free rooms agents see, and the overflow cap.",
+      "The Booking API can issue keys with the Agent portal scope, for the agent portal's server.",
+    ],
+    improved: [
+      "Negotiated rates lock in: when a travel agent, company or source is linked to negotiated rates at a property, its bookings may use only those rates. Other rate plans are not offered and are refused if sent. The agent portal shows only the source's negotiated rates.",
+      "The Tape Chart marker for a source is chosen in a picker with an icon grid, the colours and a preview of the booking bar. The same picker is used for the Hub's booking marker rules.",
+    ],
+    fixed: [
+      "The Who pays field on a Source profile showed a code and was cut off; it now shows its label in full.",
+    ],
+  },
+  {
+    version: "9.4.0",
+    date: "2026-11-13",
+    highlights: "Slots: a source asks for dates and rooms, you approve it as a tentative group block (or decline it), and its unsold rooms go back on sale by the rules you set.",
+    new: [
+      "Group Blocks has a Requests tab for slot requests from sources. A request holds no rooms. Review and approve lets you change the dates, rooms, cutoff and rules before availability is checked; Decline asks for a reason.",
+      "Slot rules on any block: rolling release (each night's unsold rooms return to sale a set number of days before), quota checkpoints (a missed one releases the unsold rooms) and flexibility (extra rooms a night, and nights before or after the slot).",
+      "Tentative pickups: a pickup can be held on option until the block's cutoff, and the block page lists tentative bookings with Confirm selected.",
+      "A source's profile lists its slots with rooms held, tentative and confirmed bookings.",
+      "Negotiated rate plans can set the date agent sales open; sources with early access days can start sooner.",
+    ],
+    improved: [
+      "Rooms can be picked up on a tentative block before it has a master folio; the guest keeps their own folio until the block goes definite.",
+      "A long block's held rooms are counted night by night, so a room booked for the first nights leaves the later nights free.",
+    ],
+    fixed: [
+      "Opening a group block now needs the Group Blocks permission.",
+    ],
+  },
+  {
+    version: "9.3.0",
+    date: "2026-11-13",
+    highlights: "Sources: a new profile type for the agents and partners who send you bookings, with their own commission, payment terms and Tape Chart marker. Bookings show where they came from at a glance.",
+    new: [
+      "Source profiles in Client Relations (a new Sources tab): commission, who pays, early access days, automatic confirmation and the source's own Tape Chart icon and colour. A travel agent can be converted to a source from its profile.",
+      "A Source field on the booking, beside Travel agent / company; a booking can carry both, and either one unlocks the negotiated rate plans linked to it.",
+      "Create a profile without leaving the booking: when a travel agent or source is not found, choose Create at the bottom of the list, fill in a short form, and it is selected.",
+      "Booking markers on the Tape Chart: an icon and coloured edge show the source, tentative bookings (also hatched), Overflow, groups, website and channel bookings. A legend lists what is on screen and a filter picks out one source, tentative bookings or Overflow. Overflow bookings have their own row.",
+      "Booking markers are set per property in the Hub under Reservations: an ordered list of rules with an icon and colour each. It works out of the box with sensible defaults.",
+    ],
+    improved: [
+      "The reservations list shows each booking's source.",
+    ],
+  },
+  {
+    version: "9.2.0",
+    date: "2026-11-13",
+    highlights: "Sell limits cap how far the desk may overbook on a night, guests can be placed at a partner hotel when the house is full, and the Availability grid shows what is on option.",
+    new: [
+      "Sell limit: for a room type or the whole house, set how many rooms past capacity may be sold on chosen nights. Past it, only a manager can book. Nights with no limit work as before.",
+      "Overflow: place a booking at a partner hotel when the house is full. It is charged as usual, gets no Green Tax or registration number here, is not counted in occupancy, and can be moved back into a room type when one frees up. A property can cap overflow bookings per night.",
+      "New reports: Overflow Bookings, and Options and Expiries (tentative bookings whose option runs out, and those released).",
+    ],
+    improved: [
+      "The Availability grid has three new lines under each room type: On option, Allotted (rooms held in tentative group blocks) and Sell limit, plus an Overflow line under the house. Oversold nights show the limit beside the number.",
+      "Overflow bookings carry an Overflow badge in the reservations list.",
+    ],
+  },
+  {
+    version: "9.1.0",
+    date: "2026-11-13",
+    highlights: "Tentative bookings: hold a room on option until a date, confirm it once payment or the contract is checked, and let it release itself if nobody does.",
+    new: [
+      "Book as tentative on a new booking. The room is held on option until a date: the group's cutoff, otherwise 30 days before arrival, or a short option of two days for a late booking. You can also pick the date yourself.",
+      "The option panel on a tentative booking: Confirm booking (with a note such as the payment reference), Extend option, and Release.",
+      "An option that runs out is released automatically: the booking is cancelled with the reason \"Released (option expired)\" and kept as a record. It can be reinstated as tentative while the room is still free.",
+      "The Reservations list counts tentative bookings as on the books, with an Option until badge, and the status filter has Tentative and Confirmed.",
+    ],
+    improved: [
+      "Two people booking the last room at the same moment can no longer both succeed; the second is asked to confirm an overbooking instead.",
+      "Night Audit never marks a tentative booking as a no-show. If one reaches its arrival day unconfirmed, the audit lists it as needing attention.",
+      "Tentative bookings count as sold everywhere availability is shown, including what is sent to channels and the booking website.",
+    ],
+  },
+  {
+    version: "9.0.2",
+    date: "2026-11-12",
+    highlights: "Roles get finer control: options such as \"may overbook\" or \"suppress rates\" on top of view, create, update and delete, and a new role editor that shows one role at a time.",
+    new: [
+      "Role options: single switches for what the four actions cannot say, such as overbook a room type, override a stop sale, undo a check-in, reverse a check-out, generate an Advance Folio, void a bill, run Night Audit and export reports. Every option starts at what the role could already do, so nothing changes until you change it.",
+      "Suppress rates: a role can be set so that rates, charge lines, totals and revenue are removed from its screens, prints and exports. The balance due stays visible so the desk can still collect.",
+      "Who has this? Under every option, one click lists the roles and people that hold it.",
+      "Presets for new roles (Reservations Agent, Night Auditor, Accounts, Housekeeping Supervisor), and Duplicate on any role, built-in ones included.",
+    ],
+    improved: [
+      "The role editor shows modules on the left with a Full, View only, Custom or None chip, and the selected module's actions with a line on what each one allows. A summary at the top says what the role can and cannot do, search finds any module or option, and Compare with marks what differs from another role.",
+    ],
+  },
+  {
+    version: "9.0.1",
+    date: "2026-11-12",
+    highlights: "A permissions check-up: every screen and action now checks what the person's role allows, not only that they are signed in.",
+    new: [
+      "A new built-in role, Accounts, for back-office staff: debtors, with read access to cashiering, reports and revenue.",
+    ],
+    improved: [
+      "The Tape Chart now needs the Tape Chart permission to open. Quotes, rate availability, the nightly breakdown and the free-room lookup need Reservations or Front Desk access.",
+      "Invoices, receipts and exchange receipts can be printed by staff with Cashiering, Front Desk or Debtors access; sending them by email needs the update permission in one of those.",
+      "Sending a debtor statement by email now needs the Debtors update permission; viewing one still needs view.",
+      "Fast Post guest search needs Fast Post, Excursions, Spa or Cashiering access.",
+    ],
+  },
+  {
     version: "8.13.6",
     date: "2026-11-10",
     fixed: [

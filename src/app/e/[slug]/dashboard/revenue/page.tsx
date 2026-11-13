@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useState } from "react"
+import { DatePicker } from "@/components/ui/date-picker"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useParams, useSearchParams } from "next/navigation"
@@ -54,6 +55,7 @@ type RatePlan = {
   description?: string
   priority: number
   isNegotiated: boolean
+  agentSalesOpenAt?: string | null
   isComplimentary: boolean
   isHouseUse: boolean
   isLocked: boolean
@@ -183,6 +185,7 @@ function RevenueDashboard() {
       description: plan.description || "",
       priority: String(plan.priority),
       isNegotiated: plan.isNegotiated,
+      agentSalesOpenAt: plan.agentSalesOpenAt ? plan.agentSalesOpenAt.slice(0, 10) : "",
       isComplimentary: plan.isComplimentary,
       isHouseUse: plan.isHouseUse,
       parentRatePlanId: plan.parentRatePlanId || "",
@@ -496,6 +499,21 @@ function RevenueDashboard() {
                       </FormItem>
                     )}
                   />
+                  {form.watch("isNegotiated") && (
+                    <FormField
+                      control={form.control}
+                      name="agentSalesOpenAt"
+                      render={({ field }) => (
+                        <FormItem className="pl-6">
+                          <FormLabel className="text-xs">Agent sales open on (optional)</FormLabel>
+                          <FormControl>
+                            <DatePicker value={field.value || null} onChange={field.onChange} placeholder="Always open" />
+                          </FormControl>
+                          <p className="text-[11px] text-muted-foreground">Linked sources may request slots on this plan from this date; a source&rsquo;s early access days let it start sooner.</p>
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="isComplimentary"

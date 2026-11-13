@@ -11,25 +11,6 @@
 
 ## 1. Planned or in progress (each has its own plan file)
 
-### Agent Portal and Agent API — plan only, nothing built
-
-Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website
-exists on the owner's machine only (`agent-portal/`, not in git).
-
-- [ ] Phase 0a (9.0.1): permissions and roles audit. Found so far: `TAPE_CHART` is never enforced
-  server-side; every Debtors route checks `view` only, including sending a statement; about a
-  dozen routes check the session but no module (list in the plan §10); `Profile.commissionRate`
-  is stored and shown but used by no calculation.
-- [ ] Phase 0b (9.0.2): capabilities (fine-grained switches on top of module CRUD, including
-  Suppress rates enforced server-side, balance due stays visible) and the redesigned Users &
-  Access screen (plan §10).
-- [ ] Phases 1 to 9 (9.1.0 … 9.9.0): plan §11. Phase 1 (`TENTATIVE` status) also closes the
-  last-room race with an advisory lock inside `createReservation`. Phase 3 adds the `SOURCE`
-  profile type, markers, and **search and create new** in the reservation form's profile pickers
-  (plan A-21a). Phase 4 puts slots, cutoff rules and elasticity on Group Blocks.
-- [ ] Owner questions still open: Q-27 (tune the Tape Chart marker defaults), Q-28 (what moves a
-  slot from Tentative to Definite).
-
 ### Notifications and phone push — N0 to N3 built (8.10.0)
 
 Plan: [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md).
@@ -59,11 +40,25 @@ checks and the quote.
 
 ## 2. Follow-ups by area
 
+### Agent Portal and Agent API (released 9.0.1 to 9.9.0; dev log section of that name) — 2026-11-13
+
+- [ ] Go live with one real agent: tentative → confirmed → checked out → commission paid
+  (Operations guide "Working with agents", go-live checklist). Set `AGENT_PORTAL_URL` on the
+  server so invite and reset links are full links.
+- [ ] Build the agent website against the real API in its own repository (the local mockup in
+  `agent-portal/` is the reference); add an OpenAPI file for `/api/agent/v1`.
+- [ ] Commission offset should also post a payment on the agent's open invoices (today it is a
+  payout with method OFFSET only).
+- [ ] Not yet built: transfers through the Transportation module for agent bookings (flights are
+  stored on the transport card), payment-proof upload, stored voucher versions, reminders at
+  7/3/1 days before the option date and details deadline, a Source marker on Front Desk,
+  tentative shown separately in the dashboard forecast and reports, "Option" wording on the
+  confirmation letter, one-step group invoice to the city ledger.
+- [ ] Owner questions: Q-27 (tune the marker defaults with the customer), Q-28 (what moves a slot
+  from Tentative to Definite; staff do it by hand today).
+
 ### Reservations, Front Desk, Tape Chart
 
-- [ ] **Last-room race**: `createReservation`'s availability check is not transactional, so two
-  simultaneous bookings (desk, website, channel) can both pass. Fix planned in Agent Portal
-  Phase 1 (advisory lock on property + room type).
 - [ ] Traces "alert on open": a tick on a trace that pops its text every time the reservation is
   opened until the trace is completed. Needs `ReservationTrace.alertOnOpen`.
 - [ ] Advance Bill: replace the `window.prompt` nights picker with a proper dialog and give it

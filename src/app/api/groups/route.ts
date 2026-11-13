@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { figuresJson } from "@/lib/figures"
 import { ensurePostingMaster } from "@/lib/groups/posting-master"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope"
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       : []
     const pmStatus = new Map(pms.map((r) => [r.id, r.status]))
 
-    return NextResponse.json(
+    return figuresJson(ctx, 
       groups.map((g) => ({ ...g, postingMasterStatus: g.postingMasterReservationId ? pmStatus.get(g.postingMasterReservationId) ?? null : null }))
     )
   } catch (error) {
@@ -91,6 +92,20 @@ export async function POST(request: Request) {
       payeeProfileId = payee.upid
     }
 
+    if (typeof body.sourceProfileId === "string" && body.sourceProfileId) {
+      const src = await prisma.profile.findUnique({ where: { upid: body.sourceProfileId } })
+      if (!src || src.enterpriseId !== ctx.enterpriseId || src.profileType !== "SOURCE") {
+        return NextResponse.json({ error: "Source profile not found" }, { status: 400 })
+      }
+    }
+
+    if (typeof body.travelAgentId === "string" && body.travelAgentId) {
+      const ta = await prisma.profile.findUnique({ where: { upid: body.travelAgentId } })
+      if (!ta || ta.enterpriseId !== ctx.enterpriseId || !["TRAVEL_AGENT", "COMPANY"].includes(ta.profileType)) {
+        return NextResponse.json({ error: "Travel agent or company profile not found" }, { status: 400 })
+      }
+    }
+
     const newGroup = await prisma.groupBlock.create({
       data: {
         propertyId,
@@ -102,6 +117,13 @@ export async function POST(request: Request) {
         totalRoomsHeld: heldTotal,
         status: startStatus,
         payeeProfileId,
+        // Blocks for Sources (Agent Portal plan Phase 4).
+        sourceProfileId: typeof body.sourceProfileId === "string" && body.sourceProfileId ? body.sourceProfileId : null,
+        travelAgentId: typeof body.travelAgentId === "string" && body.travelAgentId ? body.travelAgentId : null,
+        releaseDays: Number.isInteger(body.releaseDays) && body.releaseDays >= 0 ? body.releaseDays : null,
+        elasticRooms: Number.isInteger(body.elasticRooms) && body.elasticRooms >= 0 ? body.elasticRooms : 0,
+        elasticNightsBefore: Number.isInteger(body.elasticNightsBefore) && body.elasticNightsBefore >= 0 ? body.elasticNightsBefore : 0,
+        elasticNightsAfter: Number.isInteger(body.elasticNightsAfter) && body.elasticNightsAfter >= 0 ? body.elasticNightsAfter : 0,
         roomHolds: roomHolds.length
           ? { create: roomHolds.map((h) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })) }
           : undefined,

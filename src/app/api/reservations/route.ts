@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { expireOptionsSoon } from "@/lib/reservations/options";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { createReservation } from "@/lib/reservations/create-reservation";
@@ -13,6 +15,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, propertyId);
+    await expireOptionsSoon(propertyId);
 
     // Optional server-side filters — response stays a plain array for existing
     // callers; the list page pages through with skip/take (load-more style).
@@ -91,6 +94,8 @@ export async function GET(request: Request) {
       include: {
         primaryGuest: true,
         travelAgent: true,
+        // The booking's Source and its marker (Agent Portal plan Phase 3).
+        sourceProfile: { select: { upid: true, companyName: true, firstName: true, markerIcon: true, markerColor: true } },
         accompanyingGuests: { include: { profile: true } },
         assignments: {
           include: {
@@ -134,7 +139,7 @@ export async function GET(request: Request) {
       skip,
       take,
     });
-    return NextResponse.json(reservations);
+    return figuresJson(ctx, reservations);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

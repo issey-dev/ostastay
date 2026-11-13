@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db";
 // CHECKED_OUT never block a room or count toward a room type's sold count — a
 // no-show's room goes back on sale for the remaining nights, matching standard
 // front-office practice.
-export const INVENTORY_HOLDING_STATUSES = ["RESERVED", "IN_HOUSE"];
+// TENTATIVE holds too (Agent Portal plan A-5), until its option date — expired options
+// are released by the option-expiry job and lazily on read (src/lib/reservations/options.ts).
+export const INVENTORY_HOLDING_STATUSES = ["TENTATIVE", "RESERVED", "IN_HOUSE"];
 
 // Rooms in either of these statuses are not sellable inventory. OUT_OF_ORDER is a
 // maintenance state (previously it was still being offered for sale — see
@@ -13,7 +15,7 @@ export const UNSELLABLE_ROOM_STATUSES = ["OUT_OF_ORDER", "OUT_OF_SERVICE"];
 
 const DAY_MS = 86_400_000;
 
-function dayStartMs(d: Date): number {
+export function dayStartMs(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
@@ -157,7 +159,8 @@ export async function outstandingBlockHolds(opts: {
       quantity: { gt: 0 },
       groupBlock: {
         propertyId,
-        status: blockStatusIn ? { in: blockStatusIn } : { notIn: ["CANCELLED", "LOST"] },
+        // A slot REQUEST holds nothing (Agent Portal plan A-7); only live blocks do.
+        status: { in: blockStatusIn ?? ["TENTATIVE", "DEFINITE"] },
         startDate: { lt: new Date(windowEnd) },
         endDate: { gt: new Date(windowStart) },
         ...(excludeGroupBlockId ? { id: { not: excludeGroupBlockId } } : {}),
@@ -165,7 +168,7 @@ export async function outstandingBlockHolds(opts: {
     },
     select: {
       quantity: true,
-      groupBlock: { select: { id: true, startDate: true, endDate: true, cutoffDate: true } },
+      groupBlock: { select: { id: true, startDate: true, endDate: true, cutoffDate: true, releaseDays: true } },
     },
   });
   if (holdRows.length === 0) return [];
@@ -190,7 +193,14 @@ export async function outstandingBlockHolds(opts: {
     const b = h.groupBlock;
     if (b.cutoffDate && now > b.cutoffDate) continue; // released after cutoff
     const outstanding = Math.max(0, h.quantity - (pickedByBlock.get(b.id) ?? 0));
-    if (outstanding > 0) out.push({ startMs: dayStartMs(b.startDate), endMs: dayStartMs(b.endDate), outstanding });
+    // Rolling release (A-12): each night's unsold rooms go back on sale `releaseDays` before
+    // that night, so the hold only covers nights still further away than that.
+    let startMs = dayStartMs(b.startDate);
+    if (b.releaseDays !== null && b.releaseDays !== undefined) {
+      startMs = Math.max(startMs, dayStartMs(new Date(now.getTime() + (b.releaseDays + 1) * 86_400_000)));
+    }
+    const endMs = dayStartMs(b.endDate);
+    if (outstanding > 0 && endMs > startMs) out.push({ startMs, endMs, outstanding });
   }
   return out;
 }

@@ -34,6 +34,13 @@ export const WEBHOOK_EVENTS = [
   "booking.moved",
   "booking.completed",
   "booking.no_show",
+  // Agent API keys (Agent Portal plan §6 Webhooks).
+  "booking.accepted",
+  "booking.released",
+  "booking.changed",
+  "change_request.decided",
+  "slot.approved",
+  "slot.declined",
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number] | "ping";
 

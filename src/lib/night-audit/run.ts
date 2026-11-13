@@ -212,6 +212,13 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     where: { propertyId, status: "RESERVED", checkInDate: { lt: nextDay }, id: { notIn: noShowCandidates.map((r) => r.id) } },
     select: { confirmationNo: true },
   })
+  // Tentative bookings that reached arrival unconfirmed (Agent Portal plan §5.2). Never a
+  // no-show and never posted to; the option-expiry job should already have released them,
+  // so any survivor is listed under "Needs attention" for the desk to confirm or release.
+  const tentativeSurvivors = await prisma.reservation.findMany({
+    where: { propertyId, status: "TENTATIVE", checkInDate: { lt: nextDay } },
+    select: { confirmationNo: true },
+  })
 
   type NoShowFee = { reservationId: string; confirmationNo: string; fee: number; chargeCodeId: string; folioId: string | null; hadFolio: boolean }
   const noShowFees: NoShowFee[] = []
@@ -553,6 +560,10 @@ export async function runNightAudit(ctx: AuthContext, body: NightAuditInput): Pr
     success: true,
     log,
     noShowsProcessed: noShowCandidates.length,
+    ...(tentativeSurvivors.length > 0 && {
+      tentativeNeedsAttention: tentativeSurvivors.map((r) => r.confirmationNo),
+      tentativeWarning: `${tentativeSurvivors.length} tentative booking${tentativeSurvivors.length > 1 ? "s have" : " has"} reached arrival without being confirmed. Confirm or release ${tentativeSurvivors.length > 1 ? "them" : "it"} on the reservation.`,
+    }),
     ...((hkShift.occupiedToDirty > 0 || hkShift.vacantShifted > 0) && { housekeepingShift: hkShift }),
     ...(transportChargesPosted > 0 && { transportChargesPosted }),
     ...(transportModule.pending.length > 0 && {

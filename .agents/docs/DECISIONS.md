@@ -84,6 +84,7 @@
 - Split stays price per segment (2026-10-11)
 - Profiles: delete only when unused, otherwise deactivate (2026-10-11)
 - Group block Posting Master (2026-10-11)
+- Group block profiles and Bill to (2026-11-13)
 - Front Desk and list views (2026-10-11)
 - Green Tax per guest; every guest gets a registration number (2026-09-25)
 - Reservations list: business on the books (2026-09-25)
@@ -371,10 +372,19 @@ Structure is in the Profiles redesign section of [DEV_LOG.md](DEV_LOG.md). Rules
 - A negotiated plan (`RatePlan.isNegotiated`) is linked to specific Company or Travel Agent
   profiles through `RatePlanAgentAccess`. **A negotiated plan with no linked profile cannot be
   selected by anyone.**
-- The links are managed **from the profile** (its Negotiated Rates section).
-- On a reservation, a negotiated plan is offered only when the booking's Booking Source / Travel
-  Agent is one of the linked profiles. A non-negotiated plan is never filtered.
-- Group pickup is not affected (a block carries its own rate plan).
+- The links are managed **from the profile** only (its Negotiated Rates section; owner confirmed
+  2026-11-13 that no picker is needed on the rate plan).
+- On a reservation, a negotiated plan is offered only when the booking's Travel Agent / Company or
+  Source is one of the linked profiles.
+- **Lock-in (owner, 2026-11-13):** a profile linked to any negotiated plan is restricted to its
+  negotiated plans. A booking that carries such a profile (as Travel Agent / Company or as Source)
+  may only use the negotiated plans linked to it; any other plan, published ones included, is
+  refused on the server and hidden in the booking form. When both parties are linked, their plans
+  together are allowed. A profile with no links books as before. Existing bookings keep the plans
+  they already carry when edited. This applies to group pickups of a Source's block too.
+- **Agent portal (owner, 2026-11-13):** an agent sees and books only their Source's negotiated
+  plans. The calendar, prices, quotes and bookings are based on those plans alone; no other
+  published rate is shown or offered.
 
 ## Travel agent commission (2026-07-20)
 
@@ -1066,6 +1076,16 @@ The rules are in the Mobile polish section of [DEV_LOG.md](DEV_LOG.md). Rulings 
   folio is the block's master folio. It is created when the block becomes Definite (or by
   "Create master folio"), checked in automatically with the first pickup, and **skipped by
   Night Audit**. It is not a pickup (`src/lib/groups/posting-master.ts`).
+
+## Group block profiles and Bill to (2026-11-13)
+
+- **A block carries a Travel Agent or Company and a Source**, like a reservation. Every
+  reservation in the block takes them and **cannot change them** while the block sets them (the
+  form locks them; the server overwrites them). A profile the block leaves empty stays free on
+  the reservation. Changing one on the block carries it to the live pickups (Tentative and
+  Reserved), not to in-house or departed ones (`src/lib/groups/block-profiles.ts`).
+- **Bill to may be any credit account**: Travel Agent, Company or Source. A profile is billable
+  only once "Credit account" is on; the block says so when an attached profile is not.
 
 ## Front Desk and list views (2026-10-11)
 

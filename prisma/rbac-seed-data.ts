@@ -107,6 +107,17 @@ export const SYSTEM_ROLE_DEFS: Record<string, Record<ModuleName, Perm>> = {
     DASHBOARD: VIEW_ONLY,
   }),
 
+  // Back-office accounts (Agent Portal plan §10, default-role review 2026-11-12): debtors,
+  // commission payouts and statements, with read access to what they reconcile against.
+  Accounts: matrix({
+    DEBTORS: FULL,
+    CASHIERING: VIEW_ONLY,
+    PROFILES: EDIT_NO_DELETE,
+    REPORTS: VIEW_ONLY,
+    REVENUE: VIEW_ONLY,
+    DASHBOARD: VIEW_ONLY,
+  }),
+
   Reservations: matrix({
     RESERVATIONS: FULL,
     TAPE_CHART: FULL,

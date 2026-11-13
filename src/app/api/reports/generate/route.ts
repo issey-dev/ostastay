@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireSession, toErrorResponse } from "@/lib/scope";
+import { canSeeFigures, stripReportFigures } from "@/lib/figures";
+import { requireSession, toErrorResponse, requireCapability } from "@/lib/scope";
 import { renderReport, reportFilename } from "@/lib/reports/engine";
 import { encodeReportRequest, reportIsLandscape, runReport, ReportRequestError } from "@/lib/reports/run";
 import { generateReportPdf } from "@/lib/stationery-pdf";
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
     const ctx = await requireSession();
     const body = await request.json();
     const format = FORMATS.includes(body.format) ? (body.format as ReportFormat | "json") : "pdf";
+    // Viewing on screen needs REPORTS view (runReport); a file download is an export.
+    if (format !== "json") requireCapability(ctx, "reports.export");
 
     const options = parseExportOptions(body.options);
     const req = {
@@ -32,7 +35,10 @@ export async function POST(request: Request) {
       params: body.params ?? {},
       pdf: { includeVisuals: options.includeVisuals, orientation: options.orientation },
     };
-    const { def, result, branding, propertyId } = await runReport(ctx, req);
+    const run = await runReport(ctx, req);
+    const { def, branding, propertyId } = run;
+    // Suppress rates: currency columns, money KPIs and charts never leave the server.
+    const result = canSeeFigures(ctx) ? run.result : stripReportFigures(run.result);
 
     if (format === "json") {
       const preview: ReportPreview = { result, branding: { ...branding, generatedAt: branding.generatedAt.toISOString() } };

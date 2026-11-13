@@ -18,6 +18,7 @@ const updateSchema = z.object({
   description: z.string().optional().nullable(),
   priority: z.number().int().nonnegative(),
   isNegotiated: z.boolean(),
+  agentSalesOpenAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   isComplimentary: z.boolean(),
   isHouseUse: z.boolean(),
   parentRatePlanId: z.string().uuid().nullable().optional(),
@@ -170,6 +171,9 @@ export async function PUT(
             description: data.description,
             priority: data.priority,
             isNegotiated: data.isNegotiated,
+            ...(data.agentSalesOpenAt !== undefined && {
+              agentSalesOpenAt: data.agentSalesOpenAt ? new Date(`${data.agentSalesOpenAt}T00:00:00Z`) : null,
+            }),
             isComplimentary: data.isComplimentary,
             isHouseUse: data.isHouseUse,
             ...(chargeCodeId !== undefined && { chargeCodeId }),

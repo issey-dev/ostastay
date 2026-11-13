@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { figuresJson } from "@/lib/figures";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { draftGreenTaxBasis } from "@/lib/green-tax-basis";
 
@@ -11,6 +12,7 @@ import { draftGreenTaxBasis } from "@/lib/green-tax-basis";
 export async function POST(request: Request) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["RESERVATIONS", "view"], ["FRONT_DESK", "view"]]);
     const body = await request.json();
 
     if (!body.propertyId || !Array.isArray(body.assignments) || body.assignments.length === 0) {
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
       manualAllocationIds: Array.isArray(body.manualAllocationIds) ? body.manualAllocationIds : [],
     });
 
-    return NextResponse.json(quote);
+    return figuresJson(ctx, quote);
   } catch (error) {
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });

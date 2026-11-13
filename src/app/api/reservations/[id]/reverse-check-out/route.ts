@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { reverseCommissionAtCheckout } from "@/lib/commission-ledger";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { logActivity } from "@/lib/activity-log";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "RESERVATIONS", "update");
+    requireCapability(ctx, "frontDesk.reverseCheckOut");
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -139,6 +141,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         (reason ? ` — ${reason}` : ""),
     });
 
+    // The commission ledger follows (A-19): unpaid rows are reversed, a paid one becomes a
+    // negative row for the next payout.
+    await reverseCommissionAtCheckout(id);
     return NextResponse.json({ success: true, debtorInvoicesReversed: debtorFolios.length, voidedCommissions });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

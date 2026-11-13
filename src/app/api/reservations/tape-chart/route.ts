@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
+import { expireOptionsSoon } from "@/lib/reservations/options";
+import { processCheckpointsSoon } from "@/lib/groups/release";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
+import { getMarkerRules } from "@/lib/booking-markers-server";
 import { addDays, parseISO, startOfDay, endOfDay } from "date-fns";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "TAPE_CHART", "view");
     const { searchParams } = new URL(request.url);
     const startDateParam = searchParams.get('startDate');
     const daysParam = searchParams.get('days') || '14';
@@ -15,6 +20,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Property ID is required" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, propertyId);
+    await expireOptionsSoon(propertyId);
+    await processCheckpointsSoon(propertyId);
 
     // Default to today if not provided
     const startDate = startDateParam ? startOfDay(parseISO(startDateParam)) : startOfDay(new Date());
@@ -53,7 +60,9 @@ export async function GET(request: Request) {
       include: {
         reservation: {
           include: {
-            primaryGuest: true
+            primaryGuest: true,
+            // Booking markers (Agent Portal plan A-22): who it came from.
+            sourceProfile: { select: { upid: true, companyName: true, firstName: true, markerIcon: true, markerColor: true } },
           }
         },
         roomType: true,
@@ -62,7 +71,11 @@ export async function GET(request: Request) {
     });
 
     // Format assignments to look like reservations for the frontend tape-chart grid
-    const formattedReservations = assignments.map(a => ({
+    // A no-show keeps its place on the chart only while it holds a room (shown greyed out);
+    // with no room it has nothing to show and is dropped. Cancelled is excluded above.
+    const onChart = assignments.filter(a => !(a.reservation.status === "NO_SHOW" && !a.roomId));
+
+    const formattedReservations = onChart.map(a => ({
       id: a.id, // Unique ID for this block on the chart (the assignment ID)
       reservationId: a.reservationId, // Reference to parent reservation
       confirmationNo: a.reservation.confirmationNo,
@@ -80,17 +93,38 @@ export async function GET(request: Request) {
         name: a.roomType.name
       },
       reservationCheckInDate: a.reservation.checkInDate.toISOString(),
-      reservationCheckOutDate: a.reservation.checkOutDate.toISOString()
+      reservationCheckOutDate: a.reservation.checkOutDate.toISOString(),
+      // The facts the markers read (src/lib/booking-markers.ts), resolved on the client so
+      // the legend and filters see the same thing.
+      markerFacts: {
+        status: a.reservation.status,
+        origin: a.reservation.origin,
+        isOverflow: a.reservation.isOverflow,
+        confirmationRequestedAt: a.reservation.confirmationRequestedAt,
+        groupBlockId: a.reservation.groupBlockId,
+        travelAgentId: a.reservation.travelAgentId,
+        vipLevel: a.reservation.primaryGuest.vipLevel,
+        source: a.reservation.sourceProfile
+          ? {
+              upid: a.reservation.sourceProfile.upid,
+              name: a.reservation.sourceProfile.companyName || a.reservation.sourceProfile.firstName,
+              markerIcon: a.reservation.sourceProfile.markerIcon,
+              markerColor: a.reservation.sourceProfile.markerColor,
+            }
+          : null,
+      },
+      optionDate: a.reservation.optionDate?.toISOString() ?? null,
     }));
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       success: true,
       data: {
         startDate,
         endDate,
         days,
         rooms,
-        reservations: formattedReservations
+        reservations: formattedReservations,
+        markerRules: await getMarkerRules(propertyId),
       }
     });
   } catch (error) {

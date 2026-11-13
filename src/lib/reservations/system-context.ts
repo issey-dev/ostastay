@@ -30,5 +30,7 @@ export function systemContext(enterpriseId: string, userId: string = "system"): 
     isInternal: false,
     isActingAsSupport: false,
     licensedModules: new Set(),
+    // A channel booking the OTA has already sold must land (D-7 rule 4); nothing else.
+    capabilities: new Set(["reservations.overbook"]),
   };
 }

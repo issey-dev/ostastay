@@ -38,6 +38,9 @@ import { useProperty } from "@/components/providers/property-provider"
 import { MobileActions, type MobileAction } from "@/components/ui/mobile"
 import { ActionBar } from "@/components/ui/action-bar"
 import { PageHeader } from "@/components/ui/page-header"
+import { OptionPanel } from "@/components/reservations/option-panel"
+import { OverflowPanel } from "@/components/reservations/overflow-panel"
+import { AgentRequestsPanel } from "@/components/reservations/agent-requests-panel"
 import { ReservationSummaryRail, type RailAction } from "@/components/reservations/reservation-summary-rail"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { GuestContactMenu } from "@/components/reservations/guest-contact-menu"
@@ -76,7 +79,7 @@ const folioBalance = (folio: any) => {
   return { charges, payments, balance: charges - payments }
 }
 
-const isEntity = (g: any) => g?.profileType === "COMPANY" || g?.profileType === "TRAVEL_AGENT"
+const isEntity = (g: any) => g?.profileType === "COMPANY" || (g?.profileType === "TRAVEL_AGENT" || g?.profileType === "SOURCE")
 const profileName = (g: any) => (isEntity(g) ? g?.companyName : `${g?.firstName ?? ""} ${g?.lastName ?? ""}`.trim())
 const isVip = (g: any) => g?.classification === "VIP" || !!g?.vipLevel
 
@@ -243,7 +246,25 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
     }
   }
 
-  // Submitted from the Advance Bill dialog's <form> — Enter posts (DESKTOP_PLAN D10).
+  // Undo today's Advance Folio: its lines are voided and Night Audit posts those nights again.
+  const reverseAdvanceFolio = async () => {
+    if (!(await confirm({
+      title: "Reverse the Advance Folio?",
+      description: "The charges it posted today are voided, and Night Audit will post those nights again as usual.",
+      confirmLabel: "Reverse",
+      destructive: true,
+    }))) return
+    const res = await fetch(`/api/reservations/${id}/advance-bill/reverse`, { method: "POST" })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error || "Couldn't reverse the Advance Folio.")
+      return
+    }
+    toast.success(`Advance Folio reversed: ${data.voided} line(s) voided`)
+    fetchReservation()
+  }
+
+  // Submitted from the Advance Folio dialog's <form> — Enter posts (DESKTOP_PLAN D10).
   const handleAdvanceBill = async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (advancing) return
@@ -268,16 +289,16 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         // numbered-exempt, email/download enabled) shows exactly what was just posted, so
         // it doubles as the advance bill's own document rather than a new invoice variant.
         const printHref = primaryFolioId ? `/e/${slug}/dashboard/folios/${primaryFolioId}/print?type=interim` : undefined
-        toast.success(`Advance bill posted: ${money(data.amountPosted)}`, {
+        toast.success(`Advance Folio posted: ${money(data.amountPosted)}`, {
           description: `${data.nights} night(s), billed through ${data.advanceBilledThrough}.`,
           action: printHref ? { label: "Print / Email", onClick: () => window.open(printHref, "_blank") } : undefined,
         })
         fetchReservation()
       } else {
-        toast.error(data.error || "Couldn't post the advance bill. Try again.")
+        toast.error(data.error || "Couldn't post the Advance Folio. Try again.")
       }
     } catch {
-      toast.error("Couldn't post the advance bill. Try again.")
+      toast.error("Couldn't post the Advance Folio. Try again.")
     } finally {
       setAdvancing(false)
     }
@@ -489,8 +510,13 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
   const phoneMore: MobileAction[] = []
   if (reservation.status === "IN_HOUSE") {
     phoneMore.push({ label: "Move room", icon: ArrowLeftRight, onSelect: () => setIsRoomMoveOpen(true) })
-    phoneMore.push({ label: advancing ? "Posting advance bill…" : "Advance bill", icon: Wallet, disabled: advancing, onSelect: () => setAdvanceBillDialogOpen(true) })
+    phoneMore.push({ label: advancing ? "Posting Advance Folio…" : "Advance Folio", icon: Wallet, disabled: advancing, onSelect: () => setAdvanceBillDialogOpen(true) })
+    // Same business date only (Agent Portal plan A-23): undo an Advance Folio made by mistake.
+    if (reservation.advanceFolioCheckNo && reservation.advanceFolioDate && currentProperty?.businessDate && String(reservation.advanceFolioDate).slice(0, 10) === String(currentProperty.businessDate).slice(0, 10)) {
+      phoneMore.push({ label: "Reverse Advance Folio", icon: Wallet, destructive: true, onSelect: reverseAdvanceFolio })
+    }
   }
+  if (reservation.status === "TENTATIVE") phoneMore.push({ label: "Collect deposit", icon: Wallet, onSelect: () => setIsDepositOpen(true) })
   if ((reservation.folios?.length ?? 0) > 0) phoneMore.push({ label: "Folio", icon: ReceiptText, onSelect: () => setIsFolioOpen(true) })
   if (reservation.status === "RESERVED") phoneMore.push({ label: "Collect deposit", icon: Wallet, onSelect: () => setIsDepositOpen(true) })
   if (liveBooking) {
@@ -591,6 +617,28 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
       {/* Phone: one primary action + "More" instead of up to 7 wrapping buttons. */}
       <MobileActions className="md:hidden" primary={phonePrimary} more={phoneMore} />
       </div>
+
+      <OptionPanel
+        reservationId={id}
+        confirmationNo={reservation.confirmationNo}
+        status={reservation.status}
+        optionDate={reservation.optionDate}
+        checkInDate={reservation.checkInDate}
+        confirmationRequestedAt={reservation.confirmationRequestedAt}
+        confirmationNote={reservation.confirmationNote}
+        cancellationReasonCode={reservation.cancellationReasonCode}
+        onChanged={fetchReservation}
+      />
+      <AgentRequestsPanel reservationId={id} onChanged={fetchReservation} />
+      <OverflowPanel
+        reservationId={id}
+        propertyId={reservation.propertyId}
+        status={reservation.status}
+        isOverflow={reservation.isOverflow}
+        overflowHotelName={reservation.overflowHotelName}
+        overflowNote={reservation.overflowNote}
+        onChanged={fetchReservation}
+      />
 
       {/* Phone: the stay at a glance — dates, room, pax and the balance (tap → folio),
           which otherwise sits ~1,300px down in the Billing card. */}
@@ -1338,7 +1386,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         <DialogContent size="sm">
           <form onSubmit={handleAdvanceBill} className="contents">
           <DialogHeader>
-            <DialogTitle>Advance bill</DialogTitle>
+            <DialogTitle>Advance Folio</DialogTitle>
             <DialogDescription>
               Charges (rate, allocations, green tax, transport) post today so the guest can settle before checkout.
             </DialogDescription>
@@ -1357,7 +1405,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAdvanceBillDialogOpen(false)}>Cancel</Button>
-            <SubmitButton pending={advancing} pendingLabel="Posting…">Post advance bill</SubmitButton>
+            <SubmitButton pending={advancing} pendingLabel="Posting…">Post Advance Folio</SubmitButton>
           </DialogFooter>
           </form>
         </DialogContent>

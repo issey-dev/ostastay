@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDocumentSettings } from "@/lib/document-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 
 const EXCHANGE_INCLUDE = {
@@ -15,6 +15,7 @@ export async function GET(
 ) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "CASHIERING", "view");
     const { id } = await params;
 
     let exchange = await prisma.currencyExchange.findUnique({

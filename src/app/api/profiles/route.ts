@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sourceFieldsFromBody, defaultSourceColor } from "@/lib/source-profile";
 import { PROFILE_LINK_COUNTS, sumLinks } from "@/lib/profile-links";
 import { prisma } from "@/lib/db";
 import { ProfileType, ProfileClassification } from "@/lib/enums";
@@ -84,8 +85,16 @@ export async function POST(request: Request) {
       }
     }
 
+    // Source profiles (Agent Portal plan Phase 3): their commercial settings and marker.
+    const sourceFields = sourceFieldsFromBody(body);
+    if (body.profileType === "SOURCE" && !sourceFields.markerColor) {
+      sourceFields.markerColor = await defaultSourceColor(ctx.enterpriseId);
+      sourceFields.markerIcon = sourceFields.markerIcon ?? "Briefcase";
+    }
+
     const newProfile = await prisma.profile.create({
       data: {
+        ...sourceFields,
         enterpriseId: ctx.enterpriseId,
         profileType: body.profileType as ProfileType || ProfileType.GUEST,
         title: body.title,

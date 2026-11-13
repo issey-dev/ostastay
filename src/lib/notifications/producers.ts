@@ -239,3 +239,33 @@ export async function notifyActivityBookingReceived(a: { enterpriseId: string; p
     console.error("[notifications] activity booking", e)
   }
 }
+
+/** Something an agent did in the portal that the hotel must act on (Agent Portal plan, Phase 6). */
+export async function notifyAgentActivity(a: {
+  enterpriseId: string
+  propertyId: string
+  kind: "SLOT_REQUESTED" | "CONFIRMATION_REQUESTED" | "CHANGE_REQUESTED"
+  entityId: string
+  title: string
+  url: (slug: string) => string
+}) {
+  try {
+    const where = await whereIs(a.propertyId)
+    if (!where) return
+    const type = `AGENT_${a.kind}` as const
+    await notify({
+      type,
+      enterpriseId: a.enterpriseId,
+      propertyId: a.propertyId,
+      title: a.title,
+      body: where.name,
+      url: a.url(where.slug),
+      entityType: a.kind === "SLOT_REQUESTED" ? "GroupBlock" : "Reservation",
+      entityId: a.entityId,
+      dedupeKey: `${type}:${a.entityId}:${new Date().toISOString().slice(0, 16)}`,
+      audience: { need: a.kind === "SLOT_REQUESTED" ? { module: "GROUP_BLOCKS", action: "update" } : { module: "RESERVATIONS", action: "update" } },
+    })
+  } catch (e) {
+    console.error("[notifications] agent activity", e)
+  }
+}

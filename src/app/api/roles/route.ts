@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSession, requirePermission, toErrorResponse, getOstaEnterpriseId, MODULES } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 import { WIDGET_IDS } from "@/lib/dashboard/widgets";
+import { capabilityOverridesFromBody, effectiveRoleCapabilities } from "@/lib/role-capabilities";
 
 // A role's own module rows are stored sparsely; MODULES is the canonical list so the UI
 // always gets a full, ordered matrix (missing rows default to all-false).
@@ -22,6 +23,7 @@ export async function GET() {
       where: { OR: [{ enterpriseId: ctx.enterpriseId }, { enterpriseId: ostaEnterpriseId, isSystem: true }] },
       include: {
         permissions: true,
+        capabilities: { select: { capability: true, granted: true } },
         dashboardWidgets: { select: { widgetId: true } },
         // "N users assigned" counts THIS enterprise's staff only. The system roles are
         // shared rows owned by Osta, so an unfiltered count summed every tenant's users —
@@ -33,9 +35,13 @@ export async function GET() {
     });
 
     return NextResponse.json(
-      roles.map(({ dashboardWidgets, ...r }) => ({
+      roles.map(({ dashboardWidgets, capabilities, ...r }) => ({
         ...r,
         permissions: normalizePermissions(r.permissions),
+        // Explicit overrides only; the editor shows defaults for the rest. `effective` is
+        // what the role can actually do after defaults and overrides (Phase 0b).
+        capabilityOverrides: Object.fromEntries(capabilities.map((c) => [c.capability, c.granted])),
+        capabilities: [...effectiveRoleCapabilities(r.permissions, capabilities)],
         // Dashboard widgets this role may NOT see. Sent as the block list rather than an
         // allow list so the editor can render "everything, minus these" — a role with no
         // rows sees every widget its module permissions already entitle it to, and a
@@ -88,6 +94,7 @@ export async function POST(request: Request) {
               ].map((widgetId) => ({ widgetId })),
             }
           : undefined,
+        capabilities: { create: capabilityOverridesFromBody(body.capabilityOverrides) },
       },
       include: { permissions: true },
     });

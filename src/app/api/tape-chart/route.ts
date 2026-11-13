@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { expireOptionsSoon } from "@/lib/reservations/options";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requirePermission(ctx, "TAPE_CHART", "view");
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
     const startDateStr = searchParams.get("startDate");
@@ -14,6 +17,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing required parameters (propertyId, startDate, endDate)" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, propertyId);
+    await expireOptionsSoon(propertyId);
 
     const startDate = new Date(startDateStr);
     const endDate = new Date(endDateStr);
@@ -50,7 +54,7 @@ export async function GET(request: Request) {
       }
     });
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       rooms,
       assignments
     });

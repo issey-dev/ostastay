@@ -1,15 +1,19 @@
 import { Prisma } from "@prisma/client";
+import { sellLimitGate } from "@/lib/availability-sell-limit";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
+import { applyBlockProfiles } from "@/lib/groups/block-profiles";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
-import { assertPropertyAccess, hasPermission, type AuthContext } from "@/lib/scope";
+import { assertPropertyAccess, type AuthContext, hasCapability } from "@/lib/scope";
 import { materializeReservationAllocations } from "@/lib/allocations-server";
 import { validateSpecialRequestCodes } from "@/lib/special-requests";
 import { findTypeAvailabilityConflicts, hasRoomConflict } from "@/lib/availability";
 import { findStopSaleConflicts, gateBookingConflicts, type ConflictGate } from "@/lib/restrictions";
 import { allocateSequenceNumber } from "@/lib/document-sequence";
 import { logActivity } from "@/lib/activity-log";
+import { lockKeys, BOOKING_TX_OPTIONS } from "@/lib/db-lock";
+import { computeOptionDate, endOfOptionDay } from "@/lib/reservations/options";
 import { assignmentsAreContiguous, detectScheduledRoomMove } from "@/lib/reservation-assignments";
 
 // The reservation-creation service — extracted verbatim from POST /api/reservations so a
@@ -40,6 +44,8 @@ export type CreateReservationInput = {
   checkInDate: string | Date;
   checkOutDate: string | Date;
   travelAgentId?: string | null;
+  /** A SOURCE profile (Agent Portal plan A-21); may be set together with travelAgentId. */
+  sourceProfileId?: string | null;
   accompanyingGuestIds?: string[];
   specialRequestCodes?: unknown;
   assignments?: ReservationAssignmentInput[];
@@ -70,6 +76,12 @@ export type CreateReservationInput = {
    *  acknowledgeOverbook — see D-7 rule 4. Never set from a staff-facing route. */
   allowPastArrival?: boolean;
   manualAllocationIds?: string[];
+  /** "TENTATIVE" books on option (Agent Portal plan A-5); anything else is RESERVED. */
+  status?: string;
+  /** yyyy-MM-dd; a tentative booking without one gets the property's default option date. */
+  optionDate?: string | null;
+  /** Where it came from (A-21). Set by the system paths; staff bookings are DESK. */
+  origin?: "DESK" | "WEBSITE" | "CHANNEL" | "AGENT_PORTAL" | "GROUP_PICKUP";
 };
 
 const RESERVATION_INCLUDE = {
@@ -135,6 +147,8 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
   if (!body.propertyId || !body.primaryGuestId || !body.checkInDate || !body.checkOutDate) {
     return fail(400, "Missing required fields");
   }
+  // A reservation in a block carries the block's Travel Agent / Company and Source.
+  body = await applyBlockProfiles({ ...body });
   if (new Date(body.checkOutDate) <= new Date(body.checkInDate)) {
     return fail(400, "Check-out date must be after check-in date");
   }
@@ -217,11 +231,24 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
         },
       ];
 
-  // A negotiated rate plan is only for the agent / company it was set up for.
+  let settlementMode: string | null = null;
+  if (body.sourceProfileId) {
+    const source = await prisma.profile.findUnique({ where: { upid: body.sourceProfileId } });
+    if (!source || source.enterpriseId !== ctx.enterpriseId || source.profileType !== "SOURCE") {
+      return fail(404, "Source profile not found");
+    }
+    if (!source.isActive) return fail(400, "That source profile is deactivated.");
+    // Who pays (A-18), defaulted from the Source.
+    settlementMode = source.settlementMode ?? "AGENT_NET";
+  }
+
+  // A negotiated rate plan is only for the agent / company / source it was set up for.
   {
     const negotiated = await negotiatedPlanError({
       ratePlanIds: assignmentsInput.map((a) => a.ratePlanId),
       travelAgentId: body.travelAgentId,
+      sourceProfileId: body.sourceProfileId,
+      propertyId: body.propertyId,
     });
     if (negotiated) return fail(400, negotiated);
   }
@@ -284,6 +311,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
   // toward the block's pickups. Guest keeps their own folio (not billed to master by
   // default — that's the explicit group-pickup path).
   let groupBlockId: string | null = null;
+  let blockCutoff: Date | null = null;
   if (body.groupBlockId) {
     const block = await prisma.groupBlock.findUnique({
       where: { id: body.groupBlockId },
@@ -306,6 +334,7 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       return fail(400, "That room type is not part of this group block's held room types.");
     }
     groupBlockId = block.id;
+    blockCutoff = block.cutoffDate ?? null;
   }
 
   // Two separate soft blocks, reported together so a stay that is both restricted and sold
@@ -329,9 +358,20 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     availability: availabilityConflicts,
     overrideStopSale: body.overrideStopSale,
     acknowledgeOverbook: body.acknowledgeOverbook,
-    canOverrideStopSale: hasPermission(ctx, "AVAILABILITY", "update"),
+    canOverrideStopSale: hasCapability(ctx, "reservations.overrideStopSale"),
+    canOverbook: hasCapability(ctx, "reservations.overbook"),
   });
   if (gate) return failGate(gate);
+  // Sell limit (A-10): an acknowledged overbook is capped per night unless the user may
+  // exceed it. Only reached when there is something to oversell.
+  if (availabilityConflicts.length > 0) {
+    const limitError = await sellLimitGate(ctx, {
+      propertyId: body.propertyId,
+      segments: bookingSegments,
+      excludeGroupBlockId: groupBlockId ?? undefined,
+    });
+    if (limitError) return fail(409, limitError);
+  }
   if (stopSaleConflicts.length > 0) {
     await logActivity({
       ctx,
@@ -367,6 +407,29 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
   // since 2026-09-23, .agents/docs/HUB_SETUP_PLAN.md).
   const settings = await getPropertySettings(body.propertyId);
 
+  // Tentative (on option). The option runs to the block's cutoff, else arrival minus the
+  // property's option days, else a short option — see computeOptionDate. Staff may set it.
+  const isTentative = body.status === "TENTATIVE";
+  let optionDate: Date | null = null;
+  if (isTentative) {
+    if (body.optionDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.optionDate)) return fail(400, "Option date must be yyyy-MM-dd.");
+      optionDate = endOfOptionDay(new Date(`${body.optionDate}T00:00:00Z`));
+      if (optionDate <= new Date()) return fail(400, "The option date must be in the future.");
+      if (toUtcMidnight(optionDate) > toUtcMidnight(new Date(body.checkInDate))) {
+        return fail(400, "An option cannot run past the arrival date.");
+      }
+    } else {
+      optionDate = computeOptionDate({
+        checkInDate: new Date(body.checkInDate),
+        now: new Date(),
+        blockCutoff,
+        optionDaysBeforeArrival: settings.optionDaysBeforeArrival,
+        shortOptionHours: settings.shortOptionHours,
+      });
+    }
+  }
+
   // Sequential confirmation number via the Sequence Manager's REGISTRATION_NO
   // counter (Controls > Reservations) — the app owner's explicit "sequential
   // numbers only" rule; replaces the old Math.random() string, which could collide
@@ -391,12 +454,32 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     confirmationNo = `${prefix}${String(seq).padStart(length, "0")}`;
   }
 
-  const newReservation = await prisma.reservation.create({
+  // Last-room race (Agent Portal plan §9): take a transaction-scoped advisory lock per
+  // (property, room type) booked, re-check availability under it, and write in the same
+  // transaction — so two bookings for the last room can no longer both pass the check.
+  const lockedTypes = [...new Set(bookingSegments.map((s) => s.roomTypeId))];
+  const raced = { conflicts: [] as string[] };
+  const newReservation = await prisma.$transaction(async (tx) => {
+  await lockKeys(tx, lockedTypes.map((t) => `inventory:${body.propertyId}:${t}`));
+  if (availabilityConflicts.length === 0) {
+    const now = await findTypeAvailabilityConflicts({
+      propertyId: body.propertyId,
+      segments: bookingSegments,
+      excludeGroupBlockId: groupBlockId ?? undefined,
+    });
+    if (now.length > 0 && !(body.acknowledgeOverbook && hasCapability(ctx, "reservations.overbook"))) {
+      raced.conflicts = now;
+      return null;
+    }
+  }
+  return tx.reservation.create({
     data: {
       confirmationNo,
       propertyId: body.propertyId,
       primaryGuestId: body.primaryGuestId,
       travelAgentId: body.travelAgentId,
+      sourceProfileId: body.sourceProfileId || null,
+      settlementMode,
       groupBlockId,
       // Attached-to-block reservations keep their own folio by default (the pickup
       // dialog is the explicit bill-to-master path).
@@ -412,7 +495,9 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
       depositFeeRuleId: feeRuleSel.DEPOSIT,
       cancellationFeeRuleId: feeRuleSel.CANCELLATION,
       noShowFeeRuleId: feeRuleSel.NO_SHOW,
-      status: "RESERVED", // Default status
+      status: isTentative ? "TENTATIVE" : "RESERVED",
+      optionDate,
+      origin: body.origin ?? (groupBlockId ? "GROUP_PICKUP" : "DESK"),
       hasScheduledRoomMove: detectScheduledRoomMove(assignmentsInput),
       assignments: {
         create: assignmentsInput,
@@ -435,6 +520,11 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     },
     include: RESERVATION_INCLUDE,
   });
+  }, BOOKING_TX_OPTIONS);
+  if (!newReservation) {
+    // Someone took the last room between our check and the write.
+    return { ok: false, status: 409, error: raced.conflicts.join("; "), requiresOverbookConfirm: hasCapability(ctx, "reservations.overbook") } as CreateReservationResult;
+  }
 
   await logActivity({
     ctx,

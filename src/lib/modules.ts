@@ -105,6 +105,155 @@ export const MODULE_LABELS: Record<Module, string> = {
   GREEN_TAX: "Green Tax Registrations",
 };
 
+// ── What each action means, per module ───────────────────────────────────────────
+//
+// Agent Portal plan §10 (Phase 0a): the four actions mean different things in different
+// modules, and until now only Transportation, Dashboard and Green Tax wrote that down.
+// One line per module per action, shown on the roles screen and in the Configuration
+// guide. Keep it in step with the requirePermission() calls in src/app/api — the route
+// coverage test (tests/business-rules/route-permission-coverage.test.ts) proves every route
+// checks *something*; this table says what.
+export const MODULE_ACTION_MEANINGS: Record<Module, Record<Action, string>> = {
+  FRONT_DESK: {
+    view: "Open Front Desk: arrivals, departures, in-house lists",
+    create: "Walk-ins from the desk",
+    update: "Check in, check out, room moves, eRegistration links",
+    delete: "Undo a check-in or reverse a check-out",
+  },
+  RESERVATIONS: {
+    view: "See reservations, quotes and rate availability",
+    create: "Create reservations",
+    update: "Edit, confirm and reinstate reservations; extend an option",
+    delete: "Cancel reservations",
+  },
+  GROUP_BLOCKS: {
+    view: "See group blocks, slot requests and pickups",
+    create: "Create blocks",
+    update: "Edit blocks, pick up rooms, approve or decline slot requests",
+    delete: "Cancel or mark a block lost",
+  },
+  TAPE_CHART: {
+    view: "Open the Tape Chart",
+    create: "Book from an empty cell",
+    update: "Drag and drop moves and room assignment",
+    delete: "Unassign rooms from the chart",
+  },
+  AVAILABILITY: {
+    view: "See the availability grid",
+    create: "Add stop-sale periods",
+    update: "Set and lift stop sale; edit sell limits",
+    delete: "Book past the sell limit (manager override)",
+  },
+  PROFILES: {
+    view: "See guest, company, travel agent and source profiles",
+    create: "Create profiles",
+    update: "Edit profiles, portal logins, commission settings",
+    delete: "Deactivate or merge profiles",
+  },
+  HOUSEKEEPING: {
+    view: "See room status and the housekeeping board",
+    create: "Create tasks",
+    update: "Change room status, assign attendants",
+    delete: "Remove tasks",
+  },
+  MAINTENANCE: {
+    view: "See work orders and out-of-order rooms",
+    create: "Raise work orders",
+    update: "Work and close work orders, take rooms out of order",
+    delete: "Delete work orders",
+  },
+  CASHIERING: {
+    view: "See folios, payments, receipts and invoices",
+    create: "Post charges and payments",
+    update: "Transfer, route, advance folio, send invoices and receipts",
+    delete: "Void charges and payments",
+  },
+  POS: {
+    view: "Open Fast Post and search guests",
+    create: "Post outlet charges",
+    update: "Edit an outlet posting",
+    delete: "Void an outlet posting",
+  },
+  NIGHT_AUDIT: {
+    view: "See Night Audit status and reports",
+    create: "Run Night Audit",
+    update: "Re-run a step, change the business date",
+    delete: "Reset a failed audit",
+  },
+  DEBTORS: {
+    view: "See debtor accounts, aging and statements",
+    create: "Open a credit account",
+    update: "Send statements, record ledger payments, pay commission",
+    delete: "Close a credit account",
+  },
+  REVENUE: {
+    view: "See rate plans, prices and revenue settings",
+    create: "Create rate plans and seasons",
+    update: "Change prices and rate plans",
+    delete: "Delete rate plans",
+  },
+  REPORTS: {
+    view: "Run and download reports",
+    create: "Save report presets",
+    update: "Change saved presets",
+    delete: "Delete saved presets",
+  },
+  CONTROLS: {
+    view: "Open property setup in the Hub",
+    create: "Add setup records",
+    update: "Change property setup",
+    delete: "Remove setup records",
+  },
+  ACTIVITY_LOG: {
+    view: "Read the activity log",
+    create: "(not used)",
+    update: "(not used)",
+    delete: "(not used)",
+  },
+  EXCURSIONS: {
+    view: "See excursion bookings",
+    create: "Book excursions",
+    update: "Change and check in excursion bookings",
+    delete: "Cancel excursion bookings",
+  },
+  SPA: {
+    view: "See spa appointments",
+    create: "Book appointments",
+    update: "Change, check in and complete appointments",
+    delete: "Cancel appointments",
+  },
+  TRANSPORTATION: {
+    view: "The board, airport rep and dispatch views, reports",
+    create: "Create and edit transport bookings",
+    update: "Manage manifests and statuses",
+    delete: "Billing overrides: post or waive by hand, custom amounts",
+  },
+  DASHBOARD: {
+    view: "Land on the Operations Dashboard",
+    create: "(not used)",
+    update: "Choose which widgets each role sees",
+    delete: "(not used)",
+  },
+  INTEGRATIONS: {
+    view: "See channel connections, API keys and sync logs",
+    create: "Connect channels, mint API keys",
+    update: "Change connections and mappings",
+    delete: "Disconnect channels, revoke keys",
+  },
+  USERS: {
+    view: "See users, roles and sessions",
+    create: "Add users and roles",
+    update: "Change users, roles and capabilities",
+    delete: "Deactivate users, sign sessions out, delete roles",
+  },
+  GREEN_TAX: {
+    view: "See Green Tax registration numbers",
+    create: "(not used)",
+    update: "Correct numbers and file months",
+    delete: "(not used)",
+  },
+};
+
 // ── Service add-ons ───────────────────────────────────────────────────────────────
 //
 // Sellable add-ons that are NOT app modules. EnterpriseAddonAccess is the right storage

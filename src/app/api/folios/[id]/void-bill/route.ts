@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { logActivity } from "@/lib/activity-log";
 
 // Void an ENTIRE bill (Fast Post walk-in sale) — flags every non-void line item isVoid,
@@ -11,6 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CASHIERING", "update");
+    requireCapability(ctx, "billing.voidBill");
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));

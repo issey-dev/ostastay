@@ -54,6 +54,13 @@ export const PROPERTY_SETTINGS_DEFAULTS: PropertySettingsValues = {
   serviceChargeEnabled: true,
   serviceChargeRate: 10,
   // Night Audit — no-shows and the scheduled run
+  // Tentative bookings (Agent Portal plan A-14)
+  optionDaysBeforeArrival: 30,
+  shortOptionHours: 48,
+  maxOverflowPerNight: null,
+  agentPortalEnabled: false,
+  agentAvailabilityCap: 5,
+  guestDetailsDueDays: 7,
   noShowTiming: "FIRST_AUDIT",
   noShowPostFee: true,
   autoCheckOutZeroBalance: false,
@@ -145,6 +152,12 @@ export const propertySettingsPatchSchema = z
     serviceChargeEnabled: z.boolean(),
     // Floor shared with the Finance › Tax form — see MIN_SERVICE_CHARGE_RATE.
     serviceChargeRate: percent.min(MIN_SERVICE_CHARGE_RATE, `Maldives law requires at least ${MIN_SERVICE_CHARGE_RATE}% Service Charge (switch posting off on the Night Audit page instead)`),
+    optionDaysBeforeArrival: z.coerce.number().int().min(0).max(365, "Keep it within a year"),
+    shortOptionHours: z.coerce.number().int().min(1).max(24 * 14, "Keep it within two weeks"),
+    maxOverflowPerNight: z.coerce.number().int().min(0).max(500).nullable(),
+    agentPortalEnabled: z.boolean(),
+    agentAvailabilityCap: z.coerce.number().int().min(1, "At least 1").max(50, "At most 50"),
+    guestDetailsDueDays: z.coerce.number().int().min(0).max(90, "At most 90 days"),
     noShowTiming: z.enum(NO_SHOW_TIMINGS),
     noShowPostFee: z.boolean(),
     autoCheckOutZeroBalance: z.boolean(),

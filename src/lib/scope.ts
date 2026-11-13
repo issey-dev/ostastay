@@ -6,6 +6,7 @@ import { setRequestTenantContext } from "@/lib/request-context";
 import { getLicenseStatus, isLicenseUsable } from "@/lib/license";
 import { MODULES, MODULE_LABELS, HUB_MODULES, PROPERTY_SETUP_MODULES, ENTERPRISE_ONLY_MODULES, moduleScope, type Module, type Action } from "@/lib/modules";
 import { mergeRolePermissions } from "@/lib/role-permissions";
+import { roleCapabilities, mergeCapabilities, capabilityDef, type CapabilityKey } from "@/lib/capabilities";
 import { findLiveSession, touchSession, revokeSession, isIdleExpired } from "@/lib/session-store";
 import { notifySupportSessionOpened } from "@/lib/notifications/producers";
 import { SYSTEM_ROLE_DEFS, SUPPORT_ROLE_DEFS } from "../../prisma/rbac-seed-data";
@@ -60,6 +61,9 @@ export type AuthContext = {
   // ALL_MODULES_LICENSED); kept as a field so gating has one seam if it ever returns.
   // requirePermission() denies access to anything missing here regardless of role.
   licensedModules: Set<Module>;
+  // Named switches on top of the four actions (src/lib/capabilities.ts), merged across the
+  // user's roles by OR. Absent on synthetic system contexts, which set their own.
+  capabilities?: Set<CapabilityKey>;
 };
 
 let ostaEnterpriseIdCache: string | null = null;
@@ -239,7 +243,7 @@ export async function requireSession(opts?: {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { roles: { include: { role: { include: { permissions: true } } } } },
+    include: { roles: { include: { role: { include: { permissions: true, capabilities: true } } } } },
   });
   if (!user || !user.isActive) {
     throw new UnauthorizedError("Session invalid or account disabled");
@@ -263,6 +267,9 @@ export async function requireSession(opts?: {
     }))
   );
   const permissions = mergeRolePermissions(backfilled);
+  const capabilities = mergeCapabilities(
+    heldRoles.map((role, i) => roleCapabilities(backfilled[i].permissions, role.capabilities))
+  );
 
   let enterpriseId = user.enterpriseId;
   let isActingAsSupport = false;
@@ -369,6 +376,7 @@ export async function requireSession(opts?: {
     isActingAsSupport,
     supportGrantId,
     licensedModules,
+    capabilities,
   };
 }
 
@@ -529,6 +537,29 @@ export function requirePermission(ctx: AuthContext, module: Module, action: Acti
   if (!allowed) {
     throw new ForbiddenError(`Missing ${action} permission on ${module}`);
   }
+}
+
+// Capabilities (Agent Portal plan §10). A context without a capability set (a synthetic
+// system context) answers from the capability's default over its own permissions.
+export function hasCapability(ctx: AuthContext, key: CapabilityKey): boolean {
+  if (ctx.capabilities) return ctx.capabilities.has(key);
+  const def = capabilityDef(key);
+  return !!def?.defaultFor((m, a) => hasPermission(ctx, m, a));
+}
+
+export function requireCapability(ctx: AuthContext, key: CapabilityKey) {
+  if (!hasCapability(ctx, key)) {
+    throw new ForbiddenError(`Your role does not allow this: ${capabilityDef(key)?.label ?? key}`);
+  }
+}
+
+// For a shared lookup used by several screens (rooms available to the desk and the booking
+// form, guest search for POS / Excursions / Spa): passes when ANY of the listed grants is
+// held. Agent Portal plan §10, Phase 0a — these routes used to check the session only.
+export function requireAnyPermission(ctx: AuthContext, grants: ReadonlyArray<readonly [Module, Action]>) {
+  if (grants.some(([m, a]) => hasPermission(ctx, m, a))) return;
+  const wanted = grants.map(([m, a]) => `${a} on ${m}`).join(" or ");
+  throw new ForbiddenError(`Missing permission: ${wanted}`);
 }
 
 // ---------------------------------------------------------------------------

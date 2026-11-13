@@ -22,7 +22,8 @@ import { DesktopOnlyNotice } from "@/components/ui/mobile"
 import { OptionSelect } from "@/components/ui/option-select"
 import { JOB_FUNCTIONS, isJobFunction, jobFunctionLabel } from "@/lib/job-functions"
 import { RoleWidgetAccess } from "@/components/controls/role-widget-access"
-import { RolePermissionMatrix, emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
+import { emptyPermissionMatrix, grantsEnterpriseOnlyAccess, type PermissionMatrix } from "./role-permission-matrix"
+import { RoleAccessEditor, ROLE_PRESETS, presetMatrix, type CapabilityOverrides } from "./role-access-editor"
 import type { StatusTone } from "@/lib/status-tone"
 import { MIN_PASSWORD_LENGTH, normalizeEmail, userIdentitySchema } from "@/lib/user-account-rules"
 import { SubmitButton } from "@/components/ui/submit-button"
@@ -37,6 +38,9 @@ type Role = {
   permissions: { module: string; canView: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean }[]
   /** Dashboard widget ids this role may NOT see — see RoleWidgetAccess. */
   blockedWidgets?: string[]
+  /** Capability overrides on this role, and what it effectively holds (src/lib/capabilities.ts). */
+  capabilityOverrides?: CapabilityOverrides
+  capabilities?: string[]
   _count?: { users: number }
 }
 
@@ -244,6 +248,7 @@ export function UsersRolesManager({
   const [roleName, setRoleName] = useState("")
   const [roleMatrix, setRoleMatrix] = useState<PermissionMatrix>(emptyPermissionMatrix())
   const [roleBlockedWidgets, setRoleBlockedWidgets] = useState<string[]>([])
+  const [roleCapOverrides, setRoleCapOverrides] = useState<CapabilityOverrides>({})
   const [roleErrorMsg, setRoleErrorMsg] = useState<string | null>(null)
   const [savingRole, setSavingRole] = useState(false)
 
@@ -252,8 +257,28 @@ export function UsersRolesManager({
     setRoleName("")
     setRoleMatrix(emptyPermissionMatrix())
     setRoleBlockedWidgets([])
+    setRoleCapOverrides({})
     setRoleErrorMsg(null)
     setIsRoleDialogOpen(true)
+  }
+
+  // "Duplicate role": a new, editable role starting from another's switches.
+  const openDuplicateRoleDialog = (role: Role) => {
+    setEditingRole(null)
+    setRoleName(`${role.name} (copy)`)
+    setRoleMatrix(matrixFromRole(role))
+    setRoleBlockedWidgets(role.blockedWidgets ?? [])
+    setRoleCapOverrides(role.capabilityOverrides ?? {})
+    setRoleErrorMsg(null)
+    setIsRoleDialogOpen(true)
+  }
+
+  const applyPreset = (name: string) => {
+    const preset = ROLE_PRESETS.find((p) => p.name === name)
+    if (!preset) return
+    if (!roleName.trim()) setRoleName(preset.name)
+    setRoleMatrix(presetMatrix(preset, emptyPermissionMatrix()))
+    setRoleCapOverrides(preset.overrides ?? {})
   }
 
   const openEditRoleDialog = (role: Role) => {
@@ -261,6 +286,7 @@ export function UsersRolesManager({
     setRoleName(role.name)
     setRoleMatrix(matrixFromRole(role))
     setRoleBlockedWidgets(role.blockedWidgets ?? [])
+    setRoleCapOverrides(role.capabilityOverrides ?? {})
     setRoleErrorMsg(null)
     setIsRoleDialogOpen(true)
   }
@@ -282,7 +308,7 @@ export function UsersRolesManager({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: roleName, permissions: roleMatrix, blockedWidgets: roleBlockedWidgets }),
+        body: JSON.stringify({ name: roleName, permissions: roleMatrix, blockedWidgets: roleBlockedWidgets, capabilityOverrides: roleCapOverrides }),
       })
       if (res.ok) {
         setIsRoleDialogOpen(false)
@@ -508,6 +534,9 @@ export function UsersRolesManager({
               <CardContent className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => openEditRoleDialog(role)}>
                   <Edit className="w-4 h-4 mr-1" /> {role.isSystem ? "View" : "Edit"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => openDuplicateRoleDialog(role)}>
+                  Duplicate
                 </Button>
                 {!role.isSystem && (
                   <Button variant="ghost" size="sm" onClick={() => handleDeleteRole(role)}>
@@ -744,7 +773,7 @@ export function UsersRolesManager({
           <SheetHeader className="border-b border-border pr-12">
             <SheetTitle>{editingRole ? (editingRole.isSystem ? `View "${editingRole.name}"` : `Edit "${editingRole.name}"`) : "Add role"}</SheetTitle>
             <SheetDescription>
-              {editingRole?.isSystem ? "System roles are shared across enterprises and cannot be edited." : "Tick the modules this role can view, create, update, or delete."}
+              {editingRole?.isSystem ? "System roles are shared across enterprises and cannot be edited. Duplicate one to start your own." : "Pick a module on the left, then what this role may do in it and the options that go with it."}
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -757,7 +786,25 @@ export function UsersRolesManager({
               <label className="text-sm font-medium">Role name</label>
               <Input value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="e.g. Night Manager" disabled={editingRole?.isSystem} />
             </div>
-            <RolePermissionMatrix value={roleMatrix} onChange={setRoleMatrix} disabled={editingRole?.isSystem} />
+            {!editingRole && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Start from a preset</label>
+                <Select onValueChange={(v) => applyPreset(String(v))}>
+                  <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder="Choose a preset (optional)" /></SelectTrigger>
+                  <SelectContent>
+                    {ROLE_PRESETS.map((p) => <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <RoleAccessEditor
+              matrix={roleMatrix}
+              onMatrixChange={setRoleMatrix}
+              overrides={roleCapOverrides}
+              onOverridesChange={setRoleCapOverrides}
+              disabled={editingRole?.isSystem}
+              compareRoles={roles.filter((r) => r.id !== editingRole?.id)}
+            />
             {/* Only meaningful once the role can open the dashboard at all — otherwise it
                 is a list of cards nobody will ever reach. */}
             {roleMatrix.DASHBOARD?.canView && (

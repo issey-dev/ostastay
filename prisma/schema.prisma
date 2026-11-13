@@ -163,8 +163,24 @@ model Role {
   users            UserRole[]
   // Dashboard widgets this role may not see — see RoleDashboardWidget.
   dashboardWidgets RoleDashboardWidget[]
+  // Named switches on top of the four actions — see src/lib/capabilities.ts.
+  capabilities     RoleCapability[]
 
   @@unique([enterpriseId, name])
+}
+
+// A capability override on one role (Agent Portal plan §10, Phase 0b). No row = the
+// capability's default, derived from the role's module permissions (src/lib/capabilities.ts),
+// so upgrading changes nobody's access. `granted` false is an explicit "no" on a default-yes.
+model RoleCapability {
+  id         String  @id @default(uuid())
+  roleId     String
+  role       Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  capability String
+  granted    Boolean @default(true)
+
+  @@unique([roleId, capability])
+  @@index([roleId])
 }
 
 // Module: FRONT_DESK, RESERVATIONS, GROUP_BLOCKS, TAPE_CHART, PROFILES, HOUSEKEEPING,
@@ -519,6 +535,9 @@ model Property {
   // Stop-Sale / availability restrictions (see AvailabilityRestriction) — a row's
   // presence closes that date for sale, property-wide or per room type.
   availabilityRestrictions     AvailabilityRestriction[]
+  // Sell limits (Agent Portal plan A-10): how far past capacity a night may be sold.
+  availabilitySellLimits       AvailabilitySellLimit[]
+  bookingMarkers               BookingMarker[]
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles          Profile[]
@@ -651,6 +670,7 @@ model RoomType {
   // Per-room-type Stop-Sale rows (roomTypeId set) — property-level closures have a null
   // roomTypeId and don't appear here.
   availabilityRestrictions AvailabilityRestriction[]
+  availabilitySellLimits   AvailabilitySellLimit[]
   // Room-specific features — Bed Type, View, and Amenities are all multi-select, drawn
   // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
@@ -1045,6 +1065,15 @@ model Profile {
   totalNights       Int        @default(0)
   totalRevenue      Float      @default(0.0)
   lastStayDate      DateTime?
+  // A SOURCE profile (Agent Portal plan Phase 3): how its bookings settle (AGENT_NET |
+  // AGENT_GROSS | GUEST_DIRECT, A-18), how many days earlier than the rate plan's sales
+  // window it may request slots (A-11), whether its bookings confirm without a desk check
+  // (A-13, hotel-controlled), and its own Tape Chart marker (A-22).
+  settlementMode    String?
+  earlyAccessDays   Int?
+  portalAutoConfirm Boolean    @default(false)
+  markerIcon        String?
+  markerColor       String?
 
   // Set once at creation from the active property context, never changed afterward —
   // a lightweight "first seen at" breadcrumb, not a scoping mechanism. The profile
@@ -1060,9 +1089,13 @@ model Profile {
   documents                ProfileDocument[]
   reservations             Reservation[]
   travelAgentReservations  Reservation[]                 @relation("TravelAgent")
+  sourceReservations       Reservation[]                 @relation("SourceProfile")
   accompanyingReservations AccompanyingGuest[]
   foliosAsPayee            Folio[]                       @relation("PayeeProfile")
   groupBlocksAsPayee       GroupBlock[]                  @relation("GroupBlockPayee")
+  groupBlocksAsSource      GroupBlock[]                  @relation("GroupBlockSource")
+  groupBlocksAsTravelAgent GroupBlock[]                  @relation("GroupBlockTravelAgent")
+  agentUsers               AgentUser[]
   guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
@@ -1191,6 +1224,9 @@ model RatePlan {
   description     String?
   priority        Int                 @default(0)
   isNegotiated    Boolean             @default(false)
+  // Agent sales window (Agent Portal plan A-11): linked Sources may request slots on this
+  // plan from this moment (minus a Source's earlyAccessDays). Null = always open.
+  agentSalesOpenAt DateTime?
   // Classification flags for zero/nominal-rate stays — comp'd rooms (VIPs, media,
   // familiarization trips) and internal staff/owner use. Pure labels for now, same
   // starting point isNegotiated had before its Negotiated Rates follow-up; no posting
@@ -1304,7 +1340,50 @@ model AvailabilityRestriction {
   @@index([roomTypeId])
 }
 
-// ReservationStatus: RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
+// A sell limit (Agent Portal plan A-10, Phase 2): on `date`, the desk may oversell this
+// room type (or, with roomTypeId null, the whole house) by at most `extraRooms` rooms.
+// Past it, only a role with "Exceed the sell limit" may book. Channels, the brand website
+// and agents never sell into it (D-7). A night with no row keeps today's rule: an
+// acknowledged overbook is not capped. See src/lib/availability-sell-limit.ts.
+model AvailabilitySellLimit {
+  id              String    @id @default(uuid())
+  propertyId      String
+  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomTypeId      String?
+  roomType        RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  extraRooms      Int       @default(0)
+  updatedByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([propertyId, roomTypeId, date])
+  @@index([propertyId, date])
+  @@index([roomTypeId])
+}
+
+// A booking marker rule (Agent Portal plan A-22, Phase 3): when a booking matches `match`
+// (see MARKER_MATCHES in src/lib/booking-markers.ts), show `icon` in `colorToken` on the
+// Tape Chart and lists. Ordered; first match wins. A property with no rows uses the seeded
+// defaults (DEFAULT_MARKER_RULES), so it works with zero setup.
+model BookingMarker {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sortOrder  Int      @default(0)
+  label      String
+  match      String
+  matchValue String?
+  icon       String
+  colorToken String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([propertyId, sortOrder])
+}
+
+// ReservationStatus: TENTATIVE, RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
 model Reservation {
   id             String   @id @default(uuid())
   confirmationNo String   @unique
@@ -1323,6 +1402,10 @@ model Reservation {
 
   travelAgentId String?
   travelAgent   Profile? @relation("TravelAgent", fields: [travelAgentId], references: [upid])
+  // Where the booking came from as a commercial party (Agent Portal plan A-21): a SOURCE
+  // profile, beside the Travel Agent; both can be set. A group pickup inherits its block's.
+  sourceProfileId String?
+  sourceProfile   Profile? @relation("SourceProfile", fields: [sourceProfileId], references: [upid])
 
   groupBlockId      String?
   groupBlock        GroupBlock? @relation(fields: [groupBlockId], references: [id])
@@ -1359,6 +1442,13 @@ model Reservation {
   // re-posting them would double-charge. Null = nothing advance-billed. See
   // api/reservations/[id]/advance-bill/route.ts.
   advanceBilledThrough  DateTime?
+  // The last Advance Folio (Agent Portal plan A-23, Phase 8): its check number, the business
+  // date it was posted on, and advanceBilledThrough before it, so a mistake can be reversed
+  // the same business day (void those lines, restore the date).
+  advanceFolioCheckNo     String?
+  advanceFolioDate        DateTime?
+  advanceFolioPrevThrough DateTime?
+  advanceFolioFolioId     String?
   adults                Int       @default(1)
   children              Int       @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)
@@ -1388,6 +1478,41 @@ model Reservation {
   // acts "as of today". Surfaced as a badge on the reservation and via the Front
   // Office "Room Moves Due Today" worklist (front-office/summary route).
   hasScheduledRoomMove  Boolean   @default(false)
+
+  // Agent Portal plan Phase 1 (A-5, A-13, A-14, A-21). TENTATIVE holds inventory until
+  // optionDate, then the option-expiry job (and the lazy sweep on read) releases it:
+  // CANCELLED with cancellationReasonCode OPTION_EXPIRED. See src/lib/reservations/options.ts.
+  optionDate              DateTime?
+  confirmationRequestedAt DateTime?
+  confirmationNote        String?
+  confirmedAt             DateTime?
+  confirmedBy             String?
+  // Structured reason beside the free-text cancellationReason (OPTION_EXPIRED,
+  // AGENT_CANCELLED, HOTEL_CANCELLED, or a code from the property's list).
+  cancellationReasonCode  String?
+  // The door it came through: DESK | WEBSITE | CHANNEL | AGENT_PORTAL | GROUP_PICKUP.
+  origin                  String    @default("DESK")
+  // Overflow (Agent Portal plan A-8, Phase 2): accommodated at a partner hotel because the
+  // house is full. Sits in the pseudo room type OVF, is charged normally, but gets no
+  // Green Tax and no registration number here and is not counted in occupancy.
+  isOverflow              Boolean   @default(false)
+  overflowHotelName       String?
+  overflowNote            String?
+  // Agent bookings (Agent Portal plan §4): the package name, the agent's own file number,
+  // and the portal login that entered it (AgentUser.id; a plain id, the login can be removed).
+  packageName             String?
+  agentReference          String?
+  agentUserId             String?
+  // The agent's reference for this booking (Agent Portal plan §9: unguessable, B-11 pattern;
+  // never the sequential confirmation number alone) and how many times the agent has
+  // generated its confirmation (each re-issue is a new version number).
+  // Who pays (Agent Portal plan A-18): AGENT_NET | AGENT_GROSS | GUEST_DIRECT, defaulted from
+  // the Source at booking. Decides whether commission is netted on the agent's invoice or
+  // accrued as payable to the agent (AgentCommission).
+  settlementMode           String?
+  agentRef                 String?  @unique
+  agentConfirmationVersion Int      @default(0)
+  agentChangeRequests      AgentChangeRequest[]
 
   assignments                  RoomAssignment[]
   folios                       Folio[]
@@ -1422,8 +1547,10 @@ model Reservation {
   @@index([primaryGuestId])
   @@index([propertyId])
   @@index([travelAgentId])
+  @@index([sourceProfileId])
   // The list is always one property ordered by arrival.
   @@index([propertyId, checkInDate])
+  @@index([status, optionDate])
   // Trigram (pg_trgm) GIN index: the reservations search box is a case-insensitive
   // "contains" (ILIKE '%x%'), which a plain b-tree cannot serve.
   @@index([confirmationNo(ops: raw("gin_trgm_ops"))], type: Gin, map: "Reservation_confirmationNo_trgm_idx")
@@ -2142,6 +2269,19 @@ model PropertySettings {
   // never arrived becomes a No-Show: FIRST_AUDIT = at the audit of its arrival night (the
   // original behaviour); SECOND_AUDIT = held one night so a late arrival can still check
   // in, then marked at the next audit; MANUAL = never automatically — the desk marks it.
+  // Tentative bookings (Agent Portal plan A-14): an option runs to arrival - this many days
+  // (or the block's cutoff); a booking made after that gets shortOptionHours.
+  optionDaysBeforeArrival Int @default(30)
+  shortOptionHours        Int @default(48)
+  // Most overflow bookings accepted for one night (A-8); null = no cap.
+  maxOverflowPerNight     Int?
+  // Agent portal (Agent Portal plan A-25, Phase 5): on or off for this property, how many
+  // free rooms an agent sees before "N+" (A-9), and how many days before arrival guest
+  // details are due (A-16).
+  agentPortalEnabled      Boolean @default(false)
+  agentAvailabilityCap    Int     @default(5)
+  guestDetailsDueDays     Int     @default(7)
+
   noShowTiming  String  @default("FIRST_AUDIT")
   // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.
   noShowPostFee Boolean @default(true)
@@ -2422,7 +2562,33 @@ model GroupBlock {
   endDate        DateTime
   cutoffDate     DateTime?
   totalRoomsHeld Int       @default(0)
+  // REQUESTED (a Source's slot request; holds nothing) → TENTATIVE | DECLINED, then as before
+  // TENTATIVE → DEFINITE | LOST | CANCELLED, DEFINITE → CANCELLED. See src/lib/group-status.ts.
   status         String    @default("TENTATIVE")
+
+  // Blocks for Sources (Agent Portal plan A-7, A-12, Phase 4). A slot IS a block with a
+  // Source. origin: DESK | AGENT_PORTAL. The request/decision fields record who asked and
+  // who decided. releaseDays: each night's unsold rooms release that many days before it
+  // (rolling release, beside the one-date cutoff). Elasticity: how far a pickup may go past
+  // the approved slot (extra rooms per night, extra nights before/after); all 0 = hard edges.
+  sourceProfileId        String?
+  sourceProfile          Profile? @relation("GroupBlockSource", fields: [sourceProfileId], references: [upid])
+  // The block's Travel Agent or Company (owner, 2026-11-13). Like the Source, every reservation
+  // in the block carries it and cannot change it while it is set on the block.
+  travelAgentId          String?
+  travelAgent            Profile? @relation("GroupBlockTravelAgent", fields: [travelAgentId], references: [upid])
+  origin                 String   @default("DESK")
+  requestedByAgentUserId String?
+  requestNote            String?
+  isOverflowRequest      Boolean  @default(false)
+  decisionReason         String?
+  decidedBy              String?
+  decidedAt              DateTime?
+  releaseDays            Int?
+  elasticRooms           Int      @default(0)
+  elasticNightsBefore    Int      @default(0)
+  elasticNightsAfter     Int      @default(0)
+  checkpoints            GroupBlockCheckpoint[]
 
   // Optional Travel Agent / Corporate credit account the block's master bill settles to
   // (City Ledger). When set, the master folio is created as CITY_LEDGER with this payee,
@@ -2446,6 +2612,26 @@ model GroupBlock {
 
   @@unique([propertyId, code])
   @@index([payeeProfileId])
+  @@index([sourceProfileId])
+  @@index([propertyId, status])
+}
+
+// A quota checkpoint on a block (Agent Portal plan A-12): by `date`, at least `minPercent`
+// of the held rooms must be booked; if not, the unsold rooms are released (the hold shrinks
+// to what is booked) and the block carries on. Processed once (processedAt) by the
+// group-block-release job, and lazily on read.
+model GroupBlockCheckpoint {
+  id            String     @id @default(uuid())
+  groupBlockId  String
+  groupBlock    GroupBlock @relation(fields: [groupBlockId], references: [id], onDelete: Cascade)
+  date          DateTime
+  minPercent    Int
+  processedAt   DateTime?
+  releasedRooms Int?
+  createdAt     DateTime   @default(now())
+
+  @@index([groupBlockId])
+  @@index([processedAt, date])
 }
 
 // Rooms of a given type held by a group block for its whole date span. Outstanding
@@ -2458,6 +2644,8 @@ model GroupBlockRoom {
   roomTypeId   String
   roomType     RoomType   @relation(fields: [roomTypeId], references: [id])
   quantity     Int        @default(0)
+  // What a Source asked for, kept beside what was approved (Agent Portal plan Phase 4).
+  requestedQuantity Int?
 
   @@unique([groupBlockId, roomTypeId])
   @@index([roomTypeId])
@@ -4721,4 +4909,139 @@ model NotificationPreference {
   push   Boolean @default(true)
 
   @@unique([userId, type])
+}
+
+// ---------------------------------------------------------------------------
+// Agent portal logins (Agent Portal plan A-3, Phase 5). A login belongs to one SOURCE profile
+// and signs in THROUGH the Agent API — the portal stores no credentials. Deliberately not a
+// User: an agent must never satisfy requireSession(), and a staff session must never open
+// an /api/agent route. Invite and reset tokens are hashed, single-use and short-lived.
+// ---------------------------------------------------------------------------
+model AgentUser {
+  id                 String    @id @default(uuid())
+  enterpriseId       String
+  sourceProfileId    String
+  sourceProfile      Profile   @relation(fields: [sourceProfileId], references: [upid], onDelete: Cascade)
+  email              String
+  name               String
+  passwordHash       String?
+  // INVITED (no password yet) | ACTIVE | SUSPENDED
+  status             String    @default("INVITED")
+  inviteTokenHash    String?   @unique
+  inviteExpiresAt    DateTime?
+  resetTokenHash     String?   @unique
+  resetExpiresAt     DateTime?
+  failedLogins       Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  createdByUserId    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  sessions           AgentSession[]
+
+  @@unique([enterpriseId, email])
+  @@index([sourceProfileId])
+}
+
+// A signed-in agent. The token is bound to the key that issued it (a stolen token is useless
+// with another key) and is revocable. Stored hashed.
+model AgentSession {
+  id          String    @id @default(uuid())
+  tokenHash   String    @unique
+  agentUserId String
+  agentUser   AgentUser @relation(fields: [agentUserId], references: [id], onDelete: Cascade)
+  keyId       String
+  expiresAt   DateTime
+  lastSeenAt  DateTime  @default(now())
+  ip          String?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([agentUserId])
+}
+
+// An agent's request to amend or cancel a CONFIRMED booking (Agent Portal plan A-15): the
+// agent can never change or cancel a confirmed booking directly; the hotel accepts or
+// declines. payload holds what was asked (dates, room type, guests, a note).
+model AgentChangeRequest {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  agentUserId   String
+  // AMEND | CANCEL
+  type          String
+  payload       Json
+  note          String?
+  // PENDING | ACCEPTED | DECLINED
+  status        String      @default("PENDING")
+  decisionNote  String?
+  decidedBy     String?
+  decidedAt     DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([reservationId])
+  @@index([status])
+}
+
+// Idempotent replays for Agent API writes: the same key + Idempotency-Key answers with the
+// same response; the same key used for a different body is a conflict.
+model AgentIdempotency {
+  id             String   @id @default(uuid())
+  keyId          String
+  idempotencyKey String
+  requestHash    String
+  status         Int
+  response       Json
+  createdAt      DateTime @default(now())
+
+  @@unique([keyId, idempotencyKey])
+}
+
+// The commission ledger (Agent Portal plan A-19, Phase 7). One row per reservation and rate
+// plan at check-out: the base (room-charge amounts, without service charge and tax), the
+// rate, the amount (rounded half-up once), the settlement mode and the status:
+//   NETTED   — credited on the agent's City Ledger invoice (AGENT_NET), nothing owed
+//   ACCRUED  — payable to the agent (AGENT_GROSS, GUEST_DIRECT, or AGENT_NET not invoiced)
+//   APPROVED — checked by accounts, ready to pay
+//   PAID     — paid out (payoutId) or offset against the agent's invoices
+//   REVERSED — the check-out was reversed; a PAID row reversed becomes a negative ACCRUED row
+model AgentCommission {
+  id            String    @id @default(uuid())
+  propertyId    String
+  profileId     String
+  reservationId String
+  folioId       String?
+  ratePlanId    String?
+  baseAmount    Float
+  rate          Float
+  amount        Float
+  mode          String
+  status        String    @default("ACCRUED")
+  payoutId      String?
+  payout        AgentCommissionPayout? @relation(fields: [payoutId], references: [id])
+  businessDate  DateTime
+  note          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([propertyId, status])
+  @@index([profileId, status])
+  @@index([reservationId])
+}
+
+// A payout or offset of approved commission to one agent (Agent Portal plan A-19).
+model AgentCommissionPayout {
+  id              String   @id @default(uuid())
+  propertyId      String
+  profileId       String
+  total           Float
+  // BANK_TRANSFER | CASH | CHEQUE | OFFSET (against the agent's open invoices)
+  method          String
+  reference       String?
+  paidAt          DateTime
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  commissions     AgentCommission[]
+
+  @@index([propertyId, profileId])
 }

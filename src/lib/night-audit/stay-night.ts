@@ -85,6 +85,8 @@ export async function postStayNight(
   }: { night: Date; postDate: Date; folioId: string; description?: string; levyNightly?: boolean },
   ctx: StayNightContext
 ): Promise<StayNightResult | null> {
+  // Overflow guests sleep at a partner hotel: no Green Tax here (owner, 2026-11-11, A-8).
+  if ((res as { isOverflow?: boolean }).isOverflow) levyNightly = false
   // The segment that covers THIS night. A split stay can price each segment on its own room
   // type and rate plan, so "the latest segment" (assignments[0], newest start first) is only
   // right for tonight on the last segment — an earlier night must use its own. A night no

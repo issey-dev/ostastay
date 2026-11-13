@@ -29,7 +29,7 @@ export async function GET(request: Request) {
           : [];
         break;
       case "travelAgents":
-        options = (await prisma.profile.findMany({ where: { enterpriseId: ctx.enterpriseId, profileType: { in: ["TRAVEL_AGENT", "COMPANY"] } }, select: { upid: true, companyName: true, firstName: true }, orderBy: { companyName: "asc" }, take: 500 })).map((p) => ({ label: p.companyName ?? p.firstName, value: p.upid }));
+        options = (await prisma.profile.findMany({ where: { enterpriseId: ctx.enterpriseId, profileType: { in: ["TRAVEL_AGENT", "SOURCE", "COMPANY"] } }, select: { upid: true, companyName: true, firstName: true }, orderBy: { companyName: "asc" }, take: 500 })).map((p) => ({ label: p.companyName ?? p.firstName, value: p.upid }));
         break;
       case "chargeCategories":
         // Driven by the report's property's own ChargeGroups (deduped by reporting

@@ -23,6 +23,7 @@ rules that still bind, where the code is.
 
 | Section | Released | Was |
 |---|---|---|
+| [Agent Portal and Agent API](#agent-portal-and-agent-api--20261113-1952) | 9.0.1 to 9.9.0 | `AGENT_PORTAL_PLAN.md` |
 | [Mobile polish](#mobile-polish--20261109-0945) | 8.2.0, phone pass 8.13.x | `MOBILE_PLAN.md` |
 | [Hub level and Channel Manager](#hub-level-and-channel-manager-beds24--20261014-1204) | 2026-07-28, own account 8.8.4 | `HUB_CHANNEL_MANAGER_PLAN.md` |
 | [Hub setup: Enterprise and Property](#hub-setup-enterprise-and-property--20261014-1204) | 7.0.0, 8.4.2 | `HUB_SETUP_PLAN.md` |
@@ -42,6 +43,74 @@ rules that still bind, where the code is.
 | [Profiles redesign](#profiles-redesign--20260720-2339) | 2026-07-20 | `PROFILES_REDESIGN_PLAN.md` |
 | [Allocations](#allocations--20260719-2204) | 2026-07-19 | `ALLOCATIONS_PLAN.md` |
 | [Multi-tenancy and RBAC retrofit](#multi-tenancy-and-rbac-retrofit--20260719-1239) | 2026-07-18 | `MASTER_PLAN.md` |
+
+---
+
+## Agent Portal and Agent API — 2026/11/13 19:52
+
+Was: `AGENT_PORTAL_PLAN.md` (full text in git history: `git log -- .agents/docs/AGENT_PORTAL_PLAN.md`).
+Code comments cite "Agent Portal plan A-n", "§n" or "Phase n": that
+plan. Released 9.0.1 to 9.9.0 (2026-11-12 to 2026-11-13), one commit per phase.
+
+**What it was.** Let travel agents (Sources) work with the hotel through a separate agent
+website that only talks to a new Agent API, while making as few PMS changes as possible. On the
+way it fixed permissions (every route gated), added capabilities, a Tentative status, sell
+limits and overflow, Source profiles and Tape Chart markers, slots on Group Blocks, commission,
+and group billing.
+
+**What shipped, by phase**
+
+| Phase | Version | Where the code is |
+|---|---|---|
+| 0a. Permission enforcement | 9.0.1 | `requireAnyPermission` in `src/lib/scope.ts`, `MODULE_ACTION_MEANINGS` in `src/lib/modules.ts`, `tests/business-rules/route-permission-coverage.test.ts` |
+| 0b. Capabilities, Suppress rates | 9.0.2 | `RoleCapability`, `src/lib/capabilities.ts`, `src/lib/figures.ts` (`figuresJson`), `role-access-editor.tsx` |
+| 1. Tentative and options | 9.1.0 | `src/lib/reservations/options.ts`, `option-expiry` job, last-room advisory lock in `createReservation` |
+| 2. Sell limit, overflow | 9.2.0 | `src/lib/availability-sell-limit.ts`, `src/lib/reservations/overflow.ts` (`OVF` pseudo type) |
+| 3. Sources and markers | 9.3.0 | `SOURCE` profile type, `Reservation.sourceProfileId`, `src/lib/booking-markers*.ts`, `marker-picker.tsx`, `SearchableSelect` `onCreate` + `quick-profile-dialog.tsx` |
+| 4. Blocks for Sources | 9.4.0 | `src/lib/groups/{slot-requests,pickup,release}.ts`, `REQUESTED` / `DECLINED` block statuses, `group-block-release` job, `RatePlan.agentSalesOpenAt` |
+| 5. Agent API read side | 9.5.0 | `AgentUser` / `AgentSession`, `src/lib/agent-api/{auth,http,catalogue}.ts`, `AGENT` key scope, `source-details-card.tsx` |
+| 6. Slots and bookings | 9.6.0 | `src/lib/agent-api/{bookings,events,idempotency,confirmation-pdf}.ts`, `AgentChangeRequest`, `AgentIdempotency`, `agent-requests-panel.tsx` |
+| 7. Settlement | 9.7.0 | `Reservation.settlementMode`, `src/lib/commission-ledger.ts`, `AgentCommission` / `AgentCommissionPayout`, Debtors › Commissions |
+| 8. Group billing | 9.8.0 | Advance Folio (renamed from Advance Bill) and its same-day reversal, `/api/groups/{id}/{advance-folio,documents,rooming-list}`, `src/lib/groups/group-statement-pdf.ts`, `group-billing-panel.tsx` |
+| 9. Go-live | 9.9.0 | Agent portal tile and alerts on platform Monitoring (`src/lib/agent-api/monitoring.ts`), race and abuse tests, Operations guide "Working with agents" with the go-live checklist |
+
+The agent website mockup stays on the owner's machine (`agent-portal/`, excluded through
+`.git/info/exclude`); the real one is built against the API in its own repository.
+
+**Rules that still bind**
+
+- *A-1, A-2.* The Agent API is `/api/agent/v1/**`, its own surface. Every route goes through
+  `agentRoute`; none calls `requireSession` (the route coverage test enforces it). The portal
+  holds no business rule.
+- *A-3.* Two layers: a server-only `WebsiteApiKey` with scope `AGENT` (a key with browser
+  origins is refused the scope) plus an `X-Agent-Token` agent session bound to that key. Ten
+  wrong passwords lock a login for 15 minutes; logins are rate limited per account and IP.
+- *A-4.* An agent sees only their own Source's world; another agent's booking or slot answers
+  404, never 403.
+- *A-5, A-6, A-14.* `TENTATIVE` is a real status that holds inventory until its option date,
+  then releases itself. "Confirmed" is `RESERVED`. Confirming, extending and releasing go
+  through `options.ts`.
+- *A-7, A-12.* A slot is a `GroupBlock` with `sourceProfileId`. A request holds nothing until
+  approved. Cutoff, rolling release, quota checkpoints and elasticity live on the block. Desk
+  and agent pickups both go through `pickupIntoBlock`.
+- *A-8.* Overflow uses the `OVF` pseudo type, never `PM` (Night Audit posts nothing for the
+  Posting Master).
+- *A-9, A-10.* Agents see their own slots exactly and the house capped. The sell limit caps the
+  desk too; only the manager's override passes it; agents never sell into it.
+- *A-13, A-15.* Confirmation is the hotel's manual decision. Nothing is deleted through the
+  API. A confirmed booking changes only through an accepted change request.
+- *Negotiated lock-in (DECISIONS 2026-11-13).* A profile linked to negotiated rates books only
+  those rates, at the desk and in the portal.
+- *A-18 to A-20.* Settlement mode is recorded per booking. Commission is on the room rate net
+  of service charge and tax, rounded once, nothing on extras, in the `AgentCommission` ledger.
+  Reversing a check-out reverses it.
+- *A-22.* Markers are ordered rules with icons from the app's set and the twelve-token palette.
+- *A-23.* An advance deposit posts no revenue. An Advance Folio posts every remaining night on
+  one date, for in-house guests only, to the folio they bill to; it can be reversed on the same
+  business date only.
+- *A-24.* No Agents module: per agent the hotel creates the Source profile and adds a login.
+
+Open items moved to [TODO.md](TODO.md).
 
 ---
 

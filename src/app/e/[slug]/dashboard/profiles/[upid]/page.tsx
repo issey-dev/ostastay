@@ -1,6 +1,9 @@
 "use client"
 
 import { Suspense, useEffect, useState, use } from "react"
+import { SourceDetailsCard, PortalLoginsCard } from "@/components/profiles/source-details-card"
+import { SourceSlotsCard } from "@/components/profiles/source-slots-card"
+import { toast } from "@/lib/toast"
 import { useUrlState } from "@/lib/use-url-state"
 import { useRouter, useParams } from "next/navigation"
 import { useSmartBack } from "@/lib/use-smart-back"
@@ -27,7 +30,7 @@ import { cn } from "@/lib/utils"
 import { greenTaxExemptReason, EXEMPT_REASON_LABELS } from "@/lib/green-tax-exemption"
 
 const PROFILE_TYPE_LABELS: Record<string, string> = {
-  GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel agent", STAFF: "Staff",
+  GUEST: "Guest", COMPANY: "Company", TRAVEL_AGENT: "Travel agent", SOURCE: "Source", STAFF: "Staff",
 }
 const COMM_TYPE_LABELS: Record<string, string> = { EMAIL: "Email", MOBILE: "Mobile", SOCIAL: "Social" }
 const ADDRESS_TYPE_LABELS: Record<string, string> = { HOME: "Home", BUSINESS: "Business", BILLING: "Billing" }
@@ -196,6 +199,18 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
       .finally(() => setLoading(false))
   }, [upid])
 
+  // Agent Portal plan Phase 3: a travel agent becomes a Source (portal logins, slots, marker).
+  const convertToSource = async () => {
+    const res = await fetch(`/api/profiles/${upid}/convert-to-source`, { method: "POST" })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error || "Couldn't convert the profile. Try again.")
+      return
+    }
+    toast.success("Converted to a source")
+    setProfile((p: typeof profile) => (p ? { ...p, ...data } : p))
+  }
+
   useEffect(() => {
     fetch(`/api/profiles/${upid}/negotiated-rates`)
       .then((r) => r.json())
@@ -231,7 +246,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
     if (!t || t !== code || t !== t.toUpperCase()) return t
     return t.charAt(0) + t.slice(1).toLowerCase()
   }
-  const isB2B = profile.profileType === "COMPANY" || profile.profileType === "TRAVEL_AGENT"
+  const isB2B = profile.profileType === "COMPANY" || (profile.profileType === "TRAVEL_AGENT" || profile.profileType === "SOURCE")
   const isIndividual = !isB2B
   const displayName = isB2B
     ? profile.companyName || `${profile.firstName} ${profile.lastName ?? ""}`.trim()
@@ -358,6 +373,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
                     <Pencil className="mr-2 h-4 w-4" /> Edit
                   </Button>
                 }
+                more={profile.profileType === "TRAVEL_AGENT" ? [{ label: "Convert to source", onSelect: convertToSource }] : undefined}
               />
             }
           />
@@ -451,6 +467,12 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
         {/* ---------------- OVERVIEW ---------------- */}
         <TabsContent value="overview" className="mt-4">
           <div className="flex flex-col gap-4">
+              {profile.profileType === "SOURCE" && (
+                <>
+                  <SourceDetailsCard profile={profile} editHref={editHref} />
+                  <PortalLoginsCard upid={upid} />
+                </>
+              )}
               <Section
                 id="personal-info"
                 icon={User}
@@ -601,6 +623,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
             <Card><CardContent><InlineLoading lines={4} /></CardContent></Card>
           ) : (
             <div className="flex flex-col gap-4">
+              {profile.profileType === "SOURCE" && <SourceSlotsCard upid={upid} slug={slug} />}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-4 w-4 text-muted-foreground" /> Upcoming and in house</CardTitle>

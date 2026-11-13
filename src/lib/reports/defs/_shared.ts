@@ -6,7 +6,7 @@ export function guestName(
   p: { firstName: string; lastName: string | null; companyName: string | null; profileType: string } | null
 ): string {
   if (!p) return "—";
-  if (p.profileType === "COMPANY" || p.profileType === "TRAVEL_AGENT") return p.companyName ?? "—";
+  if (p.profileType === "COMPANY" || (p.profileType === "TRAVEL_AGENT" || p.profileType === "SOURCE")) return p.companyName ?? "—";
   return `${p.firstName} ${p.lastName ?? ""}`.trim();
 }
 

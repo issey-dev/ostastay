@@ -163,13 +163,27 @@ export function gateBookingConflicts(opts: {
   overrideStopSale?: boolean;
   acknowledgeOverbook?: boolean;
   canOverrideStopSale: boolean;
+  /** The "Overbook a room type" capability (src/lib/capabilities.ts). Default true so a
+   *  caller that predates capabilities keeps today's behaviour. */
+  canOverbook?: boolean;
 }): ConflictGate | null {
+  const canOverbook = opts.canOverbook !== false;
   const needStop = opts.stopSale.length > 0 && !(opts.overrideStopSale && opts.canOverrideStopSale);
-  const needOver = opts.availability.length > 0 && !opts.acknowledgeOverbook;
+  const needOver = opts.availability.length > 0 && !(opts.acknowledgeOverbook && canOverbook);
   if (!needStop && !needOver) return null;
 
   const stopSaleMessage = needStop ? opts.stopSale.join("; ") : undefined;
   const overbookMessage = needOver ? opts.availability.join("; ") : undefined;
+
+  if (needOver && !canOverbook) {
+    return {
+      error: `${overbookMessage}. Your role does not allow overbooking.`,
+      requiresStopSaleOverride: false,
+      requiresOverbookConfirm: false,
+      stopSaleMessage,
+      overbookMessage,
+    };
+  }
 
   if (needStop && !opts.canOverrideStopSale) {
     // Nothing the user can confirm their way past — just say so.

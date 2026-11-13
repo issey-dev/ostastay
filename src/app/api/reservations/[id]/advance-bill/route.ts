@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { postReservationTransportNow } from "@/lib/transport/billing";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
-import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, requireCapability } from "@/lib/scope";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { computeReservationQuote } from "@/lib/reservation-quote-server";
 import { reservationGreenTaxBasis } from "@/lib/green-tax-basis";
@@ -31,6 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const ctx = await requireSession();
     requirePermission(ctx, "CASHIERING", "update");
+    requireCapability(ctx, "billing.advanceFolio");
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -52,7 +53,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (reservation.status !== "IN_HOUSE") {
       return NextResponse.json({ error: "Advance billing is available only for an in-house guest." }, { status: 400 });
     }
-    const folio = reservation.folios[0];
+    // A group pickup billed to the block's master posts there, the same folio Night Audit
+    // would route the nights to (Agent Portal plan A-23: "each to the folio its routing names").
+    const master = reservation.groupBlockId && reservation.groupBillToMaster
+      ? await prisma.folio.findFirst({ where: { groupBlockId: reservation.groupBlockId, isMaster: true, isClosed: false }, orderBy: { folioNumber: "asc" } })
+      : null;
+    const folio = master ?? reservation.folios[0];
     if (!folio) {
       return NextResponse.json({ error: "This reservation has no open folio to post to." }, { status: 400 });
     }
@@ -167,7 +173,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // preventing the same nights being billed twice.
       const claimed = await tx.reservation.updateMany({
         where: { id, advanceBilledThrough: reservation.advanceBilledThrough },
-        data: { advanceBilledThrough: lastNight },
+        // Remember what a same-day reversal needs (Agent Portal plan A-23).
+        data: {
+          advanceBilledThrough: lastNight,
+          advanceFolioDate: businessDate,
+          advanceFolioPrevThrough: reservation.advanceBilledThrough,
+          advanceFolioFolioId: folio.id,
+          advanceFolioCheckNo: null,
+        },
       });
       if (claimed.count === 0) throw new AdvanceBillConflict();
 
@@ -320,11 +333,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // (advanceBilledThrough was already set atomically by the claim above, so Night
       // Audit skips these nights — no second write needed here.)
 
+      if (stayCheckNo) await tx.reservation.update({ where: { id }, data: { advanceFolioCheckNo: stayCheckNo } });
+
       const user = await tx.user.findUnique({ where: { id: ctx.userId } });
       await tx.reservationTrace.create({
         data: {
           reservationId: id, traceType: "FRONT_DESK",
-          description: `Advance bill by ${user ? `${user.firstName} ${user.lastName}` : ctx.userId} — ${nights} night(s), $${amountPosted.toFixed(2)} posted upfront (billed through ${lastNight.toISOString().slice(0, 10)}).`,
+          description: `Advance Folio by ${user ? `${user.firstName} ${user.lastName}` : ctx.userId} — ${nights} night(s), $${amountPosted.toFixed(2)} posted upfront (billed through ${lastNight.toISOString().slice(0, 10)}).`,
           actionDate: new Date(), isResolved: true,
         },
       });

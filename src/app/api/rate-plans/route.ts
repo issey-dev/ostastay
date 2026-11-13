@@ -139,6 +139,10 @@ export async function POST(request: Request) {
         description: body.description,
         priority: parsePriority(body.priority),
         isNegotiated: !!body.isNegotiated,
+        agentSalesOpenAt:
+          typeof body.agentSalesOpenAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.agentSalesOpenAt)
+            ? new Date(`${body.agentSalesOpenAt}T00:00:00Z`)
+            : null,
         isComplimentary: !!body.isComplimentary,
         isHouseUse: !!body.isHouseUse,
         chargeCodeId,

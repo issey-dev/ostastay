@@ -9,6 +9,10 @@ function assertTransportServerOnly(scopes: readonly string[], origins: readonly 
   if (scopes.includes("TRANSPORT") && origins.length > 0) {
     throw new ForbiddenError("Transportation needs a server-to-server key — remove the browser origins, or use a separate key for it");
   }
+  // The agent portal signs agents in and sees commercial terms: never from a browser key.
+  if (scopes.includes("AGENT") && origins.length > 0) {
+    throw new ForbiddenError("The agent portal needs a server-to-server key — remove the browser origins, or use a separate key for it");
+  }
 }
 
 // Hub-side management of Website API keys — list, mint, edit, rotate, revoke. Every

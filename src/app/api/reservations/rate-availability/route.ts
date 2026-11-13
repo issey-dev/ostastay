@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { expireOptionsSoon } from "@/lib/reservations/options";
+import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
-import { requireSession, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
+import { requireSession, requireAnyPermission, assertPropertyAccess, toErrorResponse } from "@/lib/scope";
 import { applyRateAdjustment } from "@/lib/derived-rate";
 import { INVENTORY_HOLDING_STATUSES, UNSELLABLE_ROOM_STATUSES } from "@/lib/availability";
 
@@ -27,6 +29,7 @@ const dayStartMs = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.
 export async function GET(request: Request) {
   try {
     const ctx = await requireSession();
+    requireAnyPermission(ctx, [["RESERVATIONS", "view"], ["FRONT_DESK", "view"]]);
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
     const startDateStr = searchParams.get("startDate");
@@ -41,6 +44,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "propertyId, startDate and endDate are required" }, { status: 400 });
     }
     await assertPropertyAccess(ctx, propertyId);
+    await expireOptionsSoon(propertyId);
 
     const start = new Date(startDateStr);
     const end = new Date(endDateStr);
@@ -174,7 +178,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({
+    return figuresJson(ctx, {
       nights,
       roomTypes: roomTypes.map((rt) => ({
         id: rt.id,

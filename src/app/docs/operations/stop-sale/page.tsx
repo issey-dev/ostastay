@@ -79,6 +79,34 @@ export default function StopSale() {
         Group pickup still refuses a closed date without an override. If you need to pick up a group on a closed night, lift the stop
         sale first.
       </p>
+      <H2>Sell limit: capping overbooking</H2>
+      <p>
+        Overbooking is a desk decision, and a <strong>sell limit</strong> caps how far it can go on a night: &ldquo;Deluxe may be
+        sold 2 rooms past capacity on 24 December&rdquo;, or &ldquo;the whole house 3 past&rdquo;. Choose <strong>Sell limit</strong>{" "}
+        above the Availability grid (or click a night in a room type&rsquo;s <strong>Sell limit</strong> line), pick the room type or
+        Whole house, the nights and the number. Leave the number empty to remove the limit.
+      </p>
+      <ul>
+        <li>A night with no limit works as before: an acknowledged overbook is not capped.</li>
+        <li>Past the limit, only a role with the option <strong>Exceed the sell limit</strong> can still book (managers by default).</li>
+        <li>Lowering a limit below what is already sold cancels nothing; the night shows as oversold and further sales are refused.</li>
+        <li>Channels, the booking website and agents never oversell, with or without a limit.</li>
+      </ul>
+      <p>
+        Expand a room type on the grid to see the new lines: <strong>On option</strong> (tentative bookings, already in Occupancy),{" "}
+        <strong>Allotted (tentative)</strong> (rooms still held in tentative group blocks, not taken off Available) and{" "}
+        <strong>Sell limit</strong>. A night sold past capacity shows its Available number in red, with the limit beside it.
+      </p>
+
+      <H2>Overflow: guests at a partner hotel</H2>
+      <p>
+        When the house is full, a booking can be placed at a partner hotel. On the reservation choose{" "}
+        <strong>Place at a partner hotel</strong>, name the hotel and add a note. The booking moves to the <strong>Overflow</strong>{" "}
+        room type: it is charged as usual, gets no Green Tax and no registration number here, and is not counted in occupancy. It
+        shows an <strong>Overflow</strong> badge in the lists and an Overflow line on the Availability grid. When a room frees up,
+        pick a room type and choose <strong>Move to room type</strong> to bring the guest in. The property can cap how many overflow
+        bookings it accepts a night. The <strong>Overflow Bookings</strong> report lists them by partner hotel.
+      </p>
       <Pager href="/docs/operations/stop-sale" />
     </>
   )

@@ -89,7 +89,7 @@ export async function planAutoAssign(propertyId: string): Promise<{ proposals: A
   for (const res of reservations) {
     const g = res.primaryGuest;
     const guestName =
-      g.profileType === "COMPANY" || g.profileType === "TRAVEL_AGENT" ? g.companyName || "" : [g.firstName, g.lastName].filter(Boolean).join(" ");
+      g.profileType === "COMPANY" || (g.profileType === "TRAVEL_AGENT" || g.profileType === "SOURCE") ? g.companyName || "" : [g.firstName, g.lastName].filter(Boolean).join(" ");
     for (const a of res.assignments) {
       const candidates = roomsOfType.get(a.roomTypeId) ?? [];
       const room = candidates.find((c) => !(busy.get(c.id) ?? []).some((b) => overlaps(b.start, b.end, a.startDate, a.endDate)));

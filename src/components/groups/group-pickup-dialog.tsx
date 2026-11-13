@@ -47,6 +47,8 @@ const pickupSchema = z
     checkInDate: z.string().min(1, "Pick a check-in date"),
     checkOutDate: z.string().min(1, "Pick a check-out date"),
     billToMaster: z.boolean(),
+    // Tentative pickup: held on option until the block's cutoff (Agent Portal plan Phase 4).
+    tentative: z.boolean(),
   })
   .superRefine((v, ctx) => {
     if (v.checkInDate && v.checkOutDate && v.checkOutDate <= v.checkInDate) {
@@ -66,6 +68,7 @@ const pickupDefaults: PickupValues = {
   checkOutDate: "",
   // Group pickups bill the block's master folio by default; staff can opt a guest out.
   billToMaster: true,
+  tentative: false,
 }
 
 // Always sent with these values (the dialog has no inputs for them) — same payload as before.
@@ -123,14 +126,14 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
 
   const onSubmit = async (values: PickupValues) => {
     setLoading(true)
-    const { billToMaster: bill, ...fields } = values
+    const { billToMaster: bill, tentative, ...fields } = values
     // Overbooking is allowed with confirmation (409 + requiresOverbookConfirm on the
     // first try, then resend with acknowledgeOverbook).
     const send = async (acknowledgeOverbook: boolean) => {
       const res = await fetch(`/api/groups/${groupId}/pickup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...fields, ...FIXED_FIELDS, billToMaster: bill, acknowledgeOverbook })
+        body: JSON.stringify({ ...fields, ...FIXED_FIELDS, billToMaster: bill, acknowledgeOverbook, status: tentative ? "TENTATIVE" : "RESERVED" })
       })
       if (res.ok) {
         form.reset(pickupDefaults)
@@ -333,6 +336,20 @@ export function GroupPickupDialog({ groupId, onSaved, disabledReason, blockStart
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       {billToMaster ? "Charges route to the block's master folio." : "This guest settles their own folio."}
                     </p>
+                  </div>
+                  <Switch checked={field.value} onCheckedChange={(checked) => field.onChange(!!checked)} />
+                </div>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tentative"
+              render={({ field }) => (
+                <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <div className="pr-3">
+                    <Label className="text-sm">Tentative</Label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Held on option until the block&rsquo;s cutoff; confirm it when it is paid or contracted.</p>
                   </div>
                   <Switch checked={field.value} onCheckedChange={(checked) => field.onChange(!!checked)} />
                 </div>

@@ -8,6 +8,7 @@ import { getFeeRuleById, computeReservationFee } from "@/lib/fee-rules";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 import { postCharge, chargeCodeInclude } from "@/lib/posting/post-charge";
 import { logActivity } from "@/lib/activity-log";
+import { confirmTentative, reinstateAsTentative, OptionError } from "@/lib/reservations/options";
 import { toCents, fromCents, subMoney } from "@/lib/money";
 
 // The reservation lifecycle is a guarded state machine, not a free-text field.
@@ -16,10 +17,14 @@ import { toCents, fromCents, subMoney } from "@/lib/money";
 // handles the transitions that don't move money on their own. Jumping straight to
 // CHECKED_OUT here would bypass the entire settlement flow, so it's never allowed.
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  // Agent Portal plan §5.2: a tentative booking is confirmed (→ RESERVED) or cancelled;
+  // RESERVED never goes back to TENTATIVE. Confirming goes through confirmTentative()
+  // (one conditional update, so it cannot race the option-expiry job).
+  TENTATIVE: ["RESERVED", "CANCELLED"],
   RESERVED: ["CANCELLED", "NO_SHOW"],
   IN_HOUSE: [], // must go through /check-out
   NO_SHOW: ["RESERVED", "CANCELLED"], // late arrival / cleanup
-  CANCELLED: ["RESERVED"], // reinstate
+  CANCELLED: ["RESERVED", "TENTATIVE"], // reinstate (TENTATIVE: a released option, fresh option date)
   CHECKED_OUT: [], // terminal
 };
 
@@ -68,6 +73,15 @@ export async function PATCH(
 
     if (body.status === existing.status) {
       return NextResponse.json(existing); // no-op
+    }
+
+    // Tentative transitions with their own rules live in src/lib/reservations/options.ts.
+    if (existing.status === "TENTATIVE" && body.status === "RESERVED") {
+      const confirmed = await confirmTentative(ctx, id, typeof body.note === "string" ? body.note : null);
+      return NextResponse.json(confirmed);
+    }
+    if (existing.status === "CANCELLED" && body.status === "TENTATIVE") {
+      return NextResponse.json(await reinstateAsTentative(ctx, id));
     }
 
     const allowed = ALLOWED_TRANSITIONS[existing.status] ?? [];
@@ -171,6 +185,8 @@ export async function PATCH(
     const statusData: Record<string, unknown> = { status: body.status };
     if (body.status === "CANCELLED") {
       statusData.cancelledAt = now;
+      statusData.cancellationReasonCode =
+        typeof body.reasonCode === "string" && body.reasonCode.trim() ? body.reasonCode.trim() : "HOTEL_CANCELLED";
       statusData.cancellationReason =
         typeof body.reason === "string" && body.reason.trim() ? body.reason.trim()
         : typeof body.cancellationReason === "string" && body.cancellationReason.trim() ? body.cancellationReason.trim()
@@ -180,6 +196,8 @@ export async function PATCH(
     } else if (body.status === "RESERVED") {
       statusData.cancelledAt = null;
       statusData.cancellationReason = null;
+      statusData.cancellationReasonCode = null;
+      statusData.optionDate = null;
       statusData.noShowAt = null;
     }
 
@@ -288,6 +306,9 @@ export async function PATCH(
 
     return NextResponse.json({ ...updatedReservation, ...(cancellationFeeInfo ? { cancellationFee: cancellationFeeInfo } : {}) });
   } catch (error) {
+    if (error instanceof OptionError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     const { status, body } = toErrorResponse(error);
     return NextResponse.json(body, { status });
   }

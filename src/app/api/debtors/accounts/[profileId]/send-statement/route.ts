@@ -137,7 +137,7 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const ctx = await requireSession();
-    requirePermission(ctx, "DEBTORS", "view");
+    requirePermission(ctx, "DEBTORS", "update");
 
     const { profileId } = await params;
     const body = await request.json();

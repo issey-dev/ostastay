@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input"
 import { NumberStepper } from "@/components/ui/number-stepper"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
+import { Switch } from "@/components/ui/switch"
 import { format, addDays, parseISO } from "date-fns"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -32,6 +33,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { allocationStayTotal, ratePlanAllocationWindows, type AllocationLike, type DateWindow } from "@/lib/allocations"
 import { GuestPickerModal, type GuestProfile } from "@/components/reservations/guest-picker-modal"
+import { QuickProfileDialog, type QuickProfileType } from "@/components/profiles/quick-profile-dialog"
+import { usePermissions } from "@/hooks/use-permissions"
 import { bookingFormSchema, emptyBookingValues, emptySegment, type BookingFormValues, type SegmentValues } from "@/components/reservations/booking-form-schema"
 import { LookToBookGrid, type GridData } from "@/components/reservations/look-to-book-grid"
 import { LookToBookCards } from "@/components/reservations/look-to-book-cards"
@@ -54,6 +57,7 @@ type ReservationDetail = {
   mealPlan: string
   primaryGuestId: string
   travelAgentId: string | null
+  sourceProfileId?: string | null
   groupBlockId: string | null
   depositFeeRuleId: string | null
   cancellationFeeRuleId: string | null
@@ -143,6 +147,10 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
   const [existingConfirmationNo, setExistingConfirmationNo] = useState<string | null>(null)
 
   const [profiles, setProfiles] = useState<any[]>([])
+  // "Create “…”" in the profile pickers (Agent Portal plan A-21a).
+  const { can } = usePermissions()
+  const canCreateProfiles = can("PROFILES", "create")
+  const [quickCreate, setQuickCreate] = useState<null | { type: QuickProfileType; name: string; field: "travelAgentId" | "sourceProfileId" }>(null)
   const [roomTypes, setRoomTypes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
   const [ratePlans, setRatePlans] = useState<any[]>([])
@@ -177,6 +185,17 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     isSubmitted || keys.some((k) => touched[k]) ? message : undefined
   const setField = <K extends Path<BookingFormValues>>(name: K, value: PathValue<BookingFormValues, K>) =>
     formCtl.setValue(name, value, { shouldValidate: true, shouldDirty: true })
+
+  // A reservation in a block takes the block's Travel Agent / Company and Source, locked
+  // (owner, 2026-11-13). The server enforces the same.
+  const block = groupBlocks.find((g) => g.id === form.groupBlockId)
+  const blockTa: string | null = block?.travelAgentId ?? null
+  const blockSource: string | null = block?.sourceProfileId ?? null
+  useEffect(() => {
+    if (blockTa && form.travelAgentId !== blockTa) setField("travelAgentId", blockTa)
+    if (blockSource && form.sourceProfileId !== blockSource) setField("sourceProfileId", blockSource)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockTa, blockSource, form.travelAgentId, form.sourceProfileId])
 
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0)
   const [guestPickerOpen, setGuestPickerOpen] = useState<null | "primary" | "accompanying">(null)
@@ -234,6 +253,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           remarks: res.remarks || "",
           mealPlan: res.mealPlan || "NONE",
           travelAgentId: res.travelAgentId || "none",
+          sourceProfileId: res.sourceProfileId || "none",
           groupBlockId: res.groupBlockId || "none",
           depositFeeRuleId: res.depositFeeRuleId || "none",
           cancellationFeeRuleId: res.cancellationFeeRuleId || "none",
@@ -242,6 +262,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           manualAllocationIds: res.allocations?.filter(a => a.source === "MANUAL").map(a => a.allocationId) || [],
           specialRequestCodes: res.specialRequests?.map(sr => sr.code) || [],
           acknowledgeOverCapacity: false,
+          bookAsTentative: false,
+          optionDate: "",
           assignments: res.assignments && res.assignments.length > 0 ? res.assignments.map(a => ({
             roomTypeId: a.roomTypeId,
             roomId: a.roomId || "none",
@@ -428,10 +450,15 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
     updateAssignment(i, { roomTypeId, ratePlanId, roomId: "none" })
   }
 
-  const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp =>
-    !rp.isNegotiated ||
-    (form.travelAgentId !== "none" && rp.negotiatedForProfileIds.includes(form.travelAgentId))
-  )
+  const unlocks = (ids?: string[]) =>
+    (form.travelAgentId !== "none" && !!ids?.includes(form.travelAgentId)) ||
+    (form.sourceProfileId !== "none" && !!ids?.includes(form.sourceProfileId))
+  // Lock-in (DECISIONS, owner 2026-11-13): a party linked to negotiated plans here may use
+  // only those, so the other plans disappear from the grid and the plan pickers.
+  const lockedToNegotiated = ratePlans.some(rp => rp.isNegotiated && unlocks(rp.negotiatedForProfileIds))
+  const planAllowed = (rp: { isNegotiated?: boolean; negotiatedForProfileIds?: string[] }) =>
+    lockedToNegotiated ? !!rp.isNegotiated && unlocks(rp.negotiatedForProfileIds) : !rp.isNegotiated || unlocks(rp.negotiatedForProfileIds)
+  const visibleGridRatePlans = (gridData?.ratePlans ?? []).filter(rp => planAllowed(rp))
 
   // Occupancy beyond a room type's baseOccupancy is normal and just incurs an
   // extra-person charge if one is configured (shown as "Extra occupancy" in the
@@ -515,10 +542,12 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
         checkInDate: minDate.toISOString(),
         checkOutDate: maxDate.toISOString(),
         travelAgentId: values.travelAgentId === "none" ? null : values.travelAgentId,
+        sourceProfileId: values.sourceProfileId === "none" ? null : values.sourceProfileId,
         groupBlockId: values.groupBlockId === "none" ? null : values.groupBlockId,
         depositFeeRuleId: values.depositFeeRuleId === "none" ? null : values.depositFeeRuleId,
         cancellationFeeRuleId: values.cancellationFeeRuleId === "none" ? null : values.cancellationFeeRuleId,
         noShowFeeRuleId: values.noShowFeeRuleId === "none" ? null : values.noShowFeeRuleId,
+        ...(!isEditMode && values.bookAsTentative ? { status: "TENTATIVE", optionDate: values.optionDate || null } : {}),
         assignments: values.assignments.map(a => ({
           roomTypeId: a.roomTypeId,
           roomId: a.roomId && a.roomId !== "none" ? a.roomId : null,
@@ -765,7 +794,8 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
               </div>
               <div className="grid content-start gap-2">
                 <Label className="flex items-center gap-2">
-                  Booking source / travel agent (optional)
+                  Travel agent / company (optional)
+                  {blockTa && <StatusBadge label="from the group block" tone="neutral" />}
                   {ratePlans.some(rp => rp.isNegotiated && form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)) && (
                     <StatusBadge label="unlocks negotiated rates" tone="warning" />
                   )}
@@ -773,7 +803,9 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                 <SearchableSelect
                   value={form.travelAgentId}
                   onChange={(v) => setField("travelAgentId", v)}
+                  disabled={!!blockTa}
                   placeholder="Select travel agent..."
+                  onCreate={canCreateProfiles && !blockTa ? (text) => setQuickCreate({ type: "TRAVEL_AGENT", name: text, field: "travelAgentId" }) : undefined}
                   options={[
                     { value: "none", label: "Direct booking (none)" },
                     ...profiles.filter(p => p.profileType === 'TRAVEL_AGENT' || p.profileType === 'COMPANY').map(prof => ({
@@ -783,6 +815,41 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                   ]}
                 />
               </div>
+              {/* Source (Agent Portal plan A-21): who the booking came from as a commercial
+                  party, beside the Travel Agent; both can be set. */}
+              <div className="grid content-start gap-2">
+                <Label className="flex items-center gap-2">
+                  Source (optional)
+                  {blockSource && <StatusBadge label="from the group block" tone="neutral" />}
+                  {ratePlans.some(rp => rp.isNegotiated && form.sourceProfileId !== "none" && rp.negotiatedForProfileIds?.includes(form.sourceProfileId)) && (
+                    <StatusBadge label="unlocks negotiated rates" tone="warning" />
+                  )}
+                </Label>
+                <SearchableSelect
+                  value={form.sourceProfileId}
+                  onChange={(v) => setField("sourceProfileId", v)}
+                  disabled={!!blockSource}
+                  placeholder="Select source..."
+                  onCreate={canCreateProfiles && !blockSource ? (text) => setQuickCreate({ type: "SOURCE", name: text, field: "sourceProfileId" }) : undefined}
+                  options={[
+                    { value: "none", label: "No source" },
+                    ...profiles.filter(p => p.profileType === 'SOURCE' && p.isActive !== false).map(prof => ({
+                      value: prof.upid,
+                      label: prof.companyName || `${prof.firstName} ${prof.lastName ?? ""}`.trim()
+                    }))
+                  ]}
+                />
+              </div>
+              <QuickProfileDialog
+                open={!!quickCreate}
+                type={quickCreate?.type ?? "SOURCE"}
+                initialName={quickCreate?.name ?? ""}
+                onClose={() => setQuickCreate(null)}
+                onCreated={(p) => {
+                  setProfiles(prev => [...prev, p])
+                  if (quickCreate) setField(quickCreate.field, p.upid)
+                }}
+              />
               {phoneFolded("group", form.groupBlockId !== "none") && (
                 <PhoneReveal label="Part of a group block?" onClick={() => showOnPhone("group")} />
               )}
@@ -895,7 +962,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                           onChange={(v) => { touch(`seg-${index}`); updateAssignment(index, { ratePlanId: v }) }}
                           placeholder="Select rate plan"
                           options={ratePlans
-                            .filter(rp => rp.id === assignment.ratePlanId || !rp.isNegotiated || (form.travelAgentId !== "none" && rp.negotiatedForProfileIds?.includes(form.travelAgentId)))
+                            .filter(rp => rp.id === assignment.ratePlanId || planAllowed(rp))
                             .map(rp => ({ value: rp.id, label: `${rp.name} (${rp.code})` }))}
                         />
                       </div>
@@ -1153,7 +1220,7 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                     {form.accompanyingGuestIds.map(gid => {
                       const prof = profiles.find(p => p.upid === gid)
                       if (!prof) return null;
-                      const name = prof.profileType === 'COMPANY' || prof.profileType === 'TRAVEL_AGENT'
+                      const name = prof.profileType === 'COMPANY' || (prof.profileType === 'TRAVEL_AGENT' || prof.profileType === 'SOURCE')
                         ? prof.companyName
                         : `${prof.firstName} ${prof.lastName || ''}`.trim();
                       return (
@@ -1200,6 +1267,33 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {!isEditMode && (
+                <div className="grid content-start gap-2 rounded-md border border-border p-3">
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    <span>
+                      <span className="font-medium">Book as tentative</span>
+                      <span className="block text-muted-foreground">
+                        Holds the room on option until confirmed. Released automatically if nobody confirms it.
+                      </span>
+                    </span>
+                    <Switch checked={!!form.bookAsTentative} onCheckedChange={(v) => setField("bookAsTentative", !!v)} aria-label="Book as tentative" />
+                  </label>
+                  {form.bookAsTentative && (
+                    <div className="grid gap-1">
+                      <Label>Option until</Label>
+                      <DatePicker
+                        value={form.optionDate || null}
+                        onChange={(v) => setField("optionDate", v)}
+                        placeholder="Property default"
+                        minDate={new Date()}
+                        maxDate={form.checkInDate ? form.checkInDate.slice(0, 10) : undefined}
+                      />
+                      <p className="text-xs text-muted-foreground">Leave empty for the default: the group&rsquo;s cutoff, else the property&rsquo;s option days before arrival.</p>
+                    </div>
+                  )}
                 </div>
               )}
 
