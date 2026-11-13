@@ -17,6 +17,18 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.9.0",
+    date: "2026-11-13",
+    highlights: "The agent portal is ready to go live, with a new guide for working with agents and a go-live checklist.",
+    new: [
+      "A new operations guide, Working with agents: portal logins, slot requests, confirming agent bookings, change requests and commission, with a go-live checklist.",
+    ],
+    improved: [
+      "Agent bookings that race for the last rooms of a slot can never overbook it.",
+      "Uppsolut's platform monitoring shows agent portal activity and flags locked agent logins and change requests waiting more than a day.",
+    ],
+  },
+  {
     version: "9.8.0",
     date: "2026-11-13",
     highlights: "Groups can be billed as a whole: one statement PDF, an Advance Folio for every guest in house, and a rooming list imported in one go.",

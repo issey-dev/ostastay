@@ -5,6 +5,7 @@ import { requireSession, requirePermission, toErrorResponse, ForbiddenError } fr
 import { MANAGED_BY, CONNECTION_STATUS } from "@/lib/channels/connection";
 import { getSlowestQueries, getTenantOpStats } from "@/lib/db-metrics";
 import { p95FromHist } from "@/lib/db-rollups";
+import { agentPortalStats } from "@/lib/agent-api/monitoring";
 
 // The Osta Monitoring page's Overview (src/components/osta/monitoring/…): one call returns
 // the charts, key figures, per-enterprise (or per-property) table and "worth a look" items
@@ -213,6 +214,8 @@ export async function GET(request: Request) {
           };
         }).sort((a, b) => b.ops - a.ops);
 
+    const agents = await agentPortalStats(from, enterpriseId, propertyId);
+
     // ── Worth a look ─────────────────────────────────────────────────────────
     const attention: { tone: "warning" | "danger"; tag: string; text: string; scope?: { enterprise: string; property?: string } }[] = [];
     if (engineErrors > 0) attention.push({ tone: "danger", tag: "Engine", text: `${engineErrors} database engine error${engineErrors === 1 ? "" : "s"} in this range` });
@@ -224,6 +227,9 @@ export async function GET(request: Request) {
       if (r.jobs && r.jobs.failures > 0)
         attention.push({ tone: "danger", tag: "Jobs", text: `${r.jobs.failures} background job run${r.jobs.failures === 1 ? "" : "s"} failed for ${r.label}` });
     }
+
+    if (agents?.lockedNow) attention.push({ tone: "warning", tag: "Agents", text: `${agents.lockedNow} agent login${agents.lockedNow === 1 ? " is" : "s are"} locked after repeated failed sign-ins` });
+    if (agents?.staleChanges) attention.push({ tone: "warning", tag: "Agents", text: `${agents.staleChanges} agent change request${agents.staleChanges === 1 ? "" : "s"} waiting more than a day` });
 
     // Property scope: what that property runs, from the live buffer (rollups keep no model names).
     const liveOps = propertyId
@@ -261,6 +267,7 @@ export async function GET(request: Request) {
         errSpark,
         chanFailSpark,
       },
+      agents,
       rows,
       liveOps,
       attention,

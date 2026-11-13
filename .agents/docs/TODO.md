@@ -11,15 +11,6 @@
 
 ## 1. Planned or in progress (each has its own plan file)
 
-### Agent Portal and Agent API — Phases 0a to 7 built (9.0.1 to 9.7.0)
-
-Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website
-exists on the owner's machine only (`agent-portal/`, not in git).
-
-- [ ] Phases 8 and 9 (9.8.0, 9.9.0): plan §11 (0a to 7 are done). Commission offset should also post a Commission offset payment on the agent's open invoices (today it is recorded as a payout only). Set AGENT_PORTAL_URL on the server so invite and reset links are full links.
-- [ ] Owner questions still open: Q-27 (tune the Tape Chart marker defaults), Q-28 (what moves a
-  slot from Tentative to Definite).
-
 ### Notifications and phone push — N0 to N3 built (8.10.0)
 
 Plan: [NOTIFICATIONS_PLAN.md](NOTIFICATIONS_PLAN.md).
@@ -48,6 +39,23 @@ reservation page. Reuse the End of Day extend-stay route, the reservation save's
 checks and the quote.
 
 ## 2. Follow-ups by area
+
+### Agent Portal and Agent API (released 9.0.1 to 9.9.0; dev log section of that name) — 2026-11-13
+
+- [ ] Go live with one real agent: tentative → confirmed → checked out → commission paid
+  (Operations guide "Working with agents", go-live checklist). Set `AGENT_PORTAL_URL` on the
+  server so invite and reset links are full links.
+- [ ] Build the agent website against the real API in its own repository (the local mockup in
+  `agent-portal/` is the reference); add an OpenAPI file for `/api/agent/v1`.
+- [ ] Commission offset should also post a payment on the agent's open invoices (today it is a
+  payout with method OFFSET only).
+- [ ] Not yet built: transfers through the Transportation module for agent bookings (flights are
+  stored on the transport card), payment-proof upload, stored voucher versions, reminders at
+  7/3/1 days before the option date and details deadline, a Source marker on Front Desk,
+  tentative shown separately in the dashboard forecast and reports, "Option" wording on the
+  confirmation letter, one-step group invoice to the city ledger.
+- [ ] Owner questions: Q-27 (tune the marker defaults with the customer), Q-28 (what moves a slot
+  from Tentative to Definite; staff do it by hand today).
 
 ### Reservations, Front Desk, Tape Chart
 

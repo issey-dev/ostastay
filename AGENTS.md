@@ -27,7 +27,6 @@ Everything is in `.agents/docs/`. The only markdown at the repository root is th
 
 | Plan | Status | Read it before touching |
 |---|---|---|
-| [`AGENT_PORTAL_PLAN.md`](.agents/docs/AGENT_PORTAL_PLAN.md) | Phases 0a to 8 built (9.0.1 to 9.8.0); 9 not started | Reservation status, Group Blocks, availability, commission, the Tape Chart, roles and permissions, `/api/agent/**` |
 | [`NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) | N0 to N3 built (8.10.0); N4 open | The header bell, any notification or toast-like feature, the web manifest, the service worker |
 | [`MARKETING_SITE_MIGRATION_PLAN.md`](.agents/docs/MARKETING_SITE_MIGRATION_PLAN.md) | Not started, on hold | `src/app/info` |
 
@@ -43,6 +42,7 @@ Everything is in `.agents/docs/`. The only markdown at the repository root is th
 | `src/lib/excursion-booking.ts`, `spa-booking.ts`, `spa-lifecycle.ts`, `db-lock.ts` | Excursions booking add-on; Spa booking add-on; Booking API |
 | `src/lib/transport/**`, the Night Audit transport pass, `ReservationTransport` | Transportation module |
 | `src/lib/channels/**`, availability pushed outside the PMS | Hub level and Channel Manager (rule D-7) |
+| Reservation status (Tentative, options), Group Blocks for Sources, sell limits, commission, booking markers, capabilities, `/api/agent/**` | Agent Portal and Agent API |
 | Reports | Daily Reports rework |
 | Client Relations (profiles) | Profiles redesign |
 | Page headers, toasts, list tables, dialogs | Desktop polish |

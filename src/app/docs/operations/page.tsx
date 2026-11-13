@@ -25,6 +25,7 @@ export default function OperationsOverview() {
           { href: "/docs/operations/notifications", title: "Notifications →", body: "The bell in the header: what it tells you, and who receives what." },
           { href: "/docs/operations/daily-reports", title: "Daily Reports →", body: "Reading a report with its figures and charts, and downloading it as PDF, Excel, delimited text or CSV." },
           { href: "/docs/operations/stop-sale", title: "Price calendar and stop sale →", body: "Reading prices on the calendar, closing dates to sale, and overriding a closed date." },
+          { href: "/docs/operations/working-with-agents", title: "Working with agents →", body: "Portal logins, slot requests, confirming the bookings agents enter, change requests and commission." },
         ]}
       />
       <Pager href="/docs/operations" />

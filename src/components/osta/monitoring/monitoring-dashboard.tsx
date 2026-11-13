@@ -68,6 +68,8 @@ type Overview = {
     errSpark: number[]
     chanFailSpark: number[]
   }
+  /** Agent portal health; null when no agent login exists in the scope. */
+  agents: { logins: number; signIns: number; lockedNow: number; bookings: number; pendingChanges: number; staleChanges: number } | null
   rows: Row[]
   liveOps: { name: string; count: number; avgMs: number; maxMs: number }[]
   attention: { tone: "warning" | "danger"; tag: string; text: string; scope?: { enterprise: string; property?: string } }[]
@@ -297,6 +299,22 @@ function OverviewTab({ data, onScope, onTab }: { data: Overview; onScope: (e: st
       tab: "jobs",
       alert: kpis.jobFailures > 0,
     },
+    ...(data.agents
+      ? [{
+          label: "Agent portal",
+          value: `${data.agents.signIns} sign-in${data.agents.signIns === 1 ? "" : "s"}`,
+          sub: (
+            <span className={data.agents.lockedNow || data.agents.staleChanges ? "text-warning" : undefined}>
+              {data.agents.bookings} booking{data.agents.bookings === 1 ? "" : "s"} · {data.agents.pendingChanges} change request{data.agents.pendingChanges === 1 ? "" : "s"} open
+              {data.agents.lockedNow ? ` · ${data.agents.lockedNow} locked` : ""}
+            </span>
+          ),
+          spark: [],
+          color: "var(--chart-1)",
+          tab: "overview" as Tab,
+          alert: data.agents.lockedNow > 0 || data.agents.staleChanges > 0,
+        }]
+      : []),
     ...(scoped
       ? []
       : [{ label: "Database size", value: bytes(kpis.dbSizeBytes), sub: "whole platform", spark: [], color: "var(--chart-5)", tab: "storage" as Tab }]),

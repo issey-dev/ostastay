@@ -210,4 +210,42 @@ describe("Agent API: slots and bookings (§1a end to end)", () => {
     expect(cancelled.status).toBe("CANCELLED");
     expect(await prisma.reservation.count({ where: { agentRef: ref } })).toBe(1); // never deleted
   });
+
+  // Phase 9 hardening: a burst of parallel bookings for a slot's last rooms never oversells it,
+  // and malformed or oversized bodies are refused before anything is written.
+  it("parallel bookings racing for a slot's last rooms: exactly the slot fills, the rest are refused", async () => {
+    await _resetWebsiteRateLimiter(); // earlier tests used up this key's per-minute quota
+    const slot = await (await slotReqRoute.POST(req(key, tokenA, { method: "POST", body: { from: day(80), to: day(82), rooms: [{ roomTypeId, quantity: 2 }] } }), { params: Promise.resolve({ propertyId }) })).json();
+    const block = await prisma.groupBlock.findFirstOrThrow({ where: { code: slot.code, propertyId } });
+    await approveSlotRequest(await staff(), block.id);
+    const one = (n: number) =>
+      slotBookingsRoute.POST(
+        req(key, tokenA, { method: "POST", body: { rooms: [{ roomTypeId, checkIn: day(80), checkOut: day(82), adults: 1, leadGuest: { firstName: "Race", lastName: `N${n}` } }] } }),
+        { params: Promise.resolve({ code: slot.code }) }
+      );
+    const answers = await Promise.all([0, 1, 2, 3, 4, 5].map(one));
+    const ok = answers.filter((r) => r.status === 201).length;
+    expect(ok).toBe(2);
+    for (const r of answers.filter((r) => r.status !== 201)) expect(r.status).toBeLessThan(500);
+    expect(await prisma.reservation.count({ where: { groupBlockId: block.id, status: { not: "CANCELLED" } } })).toBe(2);
+  });
+
+  it("malformed and oversized bodies are refused with a 4xx and write nothing", async () => {
+    await _resetWebsiteRateLimiter(); // earlier tests used up this key's per-minute quota
+    const slot = await (await slotReqRoute.POST(req(key, tokenA, { method: "POST", body: { from: day(85), to: day(86), rooms: [{ roomTypeId, quantity: 1 }] } }), { params: Promise.resolve({ propertyId }) })).json();
+    const block = await prisma.groupBlock.findFirstOrThrow({ where: { code: slot.code, propertyId } });
+    await approveSlotRequest(await staff(), block.id);
+    const params = { params: Promise.resolve({ code: slot.code }) };
+    const broken = new Request("http://localhost/x", { method: "POST", headers: { authorization: `Bearer ${key}`, "x-agent-token": tokenA, "content-type": "application/json", "idempotency-key": `bad-${stamp}` }, body: "{not json" });
+    const r1 = await slotBookingsRoute.POST(broken, params);
+    expect(r1.status).toBeGreaterThanOrEqual(400);
+    expect(r1.status).toBeLessThan(500);
+    const many = Array.from({ length: 31 }, (_, i) => ({ roomTypeId, checkIn: day(85), checkOut: day(86), adults: 1, leadGuest: { firstName: "X", lastName: `${i}` } }));
+    expect((await (await slotBookingsRoute.POST(req(key, tokenA, { method: "POST", body: { rooms: many } }), params)).json()).code).toBe("INVALID_BODY");
+    const huge = Array.from({ length: 201 }, () => ({}));
+    expect((await (await roomingRoute.POST(req(key, tokenA, { method: "POST", body: { rooms: huge } }), params)).json()).code).toBe("INVALID_BODY");
+    const past = await (await slotBookingsRoute.POST(req(key, tokenA, { method: "POST", body: { rooms: [{ roomTypeId, checkIn: day(-3), checkOut: day(-1), adults: 1, leadGuest: { firstName: "P", lastName: "Q" } }] } }), params)).json();
+    expect(past.code).toBe("INVALID_DATES");
+    expect(await prisma.reservation.count({ where: { groupBlockId: block.id } })).toBe(0);
+  });
 });

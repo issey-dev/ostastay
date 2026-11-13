@@ -141,6 +141,7 @@ export const DOC_AREAS: DocArea[] = [
           { href: "/docs/operations/notifications", title: "Notifications", summary: "For everyone: the bell in the header, what it tells you and who receives what." },
           { href: "/docs/operations/daily-reports", title: "Daily Reports", summary: "For managers, front office and finance: reading a report on screen and downloading it as PDF, Excel, delimited text or CSV." },
           { href: "/docs/operations/stop-sale", title: "Price calendar and stop sale", summary: "For revenue, reservations and front office: reading and changing prices on the calendar, closing dates to sale, and overriding a closed date." },
+          { href: "/docs/operations/working-with-agents", title: "Working with agents", summary: "For reservations, sales and finance: portal logins, slot requests, confirming agent bookings, change requests and commission." },
         ],
       },
     ],
