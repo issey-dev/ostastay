@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, addDays, differenceInDays, parseISO, startOfDay, isBefore, isAfter, isEqual } from "date-fns";
-import { Loader2, Calendar, User, DoorOpen, Key, ExternalLink, ChevronLeft, ChevronRight } from "@/components/icons";
+import { Loader2, Calendar, User, DoorOpen, Key, ExternalLink, ChevronLeft, ChevronRight, AlertTriangle, Check } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -15,11 +15,11 @@ import { FolioPanel } from "@/components/front-office/folio-panel";
 import { CheckInWizard } from "@/components/front-office/check-in-wizard";
 import { WalkInBookingDialog } from "@/components/front-office/walk-in-booking-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { statusSolidClasses, statusTone, type StatusTone } from "@/lib/status-tone";
+import { statusSolidClasses } from "@/lib/status-tone";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useUrlState } from "@/lib/use-url-state";
 import { DEFAULT_MARKER_RULES, MARKER_COLORS, resolveMarker, type MarkerFacts, type MarkerRule, type ResolvedMarker } from "@/lib/booking-markers";
-import { MarkerChip, MarkerLegend, TENTATIVE_HATCH_STYLE } from "@/components/reservations/booking-marker";
+import { MarkerIconView, bookingBarFill } from "@/components/reservations/booking-marker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
 import { useDeviceTier } from "@/hooks/use-mobile";
@@ -58,24 +58,6 @@ type DayOption = (typeof DAY_OPTIONS)[number];
 // last day; 30 days scroll horizontally (the room column stays pinned).
 const MIN_COL_PX: Record<DayOption, number> = { "7": 104, "14": 64, "30": 44 };
 
-// Bars: a status-tinted fill with a solid 3px left edge and dark text — not a saturated
-// full fill (DESKTOP_PLAN §2.2). Same tone map as every other status (status-tone.ts).
-const BAR_CLASSES: Record<StatusTone, string> = {
-  success: "bg-success-muted border-l-success hover:bg-success-muted/70",
-  warning: "bg-warning-muted border-l-warning hover:bg-warning-muted/70",
-  danger: "bg-destructive-muted border-l-destructive hover:bg-destructive-muted/70",
-  info: "bg-info-muted border-l-info hover:bg-info-muted/70",
-  neutral: "bg-muted border-l-muted-foreground hover:bg-muted/70",
-};
-const barClasses = (status: string) => BAR_CLASSES[statusTone(status)];
-
-const LEGEND: { label: string; status: string }[] = [
-  { label: "Reserved", status: "RESERVED" },
-  { label: "In-house", status: "IN_HOUSE" },
-  { label: "Checked out", status: "CHECKED_OUT" },
-  { label: "No-show", status: "NO_SHOW" },
-];
-
 export function TapeChartGrid() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -86,11 +68,6 @@ export function TapeChartGrid() {
   // Booking markers and the source/status filter (Agent Portal plan Phase 3).
   const [markerRules, setMarkerRules] = useState<MarkerRule[]>(DEFAULT_MARKER_RULES);
   const [markerFilter, setMarkerFilter] = useState<string>("all");
-  const markerOf = useMemo(() => {
-    const m = new Map<string, ResolvedMarker | null>();
-    for (const r of reservations) m.set(r.id, r.markerFacts ? resolveMarker(r.markerFacts, markerRules) : null);
-    return m;
-  }, [reservations, markerRules]);
   const filterOptions = useMemo(() => {
     const sources = new Map<string, string>();
     for (const r of reservations) if (r.markerFacts?.source) sources.set(r.markerFacts.source.upid, r.markerFacts.source.name);
@@ -111,16 +88,47 @@ export function TapeChartGrid() {
     if (markerFilter.startsWith("source:")) return f?.source?.upid === markerFilter.slice(7);
     return true;
   };
-  // A bar: status keeps the fill; the marker adds an icon chip and a coloured right edge;
-  // a tentative booking is hatched; bars outside the filter fade (rooms stay readable).
+  // A bar says WHO it is by icon and colour, and HOW FIRM it is by its fill:
+  //   individual  user icon, the brand colour
+  //   group       group icon, the Group marker's colour
+  //   source      the Source's own icon and colour
+  // Confirmed = solid; tentative = glassy (translucent); no-show with a room = greyed out.
+  // Bars outside the filter fade (rooms stay readable).
   const barExtras = (res: Reservation) => {
-    const marker = markerOf.get(res.id) ?? null;
+    const f = res.markerFacts;
+    const kind: "individual" | "group" | "source" = f?.source ? "source" : f?.groupBlockId ? "group" : "individual";
+    // The identity marker ignores tentative/overflow state, which the fill already shows.
+    const identity: ResolvedMarker | null =
+      kind === "individual" || !f
+        ? null
+        : resolveMarker({ ...f, status: "RESERVED", isOverflow: false, confirmationRequestedAt: null }, markerRules) ??
+          (kind === "group" ? { icon: "Users", color: "teal", label: "Group" } : null);
+    const tentative = res.status === "TENTATIVE";
+    const noShow = res.status === "NO_SHOW";
+    const checkedOut = res.status === "CHECKED_OUT";
+    // Groups are always slate (one look everywhere); sources use their own colour.
+    const color = kind === "group" ? "slate" : identity ? identity.color : null;
+    const fill = bookingBarFill(res.status, color);
     return {
-      marker,
-      style: res.status === "TENTATIVE" ? TENTATIVE_HATCH_STYLE : undefined,
+      kind,
+      identity,
+      tentative,
+      noShow,
+      checkedOut,
+      fill,
       dim: !matchesFilter(res),
     };
   };
+  const barIcon = (ex: ReturnType<typeof barExtras>) =>
+    ex.checkedOut ? <Check aria-hidden className="size-3.5 shrink-0" /> : ex.identity ? <MarkerIconView name={ex.identity.icon} className="size-3.5 shrink-0" /> : <User aria-hidden className="size-3.5 shrink-0" />;
+  const barTitle = (res: Reservation, ex: ReturnType<typeof barExtras>) =>
+    `${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace("_", " ")} · ${res.confirmationNo}${ex.identity ? ` · ${ex.identity.label}` : ""}${res.status === "TENTATIVE" && res.optionDate ? ` · option until ${format(new Date(res.optionDate), "d MMM")}` : ""}`;
+  const BAR_BASE = "absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border transition-colors hover:brightness-110 hover:shadow-sm z-10";
+
+  // Bookings with no room assigned stay off the chart until asked for; the toolbar toggle carries
+  // the count and a warning so a hidden one is never silent.
+  const [showUnassignedParam, setShowUnassignedParam] = useUrlState<"0" | "1">("unassigned", "0", ["0", "1"]);
+  const showUnassigned = showUnassignedParam === "1";
   const [startDate, setStartDate] = useState(startOfDay(new Date()));
   // Start at the property's business date, not the device's: before the night audit runs
   // (or on a property whose date isn't the calendar's) the device date showed the wrong
@@ -169,7 +177,9 @@ export function TapeChartGrid() {
       const json = await res.json();
       if (json.success) {
         setRooms(json.data.rooms);
-        setReservations(json.data.reservations);
+        // A no-show with no room is never drawn (the server drops it too; this keeps a stale
+        // response honest).
+        setReservations(json.data.reservations.filter((r: Reservation) => !(r.status === "NO_SHOW" && !r.roomId)));
         if (Array.isArray(json.data.markerRules)) setMarkerRules(json.data.markerRules);
       }
     } catch (error) {
@@ -566,6 +576,21 @@ export function TapeChartGrid() {
   // Overflow bookings (partner hotel) get their own row beside Unassigned (A-8).
   const unassignedReservations = reservations.filter(r => !r.roomId && !r.markerFacts?.isOverflow);
   const overflowReservations = reservations.filter(r => !!r.markerFacts?.isOverflow);
+  // Distinct bookings (a split stay has several bars), not bars.
+  const unassignedCount = new Set(unassignedReservations.map(r => r.reservationId)).size;
+
+  // Legend: the kinds actually on screen, plus the two states.
+  const legendKinds = new Map<string, { label: string; icon: React.ReactNode; swatch: string }>();
+  for (const r of reservations) {
+    const ex = barExtras(r);
+    const key = ex.kind === "group" ? "group" : ex.identity ? `${ex.identity.label}|${ex.identity.color}` : "individual";
+    if (legendKinds.has(key)) continue;
+    legendKinds.set(key, {
+      label: ex.kind === "group" ? "Group" : ex.identity ? ex.identity.label : "Individual",
+      icon: barIcon(ex),
+      swatch: ex.kind === "group" ? MARKER_COLORS.slate.solid : ex.identity ? MARKER_COLORS[ex.identity.color].solid : "bg-primary border-primary text-primary-foreground",
+    });
+  }
 
   // Weekend columns (Sat/Sun, as on Availability) get a visible tint and the business date a
   // primary one, so the eye can find "today" and the weekend without reading the numbers.
@@ -621,27 +646,42 @@ export function TapeChartGrid() {
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        aria-pressed={showUnassigned}
+        onClick={() => setShowUnassignedParam(showUnassigned ? "0" : "1")}
+        title={showUnassigned ? "Hide bookings with no room" : "Show bookings with no room"}
+        className={cn(
+          "inline-flex h-7 items-center gap-1.5 border px-2.5 text-xs font-medium transition-colors pointer-coarse:min-h-11",
+          showUnassigned ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+        )}
+      >
+        {unassignedCount > 0 && <AlertTriangle aria-hidden className={cn("h-3.5 w-3.5", showUnassigned ? "" : "text-warning")} />}
+        Unassigned
+        {unassignedCount > 0 && <span className="tabular-nums">({unassignedCount})</span>}
+      </button>
       <ul className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Legend">
-        {LEGEND.map((item) => (
-          <li key={item.status} className="inline-flex items-center gap-1.5">
-            <span aria-hidden className={cn("h-3 w-3 border border-border/60 border-l-[3px]", barClasses(item.status))} />
-            {item.label}
+        {[...legendKinds.values()].map((k) => (
+          <li key={k.label} className="inline-flex items-center gap-1.5">
+            <span aria-hidden className={cn("inline-flex h-4 w-4 items-center justify-center border", k.swatch)}>{k.icon}</span>
+            {k.label}
           </li>
         ))}
         <li className="inline-flex items-center gap-1.5">
-          <span aria-hidden className="h-3 w-3 border border-warning/40 bg-warning-muted" />
-          Unassigned
+          <span aria-hidden className="h-3 w-3 border border-dashed border-primary bg-primary/[0.07]" />
+          Tentative
         </li>
         <li className="inline-flex items-center gap-1.5">
-          <span aria-hidden className="h-3 w-3 border border-border/60 bg-muted" style={TENTATIVE_HATCH_STYLE} />
-          Tentative
+          <span aria-hidden className="h-3 w-3 border-[1.5px] border-primary" />
+          Checked out
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="h-3 w-3 border border-border bg-muted opacity-60" />
+          No-show
         </li>
       </ul>
       <div className="w-44">
         <SearchableSelect value={markerFilter} onChange={setMarkerFilter} placeholder="All bookings" options={filterOptions} />
-      </div>
-      <div className="basis-full">
-        <MarkerLegend markers={[...markerOf.values()].filter((m): m is ResolvedMarker => !!m)} />
       </div>
     </div>
 
@@ -672,7 +712,7 @@ export function TapeChartGrid() {
       </div>
 
       {/* Unassigned Reservations Row (Only show if there are any) */}
-      {unassignedReservations.length > 0 && (
+      {showUnassigned && unassignedReservations.length > 0 && (
         <div className="flex border-b border-warning/30 bg-warning-muted/60">
           <div className="w-32 shrink-0 border-r border-border p-2 bg-warning-muted z-20 sticky left-0 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
             <span className="font-bold text-warning text-xs">Unassigned</span>
@@ -702,16 +742,15 @@ export function TapeChartGrid() {
                   draggable={canDrag(res)}
                   onDragStart={(e) => handleDragStart(e, res.id)}
                   onDragEnd={handleDragEnd}
-                  title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}${ex.marker ? ` · ${ex.marker.label}` : ""}`}
-                  className={cn(`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`, ex.dim && "opacity-30")}
-                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`, ...ex.style }}
+                  title={barTitle(res, ex)}
+                  className={cn(BAR_BASE, ex.fill, landedId === res.id && "tape-landed", ex.dim && "opacity-30")}
+                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
                 >
-                  {ex.marker && <span aria-hidden className={cn("absolute inset-y-0 right-0 w-[3px]", MARKER_COLORS[ex.marker.color].dot)} />}
                   <span className="flex min-w-0 items-center gap-1 font-bold text-xs leading-tight">
-                    {ex.marker && <MarkerChip marker={ex.marker} />}
+                    {barIcon(ex)}
                     <span className="truncate">{res.primaryGuest.lastName}</span>
                   </span>
-                  <span className="text-[10px] font-medium text-muted-foreground truncate">{res.markerFacts?.isOverflow ? "Partner hotel" : res.roomType.code}</span>
+                  <span className="text-[10px] font-medium opacity-80 truncate">{res.roomType.code}</span>
                 </div>
               );
             })}
@@ -737,15 +776,15 @@ export function TapeChartGrid() {
                 <div
                   key={res.id}
                   onClick={() => setSelectedReservation(res)}
-                  title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · Overflow · ${res.confirmationNo}`}
-                  className={cn(`absolute left-0 right-0 top-1 bottom-1 mx-1 px-2 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground z-10 ${barClasses(res.status)}`, ex.dim && "opacity-30")}
-                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`, ...ex.style }}
+                  title={`${barTitle(res, ex)} · Overflow`}
+                  className={cn(BAR_BASE, ex.fill, ex.dim && "opacity-30")}
+                  style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
                 >
                   <span className="flex min-w-0 items-center gap-1 font-bold text-xs leading-tight">
-                    {ex.marker && <MarkerChip marker={ex.marker} />}
+                    {barIcon(ex)}
                     <span className="truncate">{res.primaryGuest.lastName}</span>
                   </span>
-                  <span className="text-[10px] font-mono text-muted-foreground truncate">#{res.confirmationNo}</span>
+                  <span className="text-[10px] font-mono opacity-80 truncate">#{res.confirmationNo}</span>
                 </div>
               );
             })}
@@ -804,16 +843,15 @@ export function TapeChartGrid() {
                         draggable={canDrag(res)}
                         onDragStart={(e) => handleDragStart(e, res.id)}
                         onDragEnd={handleDragEnd}
-                        title={`${res.primaryGuest.firstName} ${res.primaryGuest.lastName} · ${res.status.replace('_', ' ')} · ${res.confirmationNo}${ex.marker ? ` · ${ex.marker.label}` : ""}${res.status === "TENTATIVE" && res.optionDate ? ` · option until ${format(new Date(res.optionDate), "d MMM")}` : ""}`}
-                        className={cn(`absolute left-0 right-0 top-1 bottom-1 mx-0.5 px-1.5 py-1 overflow-hidden flex flex-col justify-between cursor-pointer border border-border/60 border-l-[3px] text-foreground transition-colors hover:shadow-sm z-10 ${barClasses(res.status)}${landedId === res.id ? " tape-landed" : ""}`, ex.dim && "opacity-30")}
-                        style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`, ...ex.style }}
+                        title={barTitle(res, ex)}
+                        className={cn(BAR_BASE, ex.fill, landedId === res.id && "tape-landed", ex.dim && "opacity-30")}
+                        style={{ gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}` }}
                       >
-                        {ex.marker && <span aria-hidden className={cn("absolute inset-y-0 right-0 w-[3px]", MARKER_COLORS[ex.marker.color].dot)} />}
                         <span className="flex min-w-0 items-center gap-1 font-bold text-xs leading-tight">
-                          {ex.marker && <MarkerChip marker={ex.marker} />}
+                          {barIcon(ex)}
                           <span className="truncate">{res.primaryGuest.lastName}</span>
                         </span>
-                        <span className="mt-1 text-[10px] font-mono text-muted-foreground truncate">#{res.confirmationNo}</span>
+                        <span className="mt-1 text-[10px] font-mono opacity-80 truncate">#{res.confirmationNo}{ex.noShow ? " · No-show" : ""}</span>
                       </div>
                     );
                   })}

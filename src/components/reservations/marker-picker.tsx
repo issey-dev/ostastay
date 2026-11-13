@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { MARKER_COLORS, MARKER_COLOR_KEYS, MARKER_ICONS, isMarkerColor, isMarkerIcon, type MarkerColor, type MarkerIcon } from "@/lib/booking-markers"
+import { Check } from "@/components/icons"
 import { MarkerIconView } from "@/components/reservations/booking-marker"
 import { cn } from "@/lib/utils"
 
@@ -32,13 +33,15 @@ export const MARKER_ICON_LABELS: Record<MarkerIcon, string> = {
   Sparkles: "Sparkles",
 }
 
-/** A Tape Chart booking bar as it will appear, with this marker. */
+/** A Tape Chart booking bar as it will appear: the same fills as the chart (confirmed solid,
+ *  tentative dashed and faint, checked out outlined with a check). */
 export function MarkerBarPreview({
   icon,
   color,
   guest = "Guest name",
   reference = "#000123",
   tentative,
+  checkedOut,
   className,
 }: {
   icon: MarkerIcon | null
@@ -46,31 +49,24 @@ export function MarkerBarPreview({
   guest?: string
   reference?: string
   tentative?: boolean
+  checkedOut?: boolean
   className?: string
 }) {
+  const p = MARKER_COLORS[color ?? "sky"]
   return (
     <div
       className={cn(
-        "relative flex h-12 w-48 flex-col justify-between overflow-hidden border border-border/60 border-l-[3px] border-l-info bg-info-muted px-1.5 py-1 text-foreground",
+        "relative flex h-12 w-48 flex-col justify-between overflow-hidden border px-1.5 py-1",
+        checkedOut ? p.outline : tentative ? p.glass : p.solid,
         className
       )}
-      style={
-        tentative
-          ? { backgroundImage: "repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in oklab, currentColor 14%, transparent) 6px 8px)" }
-          : undefined
-      }
       aria-hidden
     >
-      {color && <span className={cn("absolute inset-y-0 right-0 w-[3px]", MARKER_COLORS[color].dot)} />}
       <span className="flex min-w-0 items-center gap-1 text-xs font-bold leading-tight">
-        {icon && color && (
-          <span className={cn("inline-flex size-4 shrink-0 items-center justify-center rounded-sm", MARKER_COLORS[color].chip)}>
-            <MarkerIconView name={icon} className="size-3" />
-          </span>
-        )}
+        {checkedOut ? <Check className="size-3.5 shrink-0" /> : <MarkerIconView name={icon ?? "Briefcase"} className="size-3.5 shrink-0" />}
         <span className="truncate">{guest}</span>
       </span>
-      <span className="truncate font-mono text-[10px] text-muted-foreground">{reference}</span>
+      <span className="truncate font-mono text-[10px] opacity-80">{reference}</span>
     </div>
   )
 }
@@ -160,8 +156,8 @@ export function MarkerPickerDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            The icon and colour shown on this booking&rsquo;s bar on the Tape Chart and next to it in the lists. The bar&rsquo;s own
-            fill still shows its status.
+            The icon and colour of this source&rsquo;s bookings on the Tape Chart and next to them in the lists. How the bar
+            is filled shows its status.
           </DialogDescription>
         </DialogHeader>
 
@@ -224,8 +220,10 @@ export function MarkerPickerDialog({
             <div className="space-y-2 rounded-md border border-border bg-card p-3">
               <p className="text-[11px] text-muted-foreground">Confirmed booking</p>
               <MarkerBarPreview icon={pickIcon} color={pickColor} guest={guest} />
-              <p className="text-[11px] text-muted-foreground">Tentative booking (hatched)</p>
+              <p className="text-[11px] text-muted-foreground">Tentative booking</p>
               <MarkerBarPreview icon={pickIcon} color={pickColor} guest={guest} tentative />
+              <p className="text-[11px] text-muted-foreground">Checked out</p>
+              <MarkerBarPreview icon={pickIcon} color={pickColor} guest={guest} checkedOut />
             </div>
           </div>
         </div>

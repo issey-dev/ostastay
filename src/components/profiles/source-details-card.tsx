@@ -71,7 +71,11 @@ export function SourceDetailsCard({ profile, editHref }: { profile: SourceProfil
             <dt className="mb-1 text-xs text-muted-foreground">Tape Chart marker</dt>
             <dd>
               {icon || color ? (
-                <MarkerBarPreview icon={icon ?? "Briefcase"} color={color} guest={name} />
+                <div className="flex flex-wrap gap-3">
+                  <MarkerBarPreview icon={icon ?? "Briefcase"} color={color} guest={name} />
+                  <MarkerBarPreview icon={icon ?? "Briefcase"} color={color} guest={name} tentative />
+                  <MarkerBarPreview icon={icon ?? "Briefcase"} color={color} guest={name} checkedOut />
+                </div>
               ) : (
                 <span className="text-sm text-muted-foreground">Default marker</span>
               )}

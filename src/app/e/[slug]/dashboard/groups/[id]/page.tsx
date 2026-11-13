@@ -323,7 +323,7 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <CardTitle className="text-lg">Block schedule</CardTitle>
         </CardHeader>
         <div className="-mt-2">
-          <GroupScheduleTimeline startDate={group.startDate} endDate={group.endDate} pickups={group.reservations ?? []} slug={slug} />
+          <GroupScheduleTimeline startDate={group.startDate} endDate={group.endDate} pickups={group.reservations ?? []} slug={slug} source={group.sourceProfile ?? null} />
         </div>
       </Card>
 

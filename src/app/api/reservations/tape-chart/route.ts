@@ -71,7 +71,11 @@ export async function GET(request: Request) {
     });
 
     // Format assignments to look like reservations for the frontend tape-chart grid
-    const formattedReservations = assignments.map(a => ({
+    // A no-show keeps its place on the chart only while it holds a room (shown greyed out);
+    // with no room it has nothing to show and is dropped. Cancelled is excluded above.
+    const onChart = assignments.filter(a => !(a.reservation.status === "NO_SHOW" && !a.roomId));
+
+    const formattedReservations = onChart.map(a => ({
       id: a.id, // Unique ID for this block on the chart (the assignment ID)
       reservationId: a.reservationId, // Reference to parent reservation
       confirmationNo: a.reservation.confirmationNo,
