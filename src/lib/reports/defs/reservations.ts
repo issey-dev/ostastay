@@ -330,4 +330,107 @@ const traces: ReportDef = {
   },
 };
 
-export const RESERVATION_REPORTS: ReportDef[] = [availability, entered, cancellations, deposits, traces];
+// ─── Overflow bookings (Agent Portal plan A-8) ─────────────────────────────
+const overflow: ReportDef = {
+  key: "res-overflow",
+  module: "RESERVATIONS",
+  name: "Overflow Bookings",
+  description: "Guests accommodated at a partner hotel because the house was full, staying in the selected range.",
+  insights: {
+    kpis: [
+      { label: "Overflow bookings", agg: "count" },
+      { label: "Room nights", agg: "sum", column: "nights" },
+    ],
+    visuals: [{ type: "ranked", title: "By partner hotel", by: "hotel" }],
+  },
+  params: [{ key: "range", label: "Staying between", type: "dateRange", required: true, defaultToday: true }],
+  async run(rc): Promise<ReportResult> {
+    const propertyId = await propertyOrThrow(rc);
+    const range = rc.params.range as { from: Date; to: Date };
+    const { gte, lt } = rangeBounds(range.from, range.to);
+    const rows = await prisma.reservation.findMany({
+      where: { propertyId, isOverflow: true, checkInDate: { lt }, checkOutDate: { gt: gte }, status: { not: "CANCELLED" } },
+      include: { primaryGuest: guestSelect },
+      orderBy: { checkInDate: "asc" },
+    });
+    return {
+      title: "Overflow Bookings",
+      subtitle: `Staying ${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} booking(s)`,
+      columns: [
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
+        { key: "guest", label: "Guest", width: 1.7 },
+        { key: "hotel", label: "Partner hotel", width: 1.6 },
+        { key: "arrival", label: "Arrival", width: 1, format: "date" },
+        { key: "departure", label: "Departure", width: 1, format: "date" },
+        { key: "nights", label: "Nts", width: 0.5, format: "number" },
+        { key: "status", label: "Status", width: 1 },
+        { key: "note", label: "Note", width: 1.6 },
+      ],
+      rows: rows.map((r) => ({
+        resId: r.id,
+        conf: r.confirmationNo,
+        guest: guestName(r.primaryGuest),
+        hotel: r.overflowHotelName ?? "",
+        arrival: r.checkInDate,
+        departure: r.checkOutDate,
+        nights: nights(r.checkInDate, r.checkOutDate),
+        status: titleCase(r.status),
+        note: r.overflowNote ?? "",
+      })),
+    };
+  },
+};
+
+// ─── Options and expiries (Agent Portal plan A-14) ─────────────────────────
+const optionsReport: ReportDef = {
+  key: "res-options",
+  module: "RESERVATIONS",
+  name: "Options and Expiries",
+  description: "Tentative bookings whose option runs out in the range, and options released in it.",
+  insights: {
+    kpis: [{ label: "Bookings", agg: "count" }, { label: "Room nights", agg: "sum", column: "nights" }],
+    visuals: [{ type: "donut", title: "State", by: "state", centerLabel: "bookings" }],
+  },
+  params: [{ key: "range", label: "Option date between", type: "dateRange", required: true, defaultToday: true }],
+  async run(rc): Promise<ReportResult> {
+    const propertyId = await propertyOrThrow(rc);
+    const range = rc.params.range as { from: Date; to: Date };
+    const { gte, lt } = rangeBounds(range.from, range.to);
+    const rows = await prisma.reservation.findMany({
+      where: {
+        propertyId,
+        OR: [
+          { status: "TENTATIVE", optionDate: { gte, lt } },
+          { status: "CANCELLED", cancellationReasonCode: "OPTION_EXPIRED", cancelledAt: { gte, lt } },
+        ],
+      },
+      include: { primaryGuest: guestSelect, assignments: assignmentInclude },
+      orderBy: { optionDate: "asc" },
+    });
+    return {
+      title: "Options and Expiries",
+      subtitle: `${fmtDay(gte)} – ${fmtDay(new Date(lt.getTime() - 86_400_000))} — ${rows.length} booking(s)`,
+      columns: [
+        { key: "conf", label: "Confirmation", width: 1.2, link: { to: "reservation", idKey: "resId" } },
+        { key: "guest", label: "Guest", width: 1.7 },
+        { key: "roomType", label: "Room Type", width: 1.1 },
+        { key: "arrival", label: "Arrival", width: 1, format: "date" },
+        { key: "nights", label: "Nts", width: 0.5, format: "number" },
+        { key: "option", label: "Option until", width: 1.2, format: "datetime" },
+        { key: "state", label: "State", width: 1.2 },
+      ],
+      rows: rows.map((r) => ({
+        resId: r.id,
+        conf: r.confirmationNo,
+        guest: guestName(r.primaryGuest),
+        roomType: roomTypeNames(r.assignments),
+        arrival: r.checkInDate,
+        nights: nights(r.checkInDate, r.checkOutDate),
+        option: r.optionDate,
+        state: r.status === "TENTATIVE" ? (r.confirmationRequestedAt ? "Confirmation requested" : "On option") : "Released",
+      })),
+    };
+  },
+};
+
+export const RESERVATION_REPORTS: ReportDef[] = [availability, entered, cancellations, deposits, traces, overflow, optionsReport];

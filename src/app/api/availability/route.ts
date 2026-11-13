@@ -8,6 +8,8 @@ import {
   outstandingBlockHolds,
 } from "@/lib/availability";
 import { getClosedDates } from "@/lib/restrictions";
+import { sellLimitsInWindow } from "@/lib/availability-sell-limit";
+import { overflowCountsByNight } from "@/lib/reservations/overflow";
 import { resolveBusinessDate, toUtcMidnight } from "@/lib/business-date";
 
 const DAY_MS = 86_400_000;
@@ -77,7 +79,7 @@ export async function GET(request: Request) {
         roomTypeId: true,
         startDate: true,
         endDate: true,
-        reservation: { select: { adults: true, children: true, infants: true } },
+        reservation: { select: { adults: true, children: true, infants: true, status: true } },
       },
     });
 
@@ -99,6 +101,23 @@ export async function GET(request: Request) {
       })
     );
 
+    // Agent Portal plan Phase 2: the option forecast. "Allotted" = rooms still held in
+    // TENTATIVE blocks (not counted against availability on this grid, as before), shown so
+    // "0 free" can be read as "may loosen". "On option" (per cell below) = tentative bookings.
+    const allottedByType = new Map<string, { startMs: number; endMs: number; outstanding: number }[]>();
+    await Promise.all(
+      typeIds.map(async (id) => {
+        allottedByType.set(
+          id,
+          await outstandingBlockHolds({ propertyId, roomTypeId: id, windowStart, windowEnd, blockStatusIn: ["TENTATIVE"] })
+        );
+      })
+    );
+    const sellLimits = await sellLimitsInWindow(propertyId, new Date(windowStart), new Date(windowEnd));
+    const limitOf = (typeId: string | null, night: number) =>
+      sellLimits.find((l) => l.roomTypeId === typeId && l.date === new Date(night).toISOString().slice(0, 10))?.extraRooms ?? null;
+    const overflowByNight = await overflowCountsByNight(propertyId, new Date(windowStart), new Date(windowEnd));
+
     const { propertyLevel: propertyClosed, byRoomType: typeClosed } = await getClosedDates({
       propertyId,
       windowStart,
@@ -118,6 +137,14 @@ export async function GET(request: Request) {
       infants: number;
       groupBlocks: number;
       closed: boolean;
+      /** Tentative bookings in house that night (counted in occupancy too). */
+      onOption: number;
+      /** Rooms still held in TENTATIVE blocks (not deducted from `available` here). */
+      allotted: number;
+      /** Sell limit for the night (extra rooms past capacity), null = none set. */
+      sellLimit: number | null;
+      /** Sold past capacity. */
+      oversold: boolean;
     };
 
     // Per-type rows.
@@ -129,6 +156,7 @@ export async function GET(request: Request) {
 
       const cells: Cell[] = dateMsList.map((night) => {
         let occupancy = 0;
+        let onOption = 0;
         let adults = 0;
         let children = 0;
         let infants = 0;
@@ -139,6 +167,7 @@ export async function GET(request: Request) {
           const e = dayStartMs(a.endDate);
           if (s <= night && e > night) {
             occupancy += 1;
+            if (a.reservation.status === "TENTATIVE") onOption += 1;
             adults += a.reservation.adults;
             children += a.reservation.children;
             infants += a.reservation.infants;
@@ -150,8 +179,16 @@ export async function GET(request: Request) {
           (sum, h) => (h.startMs <= night && h.endMs > night ? sum + h.outstanding : sum),
           0
         );
+        const allotted = (allottedByType.get(type.id) ?? []).reduce(
+          (sum, h) => (h.startMs <= night && h.endMs > night ? sum + h.outstanding : sum),
+          0
+        );
         return {
           available: capacity - occupancy - held,
+          onOption,
+          allotted,
+          sellLimit: limitOf(type.id, night),
+          oversold: capacity - occupancy - held < 0,
           occupancy,
           arrivals,
           departures,
@@ -177,9 +214,11 @@ export async function GET(request: Request) {
           acc.adults += c.adults;
           acc.children += c.children;
           acc.infants += c.infants;
+          acc.onOption += c.onOption;
+          acc.allotted += c.allotted;
           return acc;
         },
-        { occupancy: 0, arrivals: 0, departures: 0, adults: 0, children: 0, infants: 0 }
+        { occupancy: 0, arrivals: 0, departures: 0, adults: 0, children: 0, infants: 0, onOption: 0, allotted: 0 }
       );
       const heldTotal = typeIds.reduce((sum, id) => {
         const holds = holdsByType.get(id) ?? [];
@@ -188,6 +227,8 @@ export async function GET(request: Request) {
       return {
         ...agg,
         available: houseCapacity - agg.occupancy - heldTotal,
+        sellLimit: limitOf(null, night),
+        oversold: houseCapacity - agg.occupancy - heldTotal < 0,
         groupBlocks: heldTotal,
         closed: propertyClosed.has(night),
       };
@@ -199,6 +240,8 @@ export async function GET(request: Request) {
       dates: dateMsList.map((ms) => new Date(ms).toISOString()),
       roomTypes: roomTypes.map((t) => ({ ...t, capacity: capacityByType.get(t.id) ?? 0 })),
       house: { capacity: houseCapacity, cells: houseCells },
+      // Overflow bookings (partner hotel) per night — the Overflow line under the house.
+      overflow: dateMsList.map((night) => overflowByNight.get(night) ?? 0),
       rows,
     });
   } catch (error) {

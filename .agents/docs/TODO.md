@@ -11,12 +11,12 @@
 
 ## 1. Planned or in progress (each has its own plan file)
 
-### Agent Portal and Agent API — Phases 0a, 0b and 1 built (9.0.1 to 9.1.0)
+### Agent Portal and Agent API — Phases 0a to 2 built (9.0.1 to 9.2.0)
 
 Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website
 exists on the owner's machine only (`agent-portal/`, not in git).
 
-- [ ] Phases 2 to 9 (9.2.0 … 9.9.0): plan §11 (0a, 0b and 1 are done). Phase 3 adds the `SOURCE`
+- [ ] Phases 3 to 9 (9.3.0 … 9.9.0): plan §11 (0a to 2 are done). Phase 3 adds the `SOURCE`
   profile type, markers, and **search and create new** in the reservation form's profile pickers
   (plan A-21a). Phase 4 puts slots, cutoff rules and elasticity on Group Blocks.
 - [ ] Owner questions still open: Q-27 (tune the Tape Chart marker defaults), Q-28 (what moves a

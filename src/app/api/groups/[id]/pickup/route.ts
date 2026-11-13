@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { sellLimitGate } from "@/lib/availability-sell-limit"
 import { getPropertySettings } from "@/lib/property-settings"
 import { prisma } from "@/lib/db"
 import { requireSession, requirePermission, assertPropertyAccess, toErrorResponse, hasCapability } from "@/lib/scope"
@@ -137,6 +138,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // guard below stays hard.
     if (availabilityConflicts.length > 0 && body.acknowledgeOverbook !== true) {
       return NextResponse.json({ error: availabilityConflicts.join("; "), requiresOverbookConfirm: true }, { status: 409 })
+    }
+    if (availabilityConflicts.length > 0) {
+      const limitError = await sellLimitGate(ctx, {
+        propertyId: group.propertyId,
+        segments: [{ roomTypeId, startDate: new Date(checkInDate), endDate: new Date(checkOutDate) }],
+        excludeGroupBlockId: id,
+      })
+      if (limitError) return NextResponse.json({ error: limitError, code: "SELL_LIMIT" }, { status: 409 })
     }
     if (roomId) {
       const roomTaken = await hasRoomConflict({

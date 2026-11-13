@@ -61,6 +61,9 @@ type Reservation = {
   /** End of the option for a TENTATIVE booking (Agent Portal plan A-14). */
   optionDate?: string | null
   confirmationRequestedAt?: string | null
+  /** At a partner hotel because the house was full (Agent Portal plan A-8). */
+  isOverflow?: boolean
+  overflowHotelName?: string | null
   checkInDate: string
   checkOutDate: string
   checkedOutAt?: string | null
@@ -144,6 +147,9 @@ const optionText = (res: Reservation) =>
 
 const getReservationFlags = (res: Reservation): Flag[] => {
   const flags: Flag[] = []
+  if (res.isOverflow) {
+    flags.push({ key: "overflow", text: "OVF", icon: Building2, title: `Overflow: at ${res.overflowHotelName ?? "a partner hotel"}`, tone: "info" })
+  }
   if (res.status === "TENTATIVE") {
     flags.push({
       key: "option",
@@ -201,6 +207,7 @@ const FLAG_TONE: Record<FlagTone, string> = {
 const getCardBadges = (res: Reservation): (Flag & { label: string })[] => {
   const out: (Flag & { label: string })[] = []
   const n = (count: number, one: string, many = `${one}s`) => (count > 1 ? `${count} ${many}` : one)
+  if (res.isOverflow) out.push({ key: "overflow", label: "Overflow", title: `At ${res.overflowHotelName ?? "a partner hotel"}`, tone: "info" })
   if (res.status === "TENTATIVE") out.push({ key: "option", label: optionText(res), title: res.confirmationRequestedAt ? "Confirmation requested" : "Tentative booking", tone: "warning" })
   if (res.mealPlan && res.mealPlan !== "NONE") out.push({ key: "meal", label: res.mealPlan, title: `Meal plan: ${res.mealPlan}`, tone: "info" })
   const pkgs = res.allocations?.length ?? 0

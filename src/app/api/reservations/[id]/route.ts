@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sellLimitGate } from "@/lib/availability-sell-limit";
 import { figuresJson } from "@/lib/figures";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { prisma } from "@/lib/db";
@@ -306,6 +307,14 @@ export async function PUT(
         },
         { status: 409 }
       );
+    }
+    if (availabilityConflicts.length > 0) {
+      const limitError = await sellLimitGate(ctx, {
+        propertyId: existing.propertyId,
+        segments: editSegments,
+        excludeReservationId: id,
+      });
+      if (limitError) return NextResponse.json({ error: limitError, code: "SELL_LIMIT" }, { status: 409 });
     }
 
     // Group-block association (optional): a reservation attached to a block must fit its

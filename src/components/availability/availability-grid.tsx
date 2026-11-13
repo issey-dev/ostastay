@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useProperty } from "@/components/providers/property-provider";
 import { useDeviceTier } from "@/hooks/use-mobile";
 import { StopSaleDialog, type StopSaleInitial } from "@/components/availability/stop-sale-dialog";
+import { SellLimitDialog } from "@/components/availability/sell-limit-dialog";
 import { AvailabilityMobileList } from "@/components/availability/availability-mobile-list";
 
 type Cell = {
@@ -23,6 +24,11 @@ type Cell = {
   infants: number;
   groupBlocks: number;
   closed: boolean;
+  // Agent Portal plan Phase 2: the option forecast and the sell limit.
+  onOption: number;
+  allotted: number;
+  sellLimit: number | null;
+  oversold: boolean;
 };
 
 type ApiData = {
@@ -32,6 +38,7 @@ type ApiData = {
   roomTypes: { id: string; code: string; name: string; capacity: number }[];
   house: { capacity: number; cells: Cell[] };
   rows: { roomTypeId: string; cells: Cell[] }[];
+  overflow?: number[];
 };
 
 const DAY_OPTIONS = [7, 14, 30];
@@ -42,6 +49,11 @@ const METRICS: { key: keyof Cell; label: string }[] = [
   { key: "occupancy", label: "Occupancy" },
   { key: "departures", label: "Departures" },
   { key: "groupBlocks", label: "Group Blocks" },
+  // Tentative bookings (already in Occupancy) and rooms in tentative blocks (not deducted
+  // above): together they say how much of "0 free" may loosen.
+  { key: "onOption", label: "On option" },
+  { key: "allotted", label: "Allotted (tentative)" },
+  { key: "sellLimit", label: "Sell limit" },
   { key: "adults", label: "Adults" },
   { key: "children", label: "Children" },
   { key: "infants", label: "Infants" },
@@ -67,6 +79,7 @@ export function AvailabilityGrid() {
   const [isLoading, setIsLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [stopSale, setStopSale] = useState<{ open: boolean; initial?: StopSaleInitial }>({ open: false });
+  const [sellLimit, setSellLimit] = useState<{ open: boolean; initial?: { roomTypeId?: string | null; date?: string; extraRooms?: number | null } }>({ open: false });
 
   const fetchData = useCallback(async () => {
     if (!currentProperty?.id) {
@@ -135,7 +148,7 @@ export function AvailabilityGrid() {
           cell.closed
             ? "Closed (Stop Sale) — click to manage"
             : cell.available < 0
-              ? `Oversold by ${-cell.available} — click to set Stop Sale`
+              ? `Oversold by ${-cell.available}${cell.sellLimit !== null && cell.sellLimit !== undefined ? ` (limit ${cell.sellLimit})` : ""} — click to set Stop Sale`
               : "Open to sell — click to set Stop Sale"
         }
         className={cn(
@@ -144,6 +157,11 @@ export function AvailabilityGrid() {
         )}
       >
         {cell.closed && <Ban className="absolute left-1 top-1 h-3 w-3 opacity-70" />}
+        {cell.sellLimit !== null && cell.sellLimit !== undefined && (
+          <span className="absolute right-1 top-0.5 text-[10px] font-medium text-muted-foreground" title={`Sell limit: ${cell.sellLimit} over capacity`}>
+            +{cell.sellLimit}
+          </span>
+        )}
         <span className={cell.closed ? "line-through decoration-destructive/60" : undefined}>
           {cell.available}
         </span>
@@ -162,6 +180,19 @@ export function AvailabilityGrid() {
     >
       {value}
     </div>
+  );
+
+  // The sell-limit sub-row: click to set or change that night's limit.
+  const sellLimitCell = (cell: Cell, roomTypeId: string | null, dateIso: string | undefined, key: string) => (
+    <button
+      key={key}
+      type="button"
+      onClick={() => setSellLimit({ open: true, initial: { roomTypeId, date: dateIso, extraRooms: cell.sellLimit } })}
+      title="Set the sell limit for this night"
+      className="h-full w-full border-r border-border p-1 text-center text-xs text-muted-foreground hover:bg-muted/60"
+    >
+      {cell.sellLimit === null || cell.sellLimit === undefined ? "–" : `+${cell.sellLimit}`}
+    </button>
   );
 
   // A full row group: a bold "Max. Available Rooms" summary row + (when expanded) the
@@ -223,7 +254,9 @@ export function AvailabilityGrid() {
               </div>
               <div className="flex-1 grid" style={gridStyle}>
                 {cells.map((cell, i) =>
-                  metricCell(cell[m.key] as number, cell.closed, `${rowKey}-${m.key}-${i}`)
+                  m.key === "sellLimit"
+                    ? sellLimitCell(cell, roomTypeId, data!.dates[i], `${rowKey}-${m.key}-${i}`)
+                    : metricCell(cell[m.key] as number, cell.closed, `${rowKey}-${m.key}-${i}`)
                 )}
               </div>
             </div>
@@ -373,6 +406,9 @@ export function AvailabilityGrid() {
               </Button>
             ))}
           </div>
+          <Button variant="outline" size="sm" onClick={() => setSellLimit({ open: true })}>
+            Sell limit
+          </Button>
           <Button
             size="sm"
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -428,6 +464,23 @@ export function AvailabilityGrid() {
             isHouse: true,
           })}
 
+        {/* Overflow: bookings placed at a partner hotel because the house is full. */}
+        {data?.overflow && data.overflow.some((n) => n > 0) && (
+          <div className="flex border-b border-border bg-card">
+            <div className="sticky left-0 z-10 w-52 shrink-0 border-r border-border bg-card p-2 text-sm">
+              <div className="font-bold">Overflow</div>
+              <div className="text-xs text-muted-foreground">At a partner hotel</div>
+            </div>
+            <div className="grid flex-1" style={gridStyle}>
+              {data.overflow.map((n, i) => (
+                <div key={i} className={cn("border-r border-border p-1 text-center text-sm", n > 0 ? "font-semibold text-foreground" : "text-muted-foreground/40")}>
+                  {n}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Room type rows */}
         {data?.roomTypes.map((type) => {
           const row = data.rows.find((r) => r.roomTypeId === type.id);
@@ -463,6 +516,16 @@ export function AvailabilityGrid() {
           propertyId={currentProperty.id}
           roomTypes={data?.roomTypes ?? []}
           initial={stopSale.initial}
+          onDone={fetchData}
+        />
+      )}
+      {currentProperty && (
+        <SellLimitDialog
+          open={sellLimit.open}
+          onClose={() => setSellLimit({ open: false })}
+          propertyId={currentProperty.id}
+          roomTypes={data?.roomTypes ?? []}
+          initial={sellLimit.initial}
           onDone={fetchData}
         />
       )}

@@ -106,9 +106,6 @@ describe("capability defaults", () => {
 // Catalogued now, wired by the phase that builds the feature behind it (each phase removes
 // its keys from this set in the same commit). Empty once Phase 7 is in.
 const NOT_YET_WIRED = new Set<string>([
-  "reservations.exceedSellLimit",
-  "reservations.markOverflow",
-  "availability.sellLimits",
   "groups.decideSlotRequest",
   "profiles.portalLogins",
   "debtors.payCommission",

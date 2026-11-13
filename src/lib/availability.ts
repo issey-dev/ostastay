@@ -15,7 +15,7 @@ export const UNSELLABLE_ROOM_STATUSES = ["OUT_OF_ORDER", "OUT_OF_SERVICE"];
 
 const DAY_MS = 86_400_000;
 
-function dayStartMs(d: Date): number {
+export function dayStartMs(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 

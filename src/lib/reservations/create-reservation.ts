@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { sellLimitGate } from "@/lib/availability-sell-limit";
 import { negotiatedPlanError } from "@/lib/reservations/negotiated-access";
 import { getPropertySettings } from "@/lib/property-settings";
 import { prisma } from "@/lib/db";
@@ -343,6 +344,16 @@ export async function createReservation(ctx: AuthContext, body: CreateReservatio
     canOverbook: hasCapability(ctx, "reservations.overbook"),
   });
   if (gate) return failGate(gate);
+  // Sell limit (A-10): an acknowledged overbook is capped per night unless the user may
+  // exceed it. Only reached when there is something to oversell.
+  if (availabilityConflicts.length > 0) {
+    const limitError = await sellLimitGate(ctx, {
+      propertyId: body.propertyId,
+      segments: bookingSegments,
+      excludeGroupBlockId: groupBlockId ?? undefined,
+    });
+    if (limitError) return fail(409, limitError);
+  }
   if (stopSaleConflicts.length > 0) {
     await logActivity({
       ctx,

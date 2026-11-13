@@ -17,6 +17,20 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.2.0",
+    date: "2026-11-13",
+    highlights: "Sell limits cap how far the desk may overbook on a night, guests can be placed at a partner hotel when the house is full, and the Availability grid shows what is on option.",
+    new: [
+      "Sell limit: for a room type or the whole house, set how many rooms past capacity may be sold on chosen nights. Past it, only a manager can book. Nights with no limit work as before.",
+      "Overflow: place a booking at a partner hotel when the house is full. It is charged as usual, gets no Green Tax or registration number here, is not counted in occupancy, and can be moved back into a room type when one frees up. A property can cap overflow bookings per night.",
+      "New reports: Overflow Bookings, and Options and Expiries (tentative bookings whose option runs out, and those released).",
+    ],
+    improved: [
+      "The Availability grid has three new lines under each room type: On option, Allotted (rooms held in tentative group blocks) and Sell limit, plus an Overflow line under the house. Oversold nights show the limit beside the number.",
+      "Overflow bookings carry an Overflow badge in the reservations list.",
+    ],
+  },
+  {
     version: "9.1.0",
     date: "2026-11-13",
     highlights: "Tentative bookings: hold a room on option until a date, confirm it once payment or the contract is checked, and let it release itself if nobody does.",

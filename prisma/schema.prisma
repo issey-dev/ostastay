@@ -535,6 +535,8 @@ model Property {
   // Stop-Sale / availability restrictions (see AvailabilityRestriction) — a row's
   // presence closes that date for sale, property-wide or per room type.
   availabilityRestrictions     AvailabilityRestriction[]
+  // Sell limits (Agent Portal plan A-10): how far past capacity a night may be sold.
+  availabilitySellLimits       AvailabilitySellLimit[]
   // Profiles whose Profile.originPropertyId points here — a "first seen at" breadcrumb
   // only; does not restrict the profile to this property (Profile stays enterprise-wide).
   originatingProfiles          Profile[]
@@ -667,6 +669,7 @@ model RoomType {
   // Per-room-type Stop-Sale rows (roomTypeId set) — property-level closures have a null
   // roomTypeId and don't appear here.
   availabilityRestrictions AvailabilityRestriction[]
+  availabilitySellLimits   AvailabilitySellLimit[]
   // Room-specific features — Bed Type, View, and Amenities are all multi-select, drawn
   // from the enterprise's own SystemCode LOV (categories BED_TYPE / ROOM_VIEW /
   // ROOM_AMENITY). A single generalized join table instead of one column per category,
@@ -1320,7 +1323,29 @@ model AvailabilityRestriction {
   @@index([roomTypeId])
 }
 
-// ReservationStatus: RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
+// A sell limit (Agent Portal plan A-10, Phase 2): on `date`, the desk may oversell this
+// room type (or, with roomTypeId null, the whole house) by at most `extraRooms` rooms.
+// Past it, only a role with "Exceed the sell limit" may book. Channels, the brand website
+// and agents never sell into it (D-7). A night with no row keeps today's rule: an
+// acknowledged overbook is not capped. See src/lib/availability-sell-limit.ts.
+model AvailabilitySellLimit {
+  id              String    @id @default(uuid())
+  propertyId      String
+  property        Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomTypeId      String?
+  roomType        RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  extraRooms      Int       @default(0)
+  updatedByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([propertyId, roomTypeId, date])
+  @@index([propertyId, date])
+  @@index([roomTypeId])
+}
+
+// ReservationStatus: TENTATIVE, RESERVED, IN_HOUSE, CHECKED_OUT, NO_SHOW, CANCELLED
 model Reservation {
   id             String   @id @default(uuid())
   confirmationNo String   @unique
@@ -1418,6 +1443,12 @@ model Reservation {
   cancellationReasonCode  String?
   // The door it came through: DESK | WEBSITE | CHANNEL | AGENT_PORTAL | GROUP_PICKUP.
   origin                  String    @default("DESK")
+  // Overflow (Agent Portal plan A-8, Phase 2): accommodated at a partner hotel because the
+  // house is full. Sits in the pseudo room type OVF, is charged normally, but gets no
+  // Green Tax and no registration number here and is not counted in occupancy.
+  isOverflow              Boolean   @default(false)
+  overflowHotelName       String?
+  overflowNote            String?
 
   assignments                  RoomAssignment[]
   folios                       Folio[]
@@ -2177,6 +2208,8 @@ model PropertySettings {
   // (or the block's cutoff); a booking made after that gets shortOptionHours.
   optionDaysBeforeArrival Int @default(30)
   shortOptionHours        Int @default(48)
+  // Most overflow bookings accepted for one night (A-8); null = no cap.
+  maxOverflowPerNight     Int?
 
   noShowTiming  String  @default("FIRST_AUDIT")
   // Whether Night Audit posts the reservation's selected No-Show fee when it marks one.

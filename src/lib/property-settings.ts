@@ -57,6 +57,7 @@ export const PROPERTY_SETTINGS_DEFAULTS: PropertySettingsValues = {
   // Tentative bookings (Agent Portal plan A-14)
   optionDaysBeforeArrival: 30,
   shortOptionHours: 48,
+  maxOverflowPerNight: null,
   noShowTiming: "FIRST_AUDIT",
   noShowPostFee: true,
   autoCheckOutZeroBalance: false,
@@ -150,6 +151,7 @@ export const propertySettingsPatchSchema = z
     serviceChargeRate: percent.min(MIN_SERVICE_CHARGE_RATE, `Maldives law requires at least ${MIN_SERVICE_CHARGE_RATE}% Service Charge (switch posting off on the Night Audit page instead)`),
     optionDaysBeforeArrival: z.coerce.number().int().min(0).max(365, "Keep it within a year"),
     shortOptionHours: z.coerce.number().int().min(1).max(24 * 14, "Keep it within two weeks"),
+    maxOverflowPerNight: z.coerce.number().int().min(0).max(500).nullable(),
     noShowTiming: z.enum(NO_SHOW_TIMINGS),
     noShowPostFee: z.boolean(),
     autoCheckOutZeroBalance: z.boolean(),
