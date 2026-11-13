@@ -14,13 +14,12 @@ import { ArrowUp, ChevronDown as ArrowDown, Trash2, Plus, RotateCcw } from "@/co
 import {
   DEFAULT_MARKER_RULES,
   MARKER_COLOR_KEYS,
-  MARKER_COLORS,
   MARKER_ICONS,
   MARKER_MATCHES,
   MARKER_MATCH_LABELS,
   type MarkerRule,
 } from "@/lib/booking-markers"
-import { MarkerChip, MarkerIconView } from "@/components/reservations/booking-marker"
+import { MarkerPickerField } from "@/components/reservations/marker-picker"
 import { toast } from "@/lib/toast"
 import { apiError } from "@/lib/api-error"
 
@@ -102,10 +101,7 @@ export function BookingMarkersEditor({ propertyId, canEdit }: { propertyId: stri
           const r = rules[i]
           const err = form.formState.errors.rules?.[i]
           return (
-            <li key={f.id} className="grid gap-2 p-2.5 md:grid-cols-[auto_1.2fr_1.4fr_1fr_auto_auto] md:items-center">
-              <span className="hidden md:block">
-                {r && <MarkerChip marker={{ icon: r.icon, color: r.colorToken as keyof typeof MARKER_COLORS, label: r.label }} />}
-              </span>
+            <li key={f.id} className="grid gap-2 p-2.5 md:grid-cols-[1fr_1.3fr_auto_auto_auto] md:items-center">
               <div>
                 <Input aria-label="Name" disabled={disabled} {...form.register(`rules.${i}.label`)} />
                 {err?.label && <p className="text-xs text-destructive">{err.label.message}</p>}
@@ -116,7 +112,7 @@ export function BookingMarkersEditor({ propertyId, canEdit }: { propertyId: stri
                   name={`rules.${i}.match`}
                   render={({ field }) => (
                     <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-                      <SelectTrigger aria-label="When"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label="When" className="w-full"><SelectValue>{MARKER_MATCH_LABELS[field.value as keyof typeof MARKER_MATCH_LABELS]}</SelectValue></SelectTrigger>
                       <SelectContent>
                         {MARKER_MATCHES.map((m) => <SelectItem key={m} value={m}>{MARKER_MATCH_LABELS[m]}</SelectItem>)}
                       </SelectContent>
@@ -143,39 +139,18 @@ export function BookingMarkersEditor({ propertyId, canEdit }: { propertyId: stri
                 )}
                 {err?.matchValue && <p className="text-xs text-destructive">{err.matchValue.message}</p>}
               </div>
-              <div className="flex items-center gap-2">
-                <Controller
-                  control={form.control}
-                  name={`rules.${i}.icon`}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-                      <SelectTrigger aria-label="Icon" className="w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {MARKER_ICONS.map((ic) => (
-                          <SelectItem key={ic} value={ic}><MarkerIconView name={ic} className="mr-1.5 inline size-4" />{ic}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <Controller
-                  control={form.control}
-                  name={`rules.${i}.colorToken`}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
-                      <SelectTrigger aria-label="Colour" className="w-28"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {MARKER_COLOR_KEYS.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            <span className={`mr-1.5 inline-block size-3 rounded-full ${MARKER_COLORS[c].dot}`} />
-                            {MARKER_COLORS[c].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
+              <MarkerPickerField
+                icon={r?.icon}
+                color={r?.colorToken}
+                guest={r?.label || "Guest name"}
+                title={`Marker: ${r?.label ?? ""}`}
+                allowClear={false}
+                disabled={disabled}
+                onChange={({ icon, color }) => {
+                  if (icon) form.setValue(`rules.${i}.icon`, icon, { shouldDirty: true, shouldValidate: true })
+                  if (color) form.setValue(`rules.${i}.colorToken`, color, { shouldDirty: true, shouldValidate: true })
+                }}
+              />
               <Controller
                 control={form.control}
                 name={`rules.${i}.isActive`}

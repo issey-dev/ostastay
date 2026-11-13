@@ -35,8 +35,9 @@ import { NegotiatedRatesManager } from "@/components/profiles/negotiated-rates-m
 import { InfoHint } from "@/components/ui/info-hint"
 import { PageHeader } from "@/components/ui/page-header"
 import { BOOKING_METHODS } from "@/lib/green-tax-sheet"
-import { SETTLEMENT_MODES, SETTLEMENT_MODE_LABELS, MARKER_ICONS, MARKER_COLORS, MARKER_COLOR_KEYS } from "@/lib/booking-markers"
-import { MarkerIconView } from "@/components/reservations/booking-marker"
+import { SETTLEMENT_MODES, SETTLEMENT_MODE_LABELS } from "@/lib/booking-markers"
+import { MarkerPickerField } from "@/components/reservations/marker-picker"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { MobileActionBar } from "@/components/ui/mobile"
 import { INPUT_EMAIL, INPUT_MONEY } from "@/lib/input-presets"
 
@@ -744,15 +745,17 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Who pays</FormLabel>
-                            <Select value={field.value || "NONE"} onValueChange={(v) => field.onChange(v === "NONE" ? "" : v)}>
-                              <FormControl>
-                                <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="NONE">Not set (agent pays, net)</SelectItem>
-                                {SETTLEMENT_MODES.map((m) => <SelectItem key={m} value={m}>{SETTLEMENT_MODE_LABELS[m]}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <FormControl>
+                              <SearchableSelect
+                                value={field.value || "NONE"}
+                                onChange={(v) => field.onChange(v === "NONE" ? "" : v)}
+                                placeholder="Choose"
+                                options={[
+                                  { value: "NONE", label: "Not set (agent pays, net of commission)" },
+                                  ...SETTLEMENT_MODES.map((m) => ({ value: m, label: SETTLEMENT_MODE_LABELS[m] })),
+                                ]}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -788,49 +791,20 @@ export default function ProfileForm({ initialData, upid, defaultType = "GUEST", 
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="markerIcon"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Tape Chart icon</FormLabel>
-                            <Select value={field.value || "NONE"} onValueChange={(v) => field.onChange(v === "NONE" ? "" : v)}>
-                              <FormControl>
-                                <SelectTrigger><SelectValue placeholder="Default" /></SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="NONE">Default</SelectItem>
-                                {MARKER_ICONS.map((i) => <SelectItem key={i} value={i}><MarkerIconView name={i} className="mr-1.5 inline size-4" />{i}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="markerColor"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Tape Chart colour</FormLabel>
-                            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Tape Chart colour">
-                              {MARKER_COLOR_KEYS.map((c) => (
-                                <button
-                                  key={c}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={field.value === c}
-                                  aria-label={MARKER_COLORS[c].label}
-                                  title={MARKER_COLORS[c].label}
-                                  onClick={() => field.onChange(field.value === c ? "" : c)}
-                                  className={`size-6 rounded-full ${MARKER_COLORS[c].dot} ring-offset-2 ring-offset-background ${field.value === c ? "ring-2 ring-foreground" : ""}`}
-                                />
-                              ))}
-                            </div>
-                            <p className="text-xs text-muted-foreground">Empty: a free colour is picked when the profile is saved.</p>
-                          </FormItem>
-                        )}
-                      />
+                      <div className="grid gap-2 sm:col-span-2">
+                        <FormLabel>Tape Chart marker</FormLabel>
+                        <MarkerPickerField
+                          icon={form.watch("markerIcon")}
+                          color={form.watch("markerColor")}
+                          guest={form.watch("companyName") || "Guest name"}
+                          title="Marker for this source"
+                          emptyHint="Default: a briefcase in a colour no other source uses, picked when you save."
+                          onChange={({ icon, color }) => {
+                            form.setValue("markerIcon", icon ?? "", { shouldDirty: true, shouldValidate: true })
+                            form.setValue("markerColor", color ?? "", { shouldDirty: true, shouldValidate: true })
+                          }}
+                        />
+                      </div>
                     </>
                   )}
                 </CardContent>
