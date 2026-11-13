@@ -11,12 +11,12 @@
 
 ## 1. Planned or in progress (each has its own plan file)
 
-### Agent Portal and Agent API — Phases 0a to 6 built (9.0.1 to 9.6.0)
+### Agent Portal and Agent API — Phases 0a to 7 built (9.0.1 to 9.7.0)
 
 Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website
 exists on the owner's machine only (`agent-portal/`, not in git).
 
-- [ ] Phases 7 to 9 (9.7.0 … 9.9.0): plan §11 (0a to 6 are done). Set AGENT_PORTAL_URL on the server so invite and reset links are full links.
+- [ ] Phases 8 and 9 (9.8.0, 9.9.0): plan §11 (0a to 7 are done). Commission offset should also post a Commission offset payment on the agent's open invoices (today it is recorded as a payout only). Set AGENT_PORTAL_URL on the server so invite and reset links are full links.
 - [ ] Owner questions still open: Q-27 (tune the Tape Chart marker defaults), Q-28 (what moves a
   slot from Tentative to Definite).
 

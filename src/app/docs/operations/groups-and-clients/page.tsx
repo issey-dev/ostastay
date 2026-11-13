@@ -73,6 +73,27 @@ export default function GroupsAndClients() {
         <li>Agents generate their own confirmation document for their client; the hotel never writes to the agent&rsquo;s client.</li>
       </ul>
 
+      <H3>Commission</H3>
+      <p>
+        A booking with a source (or a travel agent) earns commission at check-out: the commission percentage of the room rate
+        without service charge and tax. Meals that are part of the rate count; Green Tax, extras, transfers and anything the guest
+        spends do not. The rate plan&rsquo;s own commission for that agent is used first, else the percentage on the profile.
+      </p>
+      <Table
+        head={["Who pays (on the source)", "What happens at check-out"]}
+        rows={[
+          ["Agent pays, net of commission", "When the folio goes to the agent's City Ledger account, the commission is credited on that invoice (as before), and recorded as netted."],
+          ["Agent pays the full amount", "The agent is invoiced in full; the commission is recorded as owed to the agent."],
+          ["Guest pays at the hotel", "The guest settles at the desk; the commission is recorded as owed to the agent."],
+        ]}
+      />
+      <p>
+        <strong>Debtors › Commissions</strong> lists every commission line with what is owed per agent. Tick lines, choose{" "}
+        <strong>Approve</strong>, then <strong>Pay or offset</strong> (one agent at a time) with the method and a reference. Reversing a
+        check-out reverses its commission; one already paid becomes a negative line for the next payout. The{" "}
+        <strong>Commission</strong> and <strong>Source Production</strong> reports summarise them.
+      </p>
+
       <H2>The Posting Master</H2>
       <p>
         Every block has a <strong>Posting Master</strong>: a reservation of its own, in a room that only exists for the block, whose

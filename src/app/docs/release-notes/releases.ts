@@ -17,6 +17,21 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.7.0",
+    date: "2026-11-13",
+    highlights: "Commission for agents and sources is recorded on every check-out, whoever pays, and can be approved and paid out from Debtors.",
+    new: [
+      "Every booking records who pays: the agent net of commission, the agent in full, or the guest at the hotel, taken from the source.",
+      "At check-out, commission is worked out on the room rate without service charge and tax, rounded once, and recorded: netted on the agent's invoice, or owed to the agent.",
+      "Debtors has a Commissions tab: what each agent is owed, approve lines, and record a payout or an offset against their invoices.",
+      "New reports: Commission, and Source Production (bookings, room nights, room revenue and commission per source).",
+      "Agents can see their statement (invoices, commission, balance) and their commission lines in the agent portal.",
+    ],
+    improved: [
+      "Reversing a check-out also reverses its commission; commission already paid becomes a negative line for the next payout.",
+    ],
+  },
+  {
     version: "9.6.0",
     date: "2026-11-13",
     highlights: "Agents can now work end to end through the agent portal: request slots, book into them on option, ask you to confirm, fill in guest and flight details, and generate their own confirmation.",
