@@ -1441,6 +1441,13 @@ model Reservation {
   // re-posting them would double-charge. Null = nothing advance-billed. See
   // api/reservations/[id]/advance-bill/route.ts.
   advanceBilledThrough  DateTime?
+  // The last Advance Folio (Agent Portal plan A-23, Phase 8): its check number, the business
+  // date it was posted on, and advanceBilledThrough before it, so a mistake can be reversed
+  // the same business day (void those lines, restore the date).
+  advanceFolioCheckNo     String?
+  advanceFolioDate        DateTime?
+  advanceFolioPrevThrough DateTime?
+  advanceFolioFolioId     String?
   adults                Int       @default(1)
   children              Int       @default(0)
   // Under the enterprise's Green Tax exemption age (EnterpriseSettings.greenTaxExemptAge)

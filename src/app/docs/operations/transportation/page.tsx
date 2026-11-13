@@ -120,7 +120,7 @@ export default function TransportationOperations() {
         ]}
       />
       <ul>
-        <li>Each transfer is charged <strong>once</strong>: running Night Audit again, or an Advance Bill, never charges it twice. It posts with the rate&apos;s charge code and tax, and follows the reservation&apos;s routing (group master bill, routing rules).</li>
+        <li>Each transfer is charged <strong>once</strong>: running Night Audit again, or an Advance Folio, never charges it twice. It posts with the rate&apos;s charge code and tax, and follows the reservation&apos;s routing (group master bill, routing rules).</li>
         <li>Drafts, no-shows and cancellations are <strong>never</strong> charged automatically. Complimentary and non-billable transfers show as Complimentary.</li>
         <li>If there was no open bill to post to, the transfer shows <strong>Pending</strong> and Night Audit lists it. Open a folio and use Post charge.</li>
       </ul>

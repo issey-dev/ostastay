@@ -17,6 +17,21 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.8.0",
+    date: "2026-11-13",
+    highlights: "Groups can be billed as a whole: one statement PDF, an Advance Folio for every guest in house, and a rooming list imported in one go.",
+    new: [
+      "A group's statement (master folio, every guest's folio and the total) can be downloaded as one PDF or emailed from the group.",
+      "Advance Folio for the whole group: posts every in-house guest's remaining nights in one step, each to the folio it bills to.",
+      "Import a rooming list into a group: each line is checked like a single pickup, and lines that can't be added are listed.",
+      "An Advance Folio posted by mistake can be reversed on the same business date.",
+    ],
+    improved: [
+      "Advance Bill is now called Advance Folio. For a group guest billed to the master, it posts to the master folio.",
+      "A deposit can be collected on a tentative booking.",
+    ],
+  },
+  {
     version: "9.7.0",
     date: "2026-11-13",
     highlights: "Commission for agents and sources is recorded on every check-out, whoever pays, and can be approved and paid out from Debtors.",

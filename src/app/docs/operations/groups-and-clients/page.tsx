@@ -112,6 +112,21 @@ export default function GroupsAndClients() {
         </p>
       </Callout>
 
+      <H2>Group billing</H2>
+      <p>The <strong>Group billing</strong> card on the block holds the group&apos;s paperwork and the steps done for the whole group at once:</p>
+      <ul>
+        <li><strong>Download group statement</strong>: one PDF with the master folio, every guest&apos;s folio and the group total.</li>
+        <li><strong>Send documents</strong>: emails that PDF, with an optional message, to the address you enter.</li>
+        <li><strong>Advance Folio for the group</strong>: posts the remaining nights of every guest in house today, each to the folio it bills to (the master or the guest&apos;s own). Guests not yet in house are skipped, and the result lists each one.</li>
+        <li><strong>Import rooming list</strong>: paste lines (first name, last name, check-in, check-out, room type code, adults, children, email, tentative). Each line is checked like a single pickup; bad lines are listed and the rest are added.</li>
+      </ul>
+      <Callout>
+        <p>
+          An Advance Folio posted by mistake can be undone on the same business date: on the reservation, <strong>More</strong> then
+          <strong> Reverse Advance Folio</strong>. Its charges are voided and Night Audit posts those nights again as usual.
+        </p>
+      </Callout>
+
       <H2>Client Relations</H2>
       <p>
         The directory has four lists: guests, corporate accounts, travel agents and staff. Each profile is one card with the name, the
