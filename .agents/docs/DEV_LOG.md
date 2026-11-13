@@ -108,6 +108,11 @@ The agent website mockup stays on the owner's machine (`agent-portal/`, excluded
 - *A-23.* An advance deposit posts no revenue. An Advance Folio posts every remaining night on
   one date, for in-house guests only, to the folio they bill to; it can be reversed on the same
   business date only.
+- *Booking transactions.* Inside a `$transaction` that holds the last-room lock, read through the
+  transaction (`tx`), never the shared client: `findTypeAvailabilityConflicts` and
+  `outstandingBlockHolds` take `db: tx`. A second pooled connection per booking lets a burst
+  queued on the lock use up a small pool (`P2024`, a 500). Group holds are judged night by night,
+  so two pickups on different nights of a one-room block do not overbook it.
 - *A-24.* No Agents module: per agent the hotel creates the Source profile and adds a login.
 
 Open items moved to [TODO.md](TODO.md).

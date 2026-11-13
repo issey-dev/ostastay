@@ -233,7 +233,7 @@ export async function pickupIntoBlock(ctx: AuthContext, blockId: string, input: 
         }
       }
       if (!roomType.isPseudo && !acknowledgeOverbook && availabilityConflicts.length === 0) {
-        const again = await findTypeAvailabilityConflicts({ propertyId: group.propertyId, segments, excludeGroupBlockId: blockId });
+        const again = await findTypeAvailabilityConflicts({ propertyId: group.propertyId, segments, excludeGroupBlockId: blockId, db: tx });
         if (again.length > 0) throw new Raced(fail(409, again.join("; "), "NO_AVAILABILITY", !isAgent));
       }
 

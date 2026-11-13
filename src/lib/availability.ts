@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/db";
 
+// These checks can run on a transaction's own connection. A booking that holds the last-room
+// lock inside $transaction must pass its `tx`: reading through the shared client needs a second
+// pooled connection per booking, and a burst of bookings queued on the lock can use up a small
+// pool and time out (P2024).
+type Db = Pick<typeof prisma, "roomType" | "room" | "roomAssignment" | "groupBlockRoom">;
+
 // Reservation statuses that actually hold inventory. CANCELLED, NO_SHOW and
 // CHECKED_OUT never block a room or count toward a room type's sold count — a
 // no-show's room goes back on sale for the remaining nights, matching standard
@@ -43,14 +49,17 @@ export async function findTypeAvailabilityConflicts(opts: {
   // When set, this block's own outstanding holds are ignored — a block's pickups draw
   // FROM its held rooms rather than being blocked by them.
   excludeGroupBlockId?: string | null;
+  /** Run on this client (a transaction's `tx`) instead of the shared one. */
+  db?: Db;
 }): Promise<string[]> {
   const { propertyId, segments, excludeReservationId, excludeGroupBlockId } = opts;
+  const db: Db = opts.db ?? prisma;
   const conflicts: string[] = [];
 
   const typeIds = [...new Set(segments.map((s) => s.roomTypeId))];
   if (typeIds.length === 0) return conflicts;
 
-  const roomTypes = await prisma.roomType.findMany({
+  const roomTypes = await db.roomType.findMany({
     where: { id: { in: typeIds }, propertyId },
     select: { id: true, name: true, isPseudo: true },
   });
@@ -65,7 +74,7 @@ export async function findTypeAvailabilityConflicts(opts: {
     const windowEnd = Math.max(...typeSegments.map((s) => dayStartMs(s.endDate)));
     if (windowEnd <= windowStart) continue; // zero/negative-length — date validation's problem, not ours
 
-    const capacity = await prisma.room.count({
+    const capacity = await db.room.count({
       where: {
         propertyId,
         roomTypeId: typeId,
@@ -73,7 +82,7 @@ export async function findTypeAvailabilityConflicts(opts: {
       },
     });
 
-    const existing = await prisma.roomAssignment.findMany({
+    const existing = await db.roomAssignment.findMany({
       where: {
         roomTypeId: typeId,
         ...(excludeReservationId ? { reservationId: { not: excludeReservationId } } : {}),
@@ -97,6 +106,7 @@ export async function findTypeAvailabilityConflicts(opts: {
       windowStart,
       windowEnd,
       excludeGroupBlockId,
+      db,
     });
 
     // Walk each night once across the whole window; a night is oversold when the rooms
@@ -151,9 +161,12 @@ export async function outstandingBlockHolds(opts: {
   windowEnd: number;
   excludeGroupBlockId?: string | null;
   blockStatusIn?: string[];
+  /** Run on this client (a transaction's `tx`) instead of the shared one. */
+  db?: Db;
 }): Promise<BlockHoldWindow[]> {
   const { propertyId, roomTypeId, windowStart, windowEnd, excludeGroupBlockId, blockStatusIn } = opts;
-  const holdRows = await prisma.groupBlockRoom.findMany({
+  const db: Db = opts.db ?? prisma;
+  const holdRows = await db.groupBlockRoom.findMany({
     where: {
       roomTypeId,
       quantity: { gt: 0 },
@@ -174,7 +187,7 @@ export async function outstandingBlockHolds(opts: {
   if (holdRows.length === 0) return [];
 
   const blockIds = holdRows.map((h) => h.groupBlock.id);
-  const picked = await prisma.roomAssignment.findMany({
+  const picked = await db.roomAssignment.findMany({
     where: {
       roomTypeId,
       reservation: { groupBlockId: { in: blockIds }, status: { notIn: ["CANCELLED", "NO_SHOW"] } },
