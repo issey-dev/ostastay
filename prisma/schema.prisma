@@ -1093,6 +1093,7 @@ model Profile {
   accompanyingReservations AccompanyingGuest[]
   foliosAsPayee            Folio[]                       @relation("PayeeProfile")
   groupBlocksAsPayee       GroupBlock[]                  @relation("GroupBlockPayee")
+  groupBlocksAsSource      GroupBlock[]                  @relation("GroupBlockSource")
   guestRegistrations       GuestRegistration[]
   // Negotiated Rate Plans linked to this profile — only meaningful for COMPANY/
   // TRAVEL_AGENT profiles (see RatePlanAgentAccess).
@@ -1221,6 +1222,9 @@ model RatePlan {
   description     String?
   priority        Int                 @default(0)
   isNegotiated    Boolean             @default(false)
+  // Agent sales window (Agent Portal plan A-11): linked Sources may request slots on this
+  // plan from this moment (minus a Source's earlyAccessDays). Null = always open.
+  agentSalesOpenAt DateTime?
   // Classification flags for zero/nominal-rate stays — comp'd rooms (VIPs, media,
   // familiarization trips) and internal staff/owner use. Pure labels for now, same
   // starting point isNegotiated had before its Negotiated Rates follow-up; no posting
@@ -1485,6 +1489,11 @@ model Reservation {
   isOverflow              Boolean   @default(false)
   overflowHotelName       String?
   overflowNote            String?
+  // Agent bookings (Agent Portal plan §4): the package name, the agent's own file number,
+  // and the portal login that entered it (AgentUser.id; a plain id, the login can be removed).
+  packageName             String?
+  agentReference          String?
+  agentUserId             String?
 
   assignments                  RoomAssignment[]
   folios                       Folio[]
@@ -2528,7 +2537,29 @@ model GroupBlock {
   endDate        DateTime
   cutoffDate     DateTime?
   totalRoomsHeld Int       @default(0)
+  // REQUESTED (a Source's slot request; holds nothing) → TENTATIVE | DECLINED, then as before
+  // TENTATIVE → DEFINITE | LOST | CANCELLED, DEFINITE → CANCELLED. See src/lib/group-status.ts.
   status         String    @default("TENTATIVE")
+
+  // Blocks for Sources (Agent Portal plan A-7, A-12, Phase 4). A slot IS a block with a
+  // Source. origin: DESK | AGENT_PORTAL. The request/decision fields record who asked and
+  // who decided. releaseDays: each night's unsold rooms release that many days before it
+  // (rolling release, beside the one-date cutoff). Elasticity: how far a pickup may go past
+  // the approved slot (extra rooms per night, extra nights before/after); all 0 = hard edges.
+  sourceProfileId        String?
+  sourceProfile          Profile? @relation("GroupBlockSource", fields: [sourceProfileId], references: [upid])
+  origin                 String   @default("DESK")
+  requestedByAgentUserId String?
+  requestNote            String?
+  isOverflowRequest      Boolean  @default(false)
+  decisionReason         String?
+  decidedBy              String?
+  decidedAt              DateTime?
+  releaseDays            Int?
+  elasticRooms           Int      @default(0)
+  elasticNightsBefore    Int      @default(0)
+  elasticNightsAfter     Int      @default(0)
+  checkpoints            GroupBlockCheckpoint[]
 
   // Optional Travel Agent / Corporate credit account the block's master bill settles to
   // (City Ledger). When set, the master folio is created as CITY_LEDGER with this payee,
@@ -2552,6 +2583,26 @@ model GroupBlock {
 
   @@unique([propertyId, code])
   @@index([payeeProfileId])
+  @@index([sourceProfileId])
+  @@index([propertyId, status])
+}
+
+// A quota checkpoint on a block (Agent Portal plan A-12): by `date`, at least `minPercent`
+// of the held rooms must be booked; if not, the unsold rooms are released (the hold shrinks
+// to what is booked) and the block carries on. Processed once (processedAt) by the
+// group-block-release job, and lazily on read.
+model GroupBlockCheckpoint {
+  id            String     @id @default(uuid())
+  groupBlockId  String
+  groupBlock    GroupBlock @relation(fields: [groupBlockId], references: [id], onDelete: Cascade)
+  date          DateTime
+  minPercent    Int
+  processedAt   DateTime?
+  releasedRooms Int?
+  createdAt     DateTime   @default(now())
+
+  @@index([groupBlockId])
+  @@index([processedAt, date])
 }
 
 // Rooms of a given type held by a group block for its whole date span. Outstanding
@@ -2564,6 +2615,8 @@ model GroupBlockRoom {
   roomTypeId   String
   roomType     RoomType   @relation(fields: [roomTypeId], references: [id])
   quantity     Int        @default(0)
+  // What a Source asked for, kept beside what was approved (Agent Portal plan Phase 4).
+  requestedQuantity Int?
 
   @@unique([groupBlockId, roomTypeId])
   @@index([roomTypeId])

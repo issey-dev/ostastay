@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { expireOptionsSoon } from "@/lib/reservations/options";
+import { processCheckpointsSoon } from "@/lib/groups/release";
 import { figuresJson } from "@/lib/figures";
 import { prisma } from "@/lib/db";
 import { getMarkerRules } from "@/lib/booking-markers-server";
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
     }
     await assertPropertyAccess(ctx, propertyId);
     await expireOptionsSoon(propertyId);
+    await processCheckpointsSoon(propertyId);
 
     // Default to today if not provided
     const startDate = startDateParam ? startOfDay(parseISO(startDateParam)) : startOfDay(new Date());

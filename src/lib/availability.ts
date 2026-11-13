@@ -159,7 +159,8 @@ export async function outstandingBlockHolds(opts: {
       quantity: { gt: 0 },
       groupBlock: {
         propertyId,
-        status: blockStatusIn ? { in: blockStatusIn } : { notIn: ["CANCELLED", "LOST"] },
+        // A slot REQUEST holds nothing (Agent Portal plan A-7); only live blocks do.
+        status: { in: blockStatusIn ?? ["TENTATIVE", "DEFINITE"] },
         startDate: { lt: new Date(windowEnd) },
         endDate: { gt: new Date(windowStart) },
         ...(excludeGroupBlockId ? { id: { not: excludeGroupBlockId } } : {}),
@@ -167,7 +168,7 @@ export async function outstandingBlockHolds(opts: {
     },
     select: {
       quantity: true,
-      groupBlock: { select: { id: true, startDate: true, endDate: true, cutoffDate: true } },
+      groupBlock: { select: { id: true, startDate: true, endDate: true, cutoffDate: true, releaseDays: true } },
     },
   });
   if (holdRows.length === 0) return [];
@@ -192,7 +193,14 @@ export async function outstandingBlockHolds(opts: {
     const b = h.groupBlock;
     if (b.cutoffDate && now > b.cutoffDate) continue; // released after cutoff
     const outstanding = Math.max(0, h.quantity - (pickedByBlock.get(b.id) ?? 0));
-    if (outstanding > 0) out.push({ startMs: dayStartMs(b.startDate), endMs: dayStartMs(b.endDate), outstanding });
+    // Rolling release (A-12): each night's unsold rooms go back on sale `releaseDays` before
+    // that night, so the hold only covers nights still further away than that.
+    let startMs = dayStartMs(b.startDate);
+    if (b.releaseDays !== null && b.releaseDays !== undefined) {
+      startMs = Math.max(startMs, dayStartMs(new Date(now.getTime() + (b.releaseDays + 1) * 86_400_000)));
+    }
+    const endMs = dayStartMs(b.endDate);
+    if (outstanding > 0 && endMs > startMs) out.push({ startMs, endMs, outstanding });
   }
   return out;
 }

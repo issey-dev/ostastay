@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { processDueCheckpoints } from "@/lib/groups/release"
 import { figuresJson } from "@/lib/figures"
 import { ensurePostingMaster, checkInPostingMaster, syncPostingMasterDates, cancelPostingMaster } from "@/lib/groups/posting-master"
 import { z } from "zod"
@@ -10,7 +11,9 @@ import { GROUP_STATUSES, GROUP_RELEASING_STATUSES, GROUP_STATUS_LABEL, canTransi
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireSession()
+    requirePermission(ctx, "GROUP_BLOCKS", "view")
     const { id } = await params
+    await processDueCheckpoints({ groupBlockId: id })
     const group = await prisma.groupBlock.findUnique({
       where: { id },
       include: {
@@ -39,6 +42,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           include: { roomType: { select: { id: true, name: true, code: true } } },
         },
         payeeProfile: { select: { upid: true, firstName: true, lastName: true, companyName: true } },
+        sourceProfile: { select: { upid: true, firstName: true, companyName: true, markerIcon: true, markerColor: true } },
+        checkpoints: { orderBy: { date: "asc" } },
       }
     })
 
@@ -64,6 +69,13 @@ const updateSchema = z.object({
   roomHolds: z.array(z.object({ roomTypeId: z.string().min(1), quantity: z.number().int().min(0) })).optional(),
   // City-Ledger account for the master bill (null = clear / bill direct).
   payeeProfileId: z.string().nullable().optional(),
+  // Blocks for Sources (Agent Portal plan A-12, Phase 4).
+  sourceProfileId: z.string().nullable().optional(),
+  releaseDays: z.number().int().min(0).max(365).nullable().optional(),
+  elasticRooms: z.number().int().min(0).max(500).optional(),
+  elasticNightsBefore: z.number().int().min(0).max(60).optional(),
+  elasticNightsAfter: z.number().int().min(0).max(60).optional(),
+  checkpoints: z.array(z.object({ date: z.string().min(1), minPercent: z.number().int().min(1).max(100) })).max(12).optional(),
 })
 
 // A block was previously frozen at creation — status, cutoff, and rooms-held could
@@ -125,6 +137,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "End date must be after start date" }, { status: 400 })
     }
 
+    // A slot request is decided on the Requests tab (availability checked there), never here.
+    if (group.status === "REQUESTED" && data.status && data.status !== "REQUESTED") {
+      return NextResponse.json({ error: "Approve or decline the request from the Requests tab." }, { status: 400 })
+    }
+    if (data.sourceProfileId) {
+      const src = await prisma.profile.findUnique({ where: { upid: data.sourceProfileId } })
+      if (!src || src.enterpriseId !== ctx.enterpriseId || src.profileType !== "SOURCE") {
+        return NextResponse.json({ error: "Source profile not found" }, { status: 400 })
+      }
+    }
+
     // City-Ledger account: validate a credit account of this enterprise when set.
     if (data.payeeProfileId) {
       const payee = await prisma.profile.findUnique({ where: { upid: data.payeeProfileId } })
@@ -154,8 +177,29 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         // Replace the block's holds wholesale when a new set is supplied.
         ...(cleanedHolds ? { roomHolds: { deleteMany: {}, create: cleanedHolds } } : {}),
         ...(data.payeeProfileId !== undefined ? { payeeProfileId: data.payeeProfileId || null } : {}),
+        ...(data.sourceProfileId !== undefined ? { sourceProfileId: data.sourceProfileId || null } : {}),
+        ...(data.releaseDays !== undefined ? { releaseDays: data.releaseDays } : {}),
+        ...(data.elasticRooms !== undefined ? { elasticRooms: data.elasticRooms } : {}),
+        ...(data.elasticNightsBefore !== undefined ? { elasticNightsBefore: data.elasticNightsBefore } : {}),
+        ...(data.elasticNightsAfter !== undefined ? { elasticNightsAfter: data.elasticNightsAfter } : {}),
+        // Checkpoints: replace the unprocessed ones; processed ones are history and stay.
+        ...(data.checkpoints
+          ? {
+              checkpoints: {
+                deleteMany: { processedAt: null },
+                create: data.checkpoints.map((c) => ({ date: new Date(c.date), minPercent: c.minPercent })),
+              },
+            }
+          : {}),
       },
     })
+    // A pickup inherits the block's Source: keep live pickups in step when it changes.
+    if (data.sourceProfileId !== undefined && data.sourceProfileId !== group.sourceProfileId) {
+      await prisma.reservation.updateMany({
+        where: { groupBlockId: id, isPostingMaster: false, status: { in: ["TENTATIVE", "RESERVED"] } },
+        data: { sourceProfileId: data.sourceProfileId || null },
+      })
+    }
 
     // Going Definite creates the Posting Master reservation (same as the master folio by hand).
     if (data.status === "DEFINITE" && group.status !== "DEFINITE") await ensurePostingMaster(id)

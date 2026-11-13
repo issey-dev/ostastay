@@ -92,6 +92,13 @@ export async function POST(request: Request) {
       payeeProfileId = payee.upid
     }
 
+    if (typeof body.sourceProfileId === "string" && body.sourceProfileId) {
+      const src = await prisma.profile.findUnique({ where: { upid: body.sourceProfileId } })
+      if (!src || src.enterpriseId !== ctx.enterpriseId || src.profileType !== "SOURCE") {
+        return NextResponse.json({ error: "Source profile not found" }, { status: 400 })
+      }
+    }
+
     const newGroup = await prisma.groupBlock.create({
       data: {
         propertyId,
@@ -103,6 +110,12 @@ export async function POST(request: Request) {
         totalRoomsHeld: heldTotal,
         status: startStatus,
         payeeProfileId,
+        // Blocks for Sources (Agent Portal plan Phase 4).
+        sourceProfileId: typeof body.sourceProfileId === "string" && body.sourceProfileId ? body.sourceProfileId : null,
+        releaseDays: Number.isInteger(body.releaseDays) && body.releaseDays >= 0 ? body.releaseDays : null,
+        elasticRooms: Number.isInteger(body.elasticRooms) && body.elasticRooms >= 0 ? body.elasticRooms : 0,
+        elasticNightsBefore: Number.isInteger(body.elasticNightsBefore) && body.elasticNightsBefore >= 0 ? body.elasticNightsBefore : 0,
+        elasticNightsAfter: Number.isInteger(body.elasticNightsAfter) && body.elasticNightsAfter >= 0 ? body.elasticNightsAfter : 0,
         roomHolds: roomHolds.length
           ? { create: roomHolds.map((h) => ({ roomTypeId: h.roomTypeId, quantity: h.quantity })) }
           : undefined,

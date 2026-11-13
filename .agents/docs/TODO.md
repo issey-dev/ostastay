@@ -11,12 +11,12 @@
 
 ## 1. Planned or in progress (each has its own plan file)
 
-### Agent Portal and Agent API — Phases 0a to 3 built (9.0.1 to 9.3.0)
+### Agent Portal and Agent API — Phases 0a to 4 built (9.0.1 to 9.4.0)
 
 Plan: [AGENT_PORTAL_PLAN.md](AGENT_PORTAL_PLAN.md). A clickable mockup of the agent website
 exists on the owner's machine only (`agent-portal/`, not in git).
 
-- [ ] Phases 4 to 9 (9.4.0 … 9.9.0): plan §11 (0a to 3 are done). Phase 4 puts slots, cutoff rules and elasticity on Group Blocks.
+- [ ] Phases 5 to 9 (9.5.0 … 9.9.0): plan §11 (0a to 4 are done).
 - [ ] Owner questions still open: Q-27 (tune the Tape Chart marker defaults), Q-28 (what moves a
   slot from Tentative to Definite).
 

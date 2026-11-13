@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useState, use } from "react"
+import { SourceSlotsCard } from "@/components/profiles/source-slots-card"
 import { toast } from "@/lib/toast"
 import { useUrlState } from "@/lib/use-url-state"
 import { useRouter, useParams } from "next/navigation"
@@ -615,6 +616,7 @@ function ProfileDetailPage({ params }: { params: Promise<{ upid: string }> }) {
             <Card><CardContent><InlineLoading lines={4} /></CardContent></Card>
           ) : (
             <div className="flex flex-col gap-4">
+              {profile.profileType === "SOURCE" && <SourceSlotsCard upid={upid} slug={slug} />}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-4 w-4 text-muted-foreground" /> Upcoming and in house</CardTitle>

@@ -19,6 +19,7 @@ import type { Job } from "@/lib/jobs/runner";
 import { processDueWebhooks } from "@/lib/website-api/webhooks";
 import { expireStaleSpaHolds } from "@/lib/spa-booking";
 import { expireDueOptions } from "@/lib/reservations/options";
+import { processDueCheckpoints } from "@/lib/groups/release";
 
 // The job registry. Adding a job here is all that is needed for cron to pick it up —
 // /api/jobs/run iterates this list.
@@ -412,6 +413,20 @@ export const optionExpiryJob: Job = {
   },
 };
 
+/**
+ * Group block quota checkpoints (Agent Portal plan A-12): a missed checkpoint shrinks the
+ * hold to what is booked. Each checkpoint is claimed once, so replicas and retries are safe.
+ */
+export const groupBlockReleaseJob: Job = {
+  name: "group-block-release",
+  description: "Release unsold rooms from group blocks that missed a quota checkpoint",
+  run: async (enterpriseId) => {
+    const r = await processDueCheckpoints({ enterpriseId });
+    const released = r.reduce((s, x) => s + x.releasedRooms, 0);
+    return { itemsProcessed: r.length, summary: `${r.length} checkpoint(s) checked, ${released} room(s) released` };
+  },
+};
+
 export const JOBS: readonly Job[] = [
   channelKeepAliveJob,
   channelLogPruneJob,
@@ -424,6 +439,7 @@ export const JOBS: readonly Job[] = [
   nightAuditScheduleJob,
   notificationAlertsJob,
   optionExpiryJob,
+  groupBlockReleaseJob,
 ];
 
 export function findJob(name: string): Job | undefined {

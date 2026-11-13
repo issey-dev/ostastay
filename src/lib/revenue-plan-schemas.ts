@@ -23,6 +23,8 @@ export const ratePlanFormSchema = z
     // A string so an empty box is distinguishable from 0 — and 0 is a real priority.
     priority: z.string().trim().regex(/^\d+$/, "Priority must be a whole number (0 or more)"),
     isNegotiated: z.boolean(),
+    // Agent sales window (Agent Portal plan A-11): yyyy-MM-dd or "" (always open).
+    agentSalesOpenAt: z.string(),
     isComplimentary: z.boolean(),
     isHouseUse: z.boolean(),
     chargeCodeId: z.string(),
@@ -54,6 +56,7 @@ export const emptyRatePlanForm: RatePlanFormValues = {
   description: "",
   priority: "10",
   isNegotiated: false,
+  agentSalesOpenAt: "",
   isComplimentary: false,
   isHouseUse: false,
   chargeCodeId: "",
@@ -73,6 +76,7 @@ export function ratePlanPayload(v: RatePlanFormValues, propertyId: string) {
     description: v.description,
     priority: parseInt(v.priority, 10),
     isNegotiated: v.isNegotiated,
+    agentSalesOpenAt: v.isNegotiated && v.agentSalesOpenAt ? v.agentSalesOpenAt : null,
     isComplimentary: v.isComplimentary,
     isHouseUse: v.isHouseUse,
     chargeCodeId: v.chargeCodeId || null,

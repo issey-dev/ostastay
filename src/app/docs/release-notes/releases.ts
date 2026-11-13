@@ -17,6 +17,25 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.4.0",
+    date: "2026-11-13",
+    highlights: "Slots: a source asks for dates and rooms, you approve it as a tentative group block (or decline it), and its unsold rooms go back on sale by the rules you set.",
+    new: [
+      "Group Blocks has a Requests tab for slot requests from sources. A request holds no rooms. Review and approve lets you change the dates, rooms, cutoff and rules before availability is checked; Decline asks for a reason.",
+      "Slot rules on any block: rolling release (each night's unsold rooms return to sale a set number of days before), quota checkpoints (a missed one releases the unsold rooms) and flexibility (extra rooms a night, and nights before or after the slot).",
+      "Tentative pickups: a pickup can be held on option until the block's cutoff, and the block page lists tentative bookings with Confirm selected.",
+      "A source's profile lists its slots with rooms held, tentative and confirmed bookings.",
+      "Negotiated rate plans can set the date agent sales open; sources with early access days can start sooner.",
+    ],
+    improved: [
+      "Rooms can be picked up on a tentative block before it has a master folio; the guest keeps their own folio until the block goes definite.",
+      "A long block's held rooms are counted night by night, so a room booked for the first nights leaves the later nights free.",
+    ],
+    fixed: [
+      "Opening a group block now needs the Group Blocks permission.",
+    ],
+  },
+  {
     version: "9.3.0",
     date: "2026-11-13",
     highlights: "Sources: a new profile type for the agents and partners who send you bookings, with their own commission, payment terms and Tape Chart marker. Bookings show where they came from at a glance.",

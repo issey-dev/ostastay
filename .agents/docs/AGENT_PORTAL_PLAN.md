@@ -989,4 +989,5 @@ Nothing blocks Phase 0a. To settle along the way:
 | 1. Booking status flow | Built, 9.1.0 (2026-11-13). `src/lib/reservations/options.ts`, `option-expiry` job, advisory lock in `createReservation`. Not yet: tentative shown separately in the dashboard forecast and reports, confirmation letter wording ("Option") |
 | 2. Sell limit, overflow, forecast | Built, 9.2.0 (2026-11-13). `src/lib/availability-sell-limit.ts`, `src/lib/reservations/overflow.ts` (OVF pseudo type), grid lines On option / Allotted / Sell limit / Overflow, reports res-overflow and res-options |
 | 3. Source profiles and markers | Built, 9.3.0 (2026-11-13). `SOURCE` profile type + fields, `Reservation.sourceProfileId`, `src/lib/booking-markers.ts` (rules, palette, resolution), Hub editor, Tape Chart markers/hatching/legend/filter/Overflow row, `onCreate` on `SearchableSelect` + `QuickProfileDialog`, convert TA to Source. Front Desk shows no marker yet |
-| 4 – 9 | Not started |
+| 4. Blocks for Sources | Built, 9.4.0 (2026-11-13). `src/lib/groups/slot-requests.ts`, `pickup.ts` (shared desk/agent pickup: tentative, elasticity, per-night hold, lock), `release.ts` (checkpoints, `group-block-release` job), rolling release in `outstandingBlockHolds`, Requests tab, Source slot panel, `RatePlan.agentSalesOpenAt` |
+| 5 – 9 | Not started |

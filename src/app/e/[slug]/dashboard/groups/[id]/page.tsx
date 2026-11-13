@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, use } from "react"
+import { SourceSlotPanel } from "@/components/groups/source-slot-panel"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useProperty } from "@/components/providers/property-provider"
@@ -318,6 +319,8 @@ export default function GroupManagement({ params }: { params: Promise<{ slug: st
           <GroupScheduleTimeline startDate={group.startDate} endDate={group.endDate} pickups={group.reservations ?? []} slug={slug} />
         </div>
       </Card>
+
+      <SourceSlotPanel group={group} onChanged={fetchGroup} />
 
       {/* Pickups */}
       <Card className="shadow-elevation-1 overflow-hidden">

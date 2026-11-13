@@ -18,6 +18,39 @@ export default function GroupsAndClients() {
         each room type, <strong>Overbooked</strong> when more rooms are picked up than held, and where its Posting Master is.
       </p>
 
+      <H2>Slots for sources</H2>
+      <p>
+        A <strong>slot</strong> is a group block that belongs to a Source: the dates and rooms an agent has said they can fill.
+        Agents ask for one (from the agent portal, or you record it for them), and it waits under <strong>Group Blocks › Requests</strong>.
+        A request holds no rooms.
+      </p>
+      <ul>
+        <li>
+          <strong>Review and approve</strong> opens the request with everything editable: the dates, the rooms per type (what was
+          asked stays shown beside it), the cutoff, rolling release, flexibility and checkpoints. Availability is checked when you
+          approve; if rooms are short, it says which and by how many. The block is then held as <strong>Tentative</strong> and the
+          agent can enter bookings. Make it Definite later as with any group.
+        </li>
+        <li><strong>Decline</strong> asks for a reason, which the agent sees.</li>
+        <li>An <strong>overflow</strong> request (the house is full, a partner hotel) needs no availability, but always a person&rsquo;s decision.</li>
+      </ul>
+      <Table
+        head={["Rule", "What it does"]}
+        rows={[
+          ["Cutoff", "On this date every unsold room goes back on sale, and tentative bookings still unconfirmed are released (kept as records)."],
+          ["Rolling release", "Each night's unsold rooms go back on sale this many days before that night. Useful for long slots."],
+          ["Checkpoints", "By a date, at least a share of the rooms must be booked. If not, the unsold rooms are released and the block carries on with what is booked."],
+          ["Flexibility", "Extra rooms a night above the hold, and nights before or after the slot, that bookings may use without a new request. Always subject to the house having the room."],
+        ]}
+      />
+      <p>
+        A block&rsquo;s page shows its source, these rules (<strong>Edit slot rules</strong>), how many bookings are tentative and
+        confirmed, and lists the tentative ones: tick those you have checked and choose <strong>Confirm selected</strong>. A pickup
+        can be made tentative from the pickup dialog; on a tentative block with no master folio yet, the guest keeps their own folio.
+        A source&rsquo;s profile lists all its slots. On a negotiated rate plan, <strong>Agent sales open on</strong> sets the day
+        linked sources may start requesting slots; a source&rsquo;s early access days let it start sooner.
+      </p>
+
       <H2>The Posting Master</H2>
       <p>
         Every block has a <strong>Posting Master</strong>: a reservation of its own, in a room that only exists for the block, whose
