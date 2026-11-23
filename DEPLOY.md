@@ -309,6 +309,18 @@ docker compose exec app node dist-scripts/scripts/checkno-verify.js
 Each property prints `OK` or `LOOK` with what to review; the exit code is 1 when anything
 needs a look.
 
+**Removing card data from channel bookings (9.11.0, run once).** From 9.11.0 card details sent
+with channel bookings are stripped on arrival. Bookings received before that may still hold
+payment tokens or a typed card number. Run once after deploying 9.11.0: first the dry run, which
+changes nothing and reports what it would clean, then with `--apply`:
+
+```bash
+docker compose exec app node dist-scripts/scripts/scrub-channel-card-data.js
+docker compose exec app node dist-scripts/scripts/scrub-channel-card-data.js --apply
+```
+
+Safe to repeat. Take a backup first, as with any data change.
+
 **Scheduled jobs.** If the cron in §7 stops (or still runs hourly), the Hub Overview shows
 "Scheduled jobs are not running" to admins of any enterprise with a scheduled Night Audit.
 

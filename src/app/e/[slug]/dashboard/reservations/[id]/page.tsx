@@ -41,6 +41,7 @@ import { PageHeader } from "@/components/ui/page-header"
 import { OptionPanel } from "@/components/reservations/option-panel"
 import { OverflowPanel } from "@/components/reservations/overflow-panel"
 import { AgentRequestsPanel } from "@/components/reservations/agent-requests-panel"
+import { ChannelReviewPanel } from "@/components/reservations/channel-review-panel"
 import { ReservationSummaryRail, type RailAction } from "@/components/reservations/reservation-summary-rail"
 import { MobileCard, MobileCardList } from "@/components/ui/mobile-card"
 import { GuestContactMenu } from "@/components/reservations/guest-contact-menu"
@@ -630,6 +631,7 @@ export default function ReservationDetailPage({ params }: { params: Promise<{ sl
         onChanged={fetchReservation}
       />
       <AgentRequestsPanel reservationId={id} onChanged={fetchReservation} />
+      <ChannelReviewPanel reservationId={id} slug={slug} onCancel={handleCancel} onChanged={fetchReservation} />
       <OverflowPanel
         reservationId={id}
         propertyId={reservation.propertyId}

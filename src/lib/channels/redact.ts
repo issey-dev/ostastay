@@ -1,3 +1,5 @@
+import { maskCardNumbers } from "@/lib/channels/core/card-data";
+
 // Redaction for anything written to ChannelSyncLog.
 //
 // The channel-manager exchanges being logged carry invite codes, refresh tokens and access
@@ -74,7 +76,8 @@ function redactValue(value: unknown, depth: number): unknown {
     return out;
   }
 
-  if (typeof value === "string") return truncate(value);
+  // Even a whitelisted free-text value (a guest "message") can carry a typed card number.
+  if (typeof value === "string") return truncate(maskCardNumbers(value).text);
   // Numbers and booleans cannot meaningfully carry a credential.
   if (typeof value === "number" || typeof value === "boolean") return value;
   return REDACTED;

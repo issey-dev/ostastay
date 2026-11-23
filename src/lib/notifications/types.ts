@@ -47,6 +47,19 @@ export const NOTIFICATION_TYPES = {
     severity: SEVERITY.ACTION,
     group: "Bookings",
   },
+  // DECISIONS.md "Channel bookings changed or cancelled after they became a reservation" (2026-11-23).
+  CHANNEL_BOOKING_CANCELLED: {
+    label: "Online booking cancelled",
+    description: "A booking channel cancelled a booking and its reservation was cancelled automatically. Sent to people who can update reservations.",
+    severity: SEVERITY.INFO,
+    group: "Bookings",
+  },
+  CHANNEL_BOOKING_REVIEW: {
+    label: "Online booking changed or cancelled",
+    description: "A booking channel changed or cancelled a booking, and the desk needs to apply it to the reservation. Sent to people who can update reservations.",
+    severity: SEVERITY.ACTION,
+    group: "Bookings",
+  },
   CHANNEL_CONNECTION_FAILED: {
     label: "Channel connection failed",
     description: "A channel-manager connection stopped working. Sent to people who manage integrations.",

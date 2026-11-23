@@ -20,6 +20,7 @@
     "scripts/bootstrap-admin.ts",
     "scripts/ensure-platform.ts",
     "scripts/checkno-verify.ts",
+    "scripts/scrub-channel-card-data.ts",
     "prisma/rbac-seed-data.ts",
     "src/lib/modules.ts"
   ]

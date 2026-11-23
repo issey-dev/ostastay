@@ -100,6 +100,9 @@
 - Keyboard shortcuts (2026-11-07)
 - Osta console: what Osta may see (2026-11-07, 2026-11-08)
 - Phones: nothing scrolls sideways (2026-11-08, 2026-11-09)
+- Channel bookings changed or cancelled after they became a reservation (2026-11-23)
+- ZimmerStack: a licensed add-on on the Uppsolut partner account (2026-11-23)
+- Channel bookings never store card details (2026-11-23)
 
 ---
 
@@ -1303,3 +1306,40 @@ owner's rulings:
 - **Icons:** light mode is Iconsax Sun 2 Linear; a plain × closes; chevrons are the plain ones
   (the circled ArrowRight2 / ArrowDown2 are not chevrons).
 - **A booking always has a room line** (room type and rate); a room *number* is optional.
+
+## Channel bookings changed or cancelled after they became a reservation (2026-11-23)
+
+Applies to every channel manager (Beds24, ZimmerStack, any later one), OTA and website
+bookings alike.
+
+- **A cancellation is applied automatically only when it is safe:** the guest has not checked
+  in, nothing is posted to the folio (no payment, deposit or charge), staff have not edited the
+  reservation since it arrived from the channel, and no Spa, Excursion or Transfer booking is
+  linked to it. The reservation is then cancelled through the normal cancellation path (its
+  rules still apply) and the desk is notified.
+- **Any other cancellation is flagged** for the desk, never applied automatically.
+- **A date, room or other change is always flagged**, showing the old and new details side by
+  side with a one-click "Apply" (or handled by hand). Never applied automatically, for now.
+- Every cancellation or change that arrives raises a notification, whichever way it is handled.
+
+## ZimmerStack: a licensed add-on on the Uppsolut partner account (2026-11-23)
+
+- **Every ZimmerStack connection uses Uppsolut's own partner (company) key.** Customers do not
+  connect their own ZimmerStack accounts or keys; there is no self-service ZimmerStack connect.
+- **Uppsolut pays ZimmerStack and bills the customer** for the channel manager.
+- ZimmerStack connections are therefore always managed by Uppsolut (`managedBy: "OSTA"`), set up
+  from the Osta console. The Beds24 rules (self-service by default, managed opt-in) are unchanged.
+- **ZimmerStack is a sellable add-on**, enabled per enterprise in `EnterpriseAddonAccess` like
+  Spa, Excursions and Transportation, and only Osta switches it. Without the add-on, a property
+  cannot be connected to ZimmerStack and ZimmerStack is not offered anywhere.
+- Turning the add-on off does not delete a live connection: its pushes and polls stop and the
+  Osta console shows it as blocked by licence, so nothing disappears silently.
+- Beds24 stays available to every enterprise without an add-on.
+
+## Channel bookings never store card details (2026-11-23)
+
+- **Payment-card details from any channel manager or OTA (card number, expiry, CVC, virtual
+  card) are never stored**: not on the booking, the inbound record, its raw payload or the logs.
+  They are stripped on arrival.
+- Only a marker that a card (or virtual card) was supplied is kept, so the desk knows to collect
+  payment from the OTA or the guest outside the PMS.

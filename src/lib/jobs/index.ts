@@ -7,7 +7,7 @@ import { runScheduledAudits } from "@/lib/night-audit/scheduled";
 import { getProvider } from "@/lib/channels/providers/registry";
 import { testConnection, CONNECTION_STATUS } from "@/lib/channels/connection";
 import { pruneSyncLogs } from "@/lib/channels/sync-log";
-import { pushAllEnabledLinks } from "@/lib/channels/push";
+import { pushAllEnabledLinks, pushPropertyNow } from "@/lib/channels/push";
 import { pollAllConnections } from "@/lib/channels/inbound/poll";
 import { convertEligibleBookings } from "@/lib/channels/inbound/convert";
 import { redactErrorMessage } from "@/lib/channels/redact";
@@ -213,6 +213,19 @@ export const channelBookingPollJob: Job = {
   description: "Fetch recent bookings from the channel manager (fallback for missed webhooks)",
   run: async (enterpriseId) => {
     const results = await pollAllConnections(enterpriseId);
+
+    // A booking the poll picked up (one a webhook missed) changes what is left to sell —
+    // publish those properties now rather than at the next ARI sweep. Awaited, sequentially,
+    // like every other outbound call in a job; pushPropertyNow never throws.
+    const changed = results.filter((r) => r.inventoryChanged > 0).map((r) => r.connectionId);
+    if (changed.length > 0) {
+      const conns = await prisma.channelConnection.findMany({
+        where: { id: { in: changed } },
+        select: { propertyId: true },
+      });
+      for (const c of conns) await pushPropertyNow(c.propertyId);
+    }
+
     const created = results.reduce((n, r) => n + r.created, 0);
     const updated = results.reduce((n, r) => n + r.updated, 0);
     const overbookings = results.reduce((n, r) => n + r.overbookings, 0);

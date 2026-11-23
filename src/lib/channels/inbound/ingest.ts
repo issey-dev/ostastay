@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { perNightTypeAvailability } from "@/lib/availability";
 import { parseBeds24Booking, isCancelledStatus, type ParsedBooking } from "@/lib/channels/inbound/parse";
+import { stripCardData } from "@/lib/channels/core/card-data";
+import { reconcileConvertedBooking } from "@/lib/channels/inbound/reconcile";
 
 // Records a booking received from the channel manager.
 //
@@ -25,6 +27,13 @@ export type IngestSource = "WEBHOOK" | "POLL";
 export type IngestResult = {
   externalBookingId: string | null;
   status: "CREATED" | "UPDATED" | "REJECTED";
+  /**
+   * True when this arrival changed what the property has left to sell: a new booking, or an
+   * existing one whose status, dates or room type moved. False for the no-op re-reads the
+   * poller makes on every sweep, so callers can publish immediately only when it matters
+   * (and not spend the channel's rate-limit credits on unchanged bookings).
+   */
+  inventoryChanged: boolean;
   isOverbooking: boolean;
   problem?: string;
 };
@@ -90,7 +99,11 @@ export async function ingestBooking(opts: {
   /** Defaults to Beds24's cancellation words. Pass the connected provider's own when it differs. */
   isCancelled?: (status: string | null) => boolean;
 }): Promise<IngestResult> {
-  const { enterpriseId, connectionId, raw, source, parse = parseBeds24Booking, isCancelled = isCancelledStatus } = opts;
+  const { enterpriseId, connectionId, source, parse = parseBeds24Booking, isCancelled = isCancelledStatus } = opts;
+  // Card data is removed BEFORE anything else touches the payload, so neither the parsed
+  // fields nor the stored raw body can ever carry it (DECISIONS.md, 2026-11-23). Only the
+  // fact that a card was supplied survives, as cardSupplied.
+  const { value: raw, cardSupplied } = stripCardData(opts.raw);
   const parsed: ParsedBooking = parse(raw);
   const rawPayload = safeStringify(raw);
 
@@ -101,6 +114,7 @@ export async function ingestBooking(opts: {
     return {
       externalBookingId: null,
       status: "REJECTED",
+      inventoryChanged: false,
       isOverbooking: false,
       problem: parsed.problem ?? "No booking id",
     };
@@ -151,11 +165,15 @@ export async function ingestBooking(opts: {
     isOverbooking: overbooking.isOverbooking,
     overbookingNote: overbooking.note,
     rawPayload,
+    cardSupplied,
   };
 
   const existing = await prisma.channelInboundBooking.findUnique({
     where: { connectionId_externalBookingId: { connectionId, externalBookingId: parsed.externalBookingId } },
-    select: { id: true, acknowledgedAt: true },
+    select: {
+      id: true, acknowledgedAt: true, channelStatus: true, arrival: true, departure: true, roomTypeId: true,
+      adults: true, children: true, status: true, pendingAction: true,
+    },
   });
 
   if (existing) {
@@ -163,15 +181,35 @@ export async function ingestBooking(opts: {
       where: { id: existing.id },
       data: {
         ...data,
+        // Sticky: once a delivery said a card was supplied, a later one without it does not
+        // un-say it (the desk still has to collect that payment outside the PMS).
+        ...(cardSupplied ? {} : { cardSupplied: undefined }),
         // A modification the desk has NOT yet seen must not stay acknowledged — clearing it
         // pulls the row back into view. Acknowledging is about a specific state of the
         // booking, not the booking forever.
         ...(overbooking.isOverbooking ? { acknowledgedAt: null, acknowledgedById: null } : {}),
       },
     });
+    const inventoryChanged =
+      existing.channelStatus !== data.channelStatus ||
+      existing.roomTypeId !== data.roomTypeId ||
+      existing.arrival?.getTime() !== data.arrival?.getTime() ||
+      existing.departure?.getTime() !== data.departure?.getTime();
+
+    // Already a reservation: a cancellation or change from the channel is applied or flagged
+    // per the owner's rule (src/lib/channels/inbound/reconcile.ts). Only when something the
+    // reservation cares about moved, or a flag may now be resolvable — not on every no-op
+    // re-read the poller makes.
+    if (
+      existing.status === "CONVERTED" &&
+      (inventoryChanged || existing.adults !== data.adults || existing.children !== data.children || existing.pendingAction)
+    ) {
+      await reconcileConvertedBooking(existing.id);
+    }
     return {
       externalBookingId: parsed.externalBookingId,
       status: "UPDATED",
+      inventoryChanged,
       isOverbooking: overbooking.isOverbooking,
       problem: data.problem ?? undefined,
     };
@@ -181,6 +219,7 @@ export async function ingestBooking(opts: {
   return {
     externalBookingId: parsed.externalBookingId,
     status: "CREATED",
+    inventoryChanged: true,
     isOverbooking: overbooking.isOverbooking,
     problem: data.problem ?? undefined,
   };
@@ -213,6 +252,7 @@ export async function ingestBookings(opts: {
       results.push({
         externalBookingId: null,
         status: "REJECTED",
+        inventoryChanged: false,
         isOverbooking: false,
         problem: e instanceof Error ? e.message : "Unknown error",
       });

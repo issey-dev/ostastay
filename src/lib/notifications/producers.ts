@@ -103,6 +103,61 @@ export async function notifyChannelBookingFailed(a: { enterpriseId: string; prop
   }
 }
 
+/** The channel cancelled a booking and its reservation was cancelled automatically (it was safe to). */
+export async function notifyChannelBookingCancelled(a: { enterpriseId: string; propertyId: string; reservationId: string; confirmationNo: string; channelName: string | null }) {
+  try {
+    const where = await whereIs(a.propertyId)
+    if (!where) return
+    await notify({
+      type: "CHANNEL_BOOKING_CANCELLED",
+      enterpriseId: a.enterpriseId,
+      propertyId: a.propertyId,
+      title: `Online booking cancelled${a.channelName ? ` by ${a.channelName}` : ""}`,
+      body: `${where.name}: reservation ${a.confirmationNo} was cancelled automatically`,
+      url: `/e/${where.slug}/dashboard/reservations/${a.reservationId}`,
+      entityType: "Reservation",
+      entityId: a.reservationId,
+      dedupeKey: `CHANNEL_BOOKING_CANCELLED:${a.reservationId}`,
+      audience: { need: { module: "RESERVATIONS", action: "update" } },
+    })
+  } catch (e) {
+    console.error("[notifications] channel booking cancelled", e)
+  }
+}
+
+/** The channel changed or cancelled a booking and the desk has to apply it (not safe to do automatically). */
+export async function notifyChannelBookingReview(a: {
+  enterpriseId: string
+  propertyId: string
+  reservationId: string
+  confirmationNo: string
+  channelName: string | null
+  action: "CANCEL" | "CHANGE"
+  reason: string
+}) {
+  try {
+    const where = await whereIs(a.propertyId)
+    if (!where) return
+    const what = a.action === "CANCEL" ? "cancelled" : "changed"
+    await notify({
+      type: "CHANNEL_BOOKING_REVIEW",
+      enterpriseId: a.enterpriseId,
+      propertyId: a.propertyId,
+      title: `${a.channelName ?? "A booking channel"} ${what} reservation ${a.confirmationNo}`,
+      body: `${where.name}: ${a.reason}`.slice(0, 300),
+      url: `/e/${where.slug}/dashboard/reservations/${a.reservationId}`,
+      entityType: "Reservation",
+      entityId: a.reservationId,
+      // One per distinct situation: a re-delivery of the same change stays quiet, a new
+      // change (or a cancel after a change) raises again.
+      dedupeKey: `CHANNEL_BOOKING_REVIEW:${a.reservationId}:${a.action}:${a.reason}`.slice(0, 250),
+      audience: { need: { module: "RESERVATIONS", action: "update" } },
+    })
+  } catch (e) {
+    console.error("[notifications] channel booking review", e)
+  }
+}
+
 /** A channel-manager connection just broke — tell the people who manage integrations. */
 export async function notifyChannelConnectionFailed(a: { enterpriseId: string; connectionId: string; connectionName: string }) {
   try {

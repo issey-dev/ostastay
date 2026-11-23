@@ -1,6 +1,6 @@
 {
   "name": "guest-house-pms",
-  "version": "9.10.0",
+  "version": "9.11.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -18,6 +18,8 @@
     "mobile:audit": "vite-node -c vitest.config.ts scripts/mobile-audit.ts",
     "checkno:verify": "vite-node -c vitest.config.ts scripts/checkno-verify.ts",
     "charges:cleanup-demo": "vite-node -c vitest.config.ts scripts/cleanup-demo-charge-codes.ts",
+    "channels:scrub-card-data": "vite-node -c vitest.config.ts scripts/scrub-channel-card-data.ts",
+    "channels:demo": "vite-node -c vitest.config.ts scripts/dev-tools/channel-demo.ts",
     "features:backfill": "vite-node -c vitest.config.ts scripts/backfill-room-features.ts"
   },
   "dependencies": {

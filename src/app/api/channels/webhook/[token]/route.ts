@@ -4,6 +4,7 @@ import { ingestBookings } from "@/lib/channels/inbound/ingest";
 import { redactForLog } from "@/lib/channels/redact";
 import { getProvider } from "@/lib/channels/providers/registry";
 import { hashWebhookToken } from "@/lib/channels/webhook-token";
+import { pushPropertyNow } from "@/lib/channels/push";
 
 // Inbound booking webhook — the channel manager calling US.
 //
@@ -33,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const connection = token
     ? await prisma.channelConnection.findUnique({
         where: { webhookTokenHash: hashWebhookToken(token) },
-        select: { id: true, enterpriseId: true, name: true, provider: true },
+        select: { id: true, enterpriseId: true, name: true, provider: true, propertyId: true },
       })
     : null;
 
@@ -94,6 +95,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       },
     })
     .catch((e) => console.error("could not log inbound webhook", e));
+
+  // A new or changed booking changes what the property has left to sell. Publish now rather
+  // than waiting for the scheduled sweep, so the room it took is not left on sale at the other
+  // channels in between. Fire-and-forget: pushPropertyNow never throws, refuses unshared
+  // properties, and anything it skips is picked up by the next sweep.
+  if (results.some((r) => r.inventoryChanged)) {
+    void pushPropertyNow(connection.propertyId);
+  }
 
   // Always 200 once authenticated, even when a booking could not be understood.
   //

@@ -27,6 +27,7 @@ export const SYSTEM_CANCEL_REASONS: Record<string, string> = {
   [OPTION_EXPIRED]: "Released (option expired)",
   AGENT_CANCELLED: "Cancelled by the agent",
   HOTEL_CANCELLED: "Cancelled by the hotel",
+  CHANNEL_CANCELLED: "Cancelled at the booking channel",
 };
 
 export class OptionError extends Error {
