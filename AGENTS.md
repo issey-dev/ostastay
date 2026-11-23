@@ -29,6 +29,7 @@ Everything is in `.agents/docs/`. The only markdown at the repository root is th
 |---|---|---|
 | [`NOTIFICATIONS_PLAN.md`](.agents/docs/NOTIFICATIONS_PLAN.md) | N0 to N3 built (8.10.0); N4 open | The header bell, any notification or toast-like feature, the web manifest, the service worker |
 | [`MARKETING_SITE_MIGRATION_PLAN.md`](.agents/docs/MARKETING_SITE_MIGRATION_PLAN.md) | Not started, on hold | `src/app/info` |
+| [`CHANNEL_PROVIDERS_PLAN.md`](.agents/docs/CHANNEL_PROVIDERS_PLAN.md) | Not started; open questions for the owner | `src/lib/channels/**`, adding ZimmerStack or any other channel manager |
 
 ### Finished work: which dev log section to read
 
