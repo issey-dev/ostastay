@@ -3993,9 +3993,15 @@ model ChannelInboundBooking {
   acknowledgedAt   DateTime?
   acknowledgedById String?
 
-  // Exactly as received. Never redacted: a booking payload carries guest details, not
-  // credentials, and the raw body is what makes a mis-parse recoverable.
+  // As received, MINUS card data: src/lib/channels/core/card-data.ts strips card numbers, CVC,
+  // expiry and payment tokens before storage (DECISIONS.md "Channel bookings never store card
+  // details", 2026-11-23). Otherwise unredacted: the raw body is what makes a mis-parse
+  // recoverable.
   rawPayload String
+
+  // True once any delivery of this booking carried card details (which were removed). Tells
+  // the desk a card exists at the channel, to be collected outside the PMS.
+  cardSupplied Boolean @default(false)
 
   receivedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt
