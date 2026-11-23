@@ -34,6 +34,8 @@ export type PollResult = {
   created: number;
   updated: number;
   overbookings: number;
+  /** Bookings whose arrival changed what is left to sell (see IngestResult.inventoryChanged). */
+  inventoryChanged: number;
 };
 
 /**
@@ -79,7 +81,7 @@ export async function pollConnection(
     return connection.pollLookbackHours ?? POLL_LOOKBACK_HOURS;
   })();
 
-  const base = { connectionId, connectionName: connection.name, received: 0, created: 0, updated: 0, overbookings: 0 };
+  const base = { connectionId, connectionName: connection.name, received: 0, created: 0, updated: 0, overbookings: 0, inventoryChanged: 0 };
 
   if (!connection.refreshToken) {
     return { ...base, status: "SKIPPED", reason: "Connection has no credentials" };
@@ -121,6 +123,7 @@ export async function pollConnection(
       created: results.filter((r) => r.status === "CREATED").length,
       updated: results.filter((r) => r.status === "UPDATED").length,
       overbookings: results.filter((r) => r.isOverbooking).length,
+      inventoryChanged: results.filter((r) => r.inventoryChanged).length,
     };
   } catch (e) {
     // Never rethrows — one unreachable connection must not stop the sweep.

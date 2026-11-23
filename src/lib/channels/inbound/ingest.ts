@@ -25,6 +25,13 @@ export type IngestSource = "WEBHOOK" | "POLL";
 export type IngestResult = {
   externalBookingId: string | null;
   status: "CREATED" | "UPDATED" | "REJECTED";
+  /**
+   * True when this arrival changed what the property has left to sell: a new booking, or an
+   * existing one whose status, dates or room type moved. False for the no-op re-reads the
+   * poller makes on every sweep, so callers can publish immediately only when it matters
+   * (and not spend the channel's rate-limit credits on unchanged bookings).
+   */
+  inventoryChanged: boolean;
   isOverbooking: boolean;
   problem?: string;
 };
@@ -101,6 +108,7 @@ export async function ingestBooking(opts: {
     return {
       externalBookingId: null,
       status: "REJECTED",
+      inventoryChanged: false,
       isOverbooking: false,
       problem: parsed.problem ?? "No booking id",
     };
@@ -155,7 +163,7 @@ export async function ingestBooking(opts: {
 
   const existing = await prisma.channelInboundBooking.findUnique({
     where: { connectionId_externalBookingId: { connectionId, externalBookingId: parsed.externalBookingId } },
-    select: { id: true, acknowledgedAt: true },
+    select: { id: true, acknowledgedAt: true, channelStatus: true, arrival: true, departure: true, roomTypeId: true },
   });
 
   if (existing) {
@@ -169,9 +177,15 @@ export async function ingestBooking(opts: {
         ...(overbooking.isOverbooking ? { acknowledgedAt: null, acknowledgedById: null } : {}),
       },
     });
+    const inventoryChanged =
+      existing.channelStatus !== data.channelStatus ||
+      existing.roomTypeId !== data.roomTypeId ||
+      existing.arrival?.getTime() !== data.arrival?.getTime() ||
+      existing.departure?.getTime() !== data.departure?.getTime();
     return {
       externalBookingId: parsed.externalBookingId,
       status: "UPDATED",
+      inventoryChanged,
       isOverbooking: overbooking.isOverbooking,
       problem: data.problem ?? undefined,
     };
@@ -181,6 +195,7 @@ export async function ingestBooking(opts: {
   return {
     externalBookingId: parsed.externalBookingId,
     status: "CREATED",
+    inventoryChanged: true,
     isOverbooking: overbooking.isOverbooking,
     problem: data.problem ?? undefined,
   };
@@ -213,6 +228,7 @@ export async function ingestBookings(opts: {
       results.push({
         externalBookingId: null,
         status: "REJECTED",
+        inventoryChanged: false,
         isOverbooking: false,
         problem: e instanceof Error ? e.message : "Unknown error",
       });

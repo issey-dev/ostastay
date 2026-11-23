@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { ForbiddenError } from "@/lib/scope";
 import { perNightTypeAvailability, formatLocalDay } from "@/lib/availability";
 import { resolveRatesForLink } from "@/lib/channels/rates";
+import { getProvider } from "@/lib/channels/providers/registry";
 
 // The outbound half of the sync engine: what we would publish to the channel manager for a
 // linked property, and why.
@@ -94,7 +95,7 @@ export async function computeChannelAvailability(opts: {
   const link = await prisma.channelPropertyLink.findUnique({
     where: { id: linkId },
     include: {
-      connection: { select: { enterpriseId: true } },
+      connection: { select: { enterpriseId: true, provider: true } },
       property: { select: { id: true, name: true } },
       roomTypeMaps: true,
     },
@@ -134,6 +135,13 @@ export async function computeChannelAvailability(opts: {
   const ratesByRoomType = await resolveRatesForLink({
     propertyId: link.propertyId,
     linkId: link.id,
+    roomTypeIds: publishable.map((rt) => rt.id),
+    from,
+    to,
+  });
+
+  const pendingHolds = await pendingChannelHolds({
+    propertyId: link.propertyId,
     roomTypeIds: publishable.map((rt) => rt.id),
     from,
     to,
@@ -185,10 +193,15 @@ export async function computeChannelAvailability(opts: {
           if (price != null) prices[plan.externalRateId] = price;
         }
 
+        // Channel bookings received but not yet converted into reservations still hold a
+        // room — see pendingChannelHolds(). Clamped at 0, same as every other count here.
+        const pending = pendingHolds.get(`${rt.id}|${n.date}`) ?? 0;
+        const available = Math.max(0, n.available - pending);
+
         // Closed nights publish 0 AND carry the closed flag. Availability 0 alone is not
         // equivalent: several OTAs read it as "temporarily sold out" and keep the listing
         // live, whereas a closure removes it. Rule 5 of the D-7 ruling.
-        return { date: n.date, available: closed ? 0 : n.available, closed, prices };
+        return { date: n.date, available: closed ? 0 : available, closed, prices };
       }),
     });
   }
@@ -204,6 +217,73 @@ export async function computeChannelAvailability(opts: {
     roomTypes: included,
     excluded,
   };
+}
+
+// Inbound statuses whose booking is real but not yet a Reservation. RECEIVED is waiting for
+// conversion (or for a mapping/default to be fixed); FAILED hit an unexpected error during
+// conversion. Neither is in the reservation tables, so perNightTypeAvailability() cannot see
+// them — yet the guest holds a confirmed booking at the OTA.
+const PENDING_INBOUND_STATUSES = ["RECEIVED", "FAILED"];
+
+/**
+ * Rooms held by channel bookings that have not become reservations yet, keyed
+ * `${roomTypeId}|${YYYY-MM-DD}`.
+ *
+ * Why this exists: pushes are ABSOLUTE counts. Without it, a booking that arrived but is still
+ * waiting for conversion is invisible to the next push, which then republishes the room it
+ * already sold — a channel-caused double booking, exactly what D-7 rule 1 forbids.
+ *
+ * Deliberately here, in the CHANNEL calculation only, and not in perNightTypeAvailability():
+ * that function also feeds the desk's availability, the Tape Chart and the booking guards, and
+ * an unconverted row is not something staff can see or act on there. Scoped by property, not
+ * by connection, so a booking from any connection on the property holds its room.
+ *
+ * Cancellation is read from each booking's OWN provider, since status words differ per vendor.
+ */
+async function pendingChannelHolds(opts: {
+  propertyId: string;
+  roomTypeIds: string[];
+  from: Date;
+  to: Date;
+}): Promise<Map<string, number>> {
+  const holds = new Map<string, number>();
+  if (opts.roomTypeIds.length === 0) return holds;
+
+  const rows = await prisma.channelInboundBooking.findMany({
+    where: {
+      propertyId: opts.propertyId,
+      roomTypeId: { in: opts.roomTypeIds },
+      status: { in: PENDING_INBOUND_STATUSES },
+      reservationId: null,
+      arrival: { not: null, lt: opts.to },
+      departure: { not: null, gt: opts.from },
+    },
+    select: {
+      roomTypeId: true,
+      arrival: true,
+      departure: true,
+      channelStatus: true,
+      connection: { select: { provider: true } },
+    },
+  });
+
+  for (const r of rows) {
+    if (!r.roomTypeId || !r.arrival || !r.departure) continue;
+    if (getProvider(r.connection.provider).isCancelledStatus(r.channelStatus)) continue;
+    // Half-open [arrival, departure): the departure night is not held.
+    const end = r.departure.getTime();
+    for (let night = r.arrival.getTime(); night < end; night = nextLocalDay(night)) {
+      const key = `${r.roomTypeId}|${formatLocalDay(night)}`;
+      holds.set(key, (holds.get(key) ?? 0) + 1);
+    }
+  }
+  return holds;
+}
+
+/** Next local midnight. Calendar arithmetic, not +24h, so a DST day cannot skip or repeat a night. */
+function nextLocalDay(ms: number): number {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
 }
 
 /** Clamp a requested preview/push window to something sane. 366 (not 365) so a full year
