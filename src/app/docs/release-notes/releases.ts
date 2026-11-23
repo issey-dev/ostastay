@@ -17,6 +17,21 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    version: "9.11.0",
+    date: "2026-11-23",
+    highlights: "When a booking site cancels or changes a booking that is already a reservation, the system now follows it: safe cancellations happen by themselves, everything else is shown on the reservation for the desk.",
+    new: [
+      "A booking site's cancellation is applied automatically when nothing has happened on the reservation yet: no check-in, no payment or charge on the folio, no change by staff, no Spa, Excursion or Transfer booking and no cancellation fee. You get a notification.",
+      "Any other cancellation, and every change of dates, room type or number of guests, shows as a yellow panel on the reservation with what changed. Cancel reservation, Apply (opens the edit form with the new details filled in) or Dismiss.",
+      "Two new notifications: Online booking cancelled, and Online booking changed or cancelled (needs the desk).",
+    ],
+    improved: [
+      "Bookings from a booking site that are still waiting to become reservations now keep their room off sale on the other booking sites, so the same room cannot be sold twice.",
+      "While a booking site's change waits for the desk, its new nights are kept off sale too.",
+      "Payment card details sent with online bookings are never stored. The booking only shows that a card was supplied, so the payment is collected outside the system.",
+    ],
+  },
+  {
     version: "9.10.0",
     date: "2026-11-13",
     highlights: "A group block now carries its travel agent or company and its source, and every booking in the block takes them.",
