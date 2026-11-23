@@ -164,9 +164,9 @@ checks and the quote.
 
 ### Channel manager
 
-- [ ] After the release carrying `cardSupplied` (2026-11-23), run `npm run channels:scrub-card-data`
-  on production (dry run first, then `-- --apply`) to strip card data from channel bookings and
-  logs stored before the no-card-data rule.
+- [ ] After deploying 9.11.0, run the card-data scrub on production once (dry run, then `--apply`;
+  commands in DEPLOY.md, "Removing card data from channel bookings") to strip card data from
+  channel bookings and logs stored before the no-card-data rule.
 - [ ] Beds24 card data is not fully confirmed: its V2 spec lists `stripeToken` / `pcibookingToken`
   on bookings and a webhook `additionalData` option (`CVC`, `token`) with no description. Both are
   stripped now; ask Beds24 support what they contain if Beds24 stays.

@@ -1,17 +1,27 @@
 // npm run channels:scrub-card-data            — report what would change
 // npm run channels:scrub-card-data -- --apply — make the changes
 //
+// On the server (compiled into the image, like checkno-verify):
+//   docker compose exec app node dist-scripts/scripts/scrub-channel-card-data.js
+//   docker compose exec app node dist-scripts/scripts/scrub-channel-card-data.js --apply
+//
 // One-off cleanup for DECISIONS.md "Channel bookings never store card details" (2026-11-23).
 // Bookings received before that rule were stored with their raw payload as received, which can
 // include payment tokens (Beds24 `stripeToken` / `pcibookingToken`) or a card number typed into
 // a guest message. This removes them with the same stripper new bookings go through
 // (src/lib/channels/core/card-data.ts), sets cardSupplied where something was found, and masks
 // card numbers in the exchange log. Safe to run more than once.
-import { prisma } from "../src/lib/db";
+// Its own PrismaClient and RELATIVE imports only: the runtime image runs this as plain node
+// (tsconfig.scripts.json), where the app's "@/" modules are not available. card-data.ts
+// imports nothing, so it compiles in on its own.
+import { PrismaClient } from "@prisma/client";
 import { stripCardData, maskCardNumbers } from "../src/lib/channels/core/card-data";
 
+const prisma = new PrismaClient();
 const apply = process.argv.slice(2).includes("--apply");
 const BATCH = 200;
+
+async function main() {
 
 let bookingsChecked = 0, bookingsChanged = 0, unreadable = 0;
 for (let cursor: string | undefined; ; ) {
@@ -76,10 +86,17 @@ for (let cursor: string | undefined; ; ) {
   cursor = rows[rows.length - 1].id;
 }
 
-console.log(
+  console.log(
   `${apply ? "Done" : "Dry run (nothing changed — add --apply)"}: ` +
     `${bookingsChanged} of ${bookingsChecked} channel bookings ${apply ? "scrubbed" : "would be scrubbed"}` +
     `${unreadable ? ` (${unreadable} non-JSON payloads had nothing to mask)` : ""}; ` +
     `${logsChanged} of ${logsChecked} exchange-log entries ${apply ? "masked" : "would be masked"}.`
 );
-await prisma.$disconnect();
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());
