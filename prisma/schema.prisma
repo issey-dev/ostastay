@@ -4003,12 +4003,27 @@ model ChannelInboundBooking {
   // the desk a card exists at the channel, to be collected outside the PMS.
   cardSupplied Boolean @default(false)
 
+  // A cancellation or change the channel sent AFTER this booking became a reservation, that
+  // was NOT applied automatically and is waiting for the desk (DECISIONS.md "Channel bookings
+  // changed or cancelled after they became a reservation", 2026-11-23). See
+  // src/lib/channels/inbound/reconcile.ts.
+  //   CANCEL  the channel cancelled it, but it was not safe to cancel automatically
+  //   CHANGE  dates, room type or guest count differ from the reservation. The NEW values are
+  //           this row's own fields (arrival, departure, roomTypeId, adults, children); the
+  //           reservation still holds the old ones until the desk applies the change.
+  // Null = nothing waiting. Cleared once the reservation matches the channel again.
+  pendingAction String?
+  // Plain-language reason it was not applied automatically, or what changed.
+  pendingReason String?
+  pendingSince  DateTime?
+
   receivedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@unique([connectionId, externalBookingId])
   @@index([enterpriseId, receivedAt])
   @@index([enterpriseId, isOverbooking])
+  @@index([enterpriseId, pendingAction])
   @@index([propertyId])
   @@index([reservationId])
   @@index([roomTypeId])

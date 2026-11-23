@@ -1,6 +1,12 @@
 # Channel Providers Plan: ZimmerStack now, any channel manager later
 
-Status: PLAN, not started. All owner questions answered 2026-11-23. Written 2026-11-23 against master @ 4200eb68 (v9.10.0).
+Status: **Phase 0 built** on `feat/channel-providers-phase-0` (2026-11-23, not yet merged): pending
+inbound bookings and pending channel changes hold rooms in what is pushed (`sync.ts`); immediate
+push only on real changes; card data stripped (`core/card-data.ts`, `cardSupplied`, scrub script);
+safe auto-cancel vs flag (`inbound/reconcile.ts`, `pendingAction`), reservation-page
+`ChannelReviewPanel`, edit-form prefill, notifications `CHANNEL_BOOKING_CANCELLED` /
+`CHANNEL_BOOKING_REVIEW`, desk guide section. Phases 1-6 not started. All owner questions
+answered 2026-11-23. Written 2026-11-23 against master @ 4200eb68 (v9.10.0).
 
 ## Goal
 

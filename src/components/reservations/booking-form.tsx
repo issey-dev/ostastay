@@ -119,7 +119,26 @@ function PhoneReveal({ label, onClick }: { label: string; onClick: () => void })
 // booking-form-schema.ts owns every form-shape rule with inline, real-time
 // errors; this component keeps the booking machinery (Look-to-Book grid,
 // server quote, segment chaining) reading from the watched values.
-export function BookingForm({ reservationId, walkIn = false }: { reservationId?: string; walkIn?: boolean }) {
+/** A booking channel's changed details to pre-fill into the edit form, for the desk to review
+ *  and save (DECISIONS.md "Channel bookings changed or cancelled after they became a
+ *  reservation", 2026-11-23). Applied only to a single-segment stay — a channel booking is one. */
+export type ChannelChangePrefill = {
+  checkInDate?: string
+  checkOutDate?: string
+  adults?: number
+  children?: number
+  roomTypeId?: string
+}
+
+export function BookingForm({
+  reservationId,
+  walkIn = false,
+  channelChange,
+}: {
+  reservationId?: string
+  walkIn?: boolean
+  channelChange?: ChannelChangePrefill
+}) {
   const router = useRouter()
   const { slug } = useParams<{ slug: string }>()
   const confirm = useConfirm()
@@ -281,6 +300,31 @@ export function BookingForm({ reservationId, walkIn = false }: { reservationId?:
           }],
         })
         setActiveSegmentIndex(0)
+
+        // The channel's new details, on top of what the reservation holds now. Nothing is
+        // saved here: the desk reviews the form and saves it the normal way, so every edit
+        // rule (availability, rate plans, room conflicts) still applies.
+        const segs = formCtl.getValues("assignments")
+        if (channelChange && segs.length === 1) {
+          const c = channelChange
+          const seg = segs[0]
+          const typeChanged = !!c.roomTypeId && c.roomTypeId !== seg.roomTypeId
+          const datesChanged = (!!c.checkInDate && c.checkInDate !== seg.startDate) || (!!c.checkOutDate && c.checkOutDate !== seg.endDate)
+          if (c.checkInDate) setField("checkInDate", c.checkInDate)
+          if (c.checkOutDate) setField("checkOutDate", c.checkOutDate)
+          if (c.adults != null) setField("adults", c.adults)
+          if (c.children != null) setField("children", c.children)
+          setField("assignments", [{
+            ...seg,
+            startDate: c.checkInDate || seg.startDate,
+            endDate: c.checkOutDate || seg.endDate,
+            roomTypeId: c.roomTypeId || seg.roomTypeId,
+            // A specific room may not be of the new type or free on the new dates; the desk
+            // picks it again rather than carrying a room that no longer fits.
+            roomId: typeChanged || datesChanged ? "none" : seg.roomId,
+          }])
+          toast.info("The booking channel's changes are filled in. Review them, then save.")
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))

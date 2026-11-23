@@ -108,6 +108,38 @@ export default function DeskGuide() {
         role option <strong>Confirm, extend or release an option</strong>.
       </p>
 
+      <H2>Online bookings changed or cancelled</H2>
+      <p>
+        When a booking site (Booking.com, Agoda and so on) cancels or changes a booking that is already a reservation here, the
+        system follows it like this:
+      </p>
+      <Table
+        head={["What the booking site did", "What happens"]}
+        rows={[
+          [
+            "Cancelled, and nothing has happened on the reservation yet",
+            "The reservation is cancelled for you, with the reason “Cancelled at” the booking site, and you get a notification.",
+          ],
+          [
+            "Cancelled, but the guest is checked in, there is a payment or charge on the folio, someone has changed the reservation, it has a Spa, Excursion or Transfer booking, or a cancellation fee applies",
+            "Nothing is changed. The reservation shows a yellow panel saying the booking site cancelled it and why it was not done automatically. Press Cancel reservation when you have dealt with the money or the add-ons.",
+          ],
+          [
+            "Changed the dates, room type or number of guests",
+            "Never changed automatically. The panel shows what changed. Press Apply to open the edit form with the new details filled in, check them (and pick a room again if needed), then save.",
+          ],
+        ]}
+      />
+      <p>
+        If you handled it another way, for example the booking site agreed to keep the booking as it is, press
+        <strong> Dismiss</strong>. The reservation is not changed and the dismissal is recorded. The panel also disappears by itself
+        once the reservation matches the booking site again.
+      </p>
+      <Callout>
+        Until you apply a change, the booking site&rsquo;s new nights are kept off sale on the other channels, so the room cannot be
+        sold twice in the meantime.
+      </Callout>
+
       <H2>Reading the Tape Chart</H2>
       <p>
         Rooms run down the left, grouped by floor, and days run across. Use <strong>7 days</strong>, <strong>14 days</strong> or <strong>30 days</strong> to change how

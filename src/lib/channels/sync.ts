@@ -238,6 +238,12 @@ const PENDING_INBOUND_STATUSES = ["RECEIVED", "FAILED"];
  * an unconverted row is not something staff can see or act on there. Scoped by property, not
  * by connection, so a booking from any connection on the property holds its room.
  *
+ * Also held: the NEW dates / room type of a converted booking whose channel CHANGE is waiting
+ * for the desk (pendingAction = "CHANGE", see src/lib/channels/inbound/reconcile.ts). Until the
+ * desk applies it, the reservation still holds the OLD nights, while the channel has already sold
+ * the new ones — publishing them open would oversell. Nights the reservation itself already
+ * holds for the same room type are skipped, so the overlap is not counted twice.
+ *
  * Cancellation is read from each booking's OWN provider, since status words differ per vendor.
  */
 async function pendingChannelHolds(opts: {
@@ -253,8 +259,10 @@ async function pendingChannelHolds(opts: {
     where: {
       propertyId: opts.propertyId,
       roomTypeId: { in: opts.roomTypeIds },
-      status: { in: PENDING_INBOUND_STATUSES },
-      reservationId: null,
+      OR: [
+        { status: { in: PENDING_INBOUND_STATUSES }, reservationId: null },
+        { status: "CONVERTED", pendingAction: "CHANGE" },
+      ],
       arrival: { not: null, lt: opts.to },
       departure: { not: null, gt: opts.from },
     },
@@ -264,15 +272,23 @@ async function pendingChannelHolds(opts: {
       departure: true,
       channelStatus: true,
       connection: { select: { provider: true } },
+      reservation: { select: { assignments: { select: { roomTypeId: true, startDate: true, endDate: true } } } },
     },
   });
 
   for (const r of rows) {
     if (!r.roomTypeId || !r.arrival || !r.departure) continue;
     if (getProvider(r.connection.provider).isCancelledStatus(r.channelStatus)) continue;
+    // Nights the (pending-change) reservation already holds for this room type.
+    const alreadyHeld = new Set<string>();
+    for (const a of r.reservation?.assignments ?? []) {
+      if (a.roomTypeId !== r.roomTypeId) continue;
+      for (let n = a.startDate.getTime(); n < a.endDate.getTime(); n = nextLocalDay(n)) alreadyHeld.add(formatLocalDay(n));
+    }
     // Half-open [arrival, departure): the departure night is not held.
     const end = r.departure.getTime();
     for (let night = r.arrival.getTime(); night < end; night = nextLocalDay(night)) {
+      if (alreadyHeld.has(formatLocalDay(night))) continue;
       const key = `${r.roomTypeId}|${formatLocalDay(night)}`;
       holds.set(key, (holds.get(key) ?? 0) + 1);
     }

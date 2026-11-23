@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { perNightTypeAvailability } from "@/lib/availability";
 import { parseBeds24Booking, isCancelledStatus, type ParsedBooking } from "@/lib/channels/inbound/parse";
 import { stripCardData } from "@/lib/channels/core/card-data";
+import { reconcileConvertedBooking } from "@/lib/channels/inbound/reconcile";
 
 // Records a booking received from the channel manager.
 //
@@ -169,7 +170,10 @@ export async function ingestBooking(opts: {
 
   const existing = await prisma.channelInboundBooking.findUnique({
     where: { connectionId_externalBookingId: { connectionId, externalBookingId: parsed.externalBookingId } },
-    select: { id: true, acknowledgedAt: true, channelStatus: true, arrival: true, departure: true, roomTypeId: true },
+    select: {
+      id: true, acknowledgedAt: true, channelStatus: true, arrival: true, departure: true, roomTypeId: true,
+      adults: true, children: true, status: true, pendingAction: true,
+    },
   });
 
   if (existing) {
@@ -191,6 +195,17 @@ export async function ingestBooking(opts: {
       existing.roomTypeId !== data.roomTypeId ||
       existing.arrival?.getTime() !== data.arrival?.getTime() ||
       existing.departure?.getTime() !== data.departure?.getTime();
+
+    // Already a reservation: a cancellation or change from the channel is applied or flagged
+    // per the owner's rule (src/lib/channels/inbound/reconcile.ts). Only when something the
+    // reservation cares about moved, or a flag may now be resolvable — not on every no-op
+    // re-read the poller makes.
+    if (
+      existing.status === "CONVERTED" &&
+      (inventoryChanged || existing.adults !== data.adults || existing.children !== data.children || existing.pendingAction)
+    ) {
+      await reconcileConvertedBooking(existing.id);
+    }
     return {
       externalBookingId: parsed.externalBookingId,
       status: "UPDATED",
